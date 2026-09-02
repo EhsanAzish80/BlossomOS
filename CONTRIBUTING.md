@@ -41,9 +41,14 @@ redaction must remain easy to review independently.
 
 ## Quality gates
 
-Language-specific formatting, linting, static analysis, tests, dependency scans,
-and security checks will be recorded by ADR when the implementation language is
-selected. CI must reproduce those checks. Warnings are not silently ignored.
+Run `python3 scripts/ci/check_repository.py` and the relevant tests before
+committing. CI runs repository checks, prototype smoke tests, ShellCheck, CodeQL,
+and Gitleaks. Stable Rust code introduced under ADR-0002 must pass
+`cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test`. Warnings are
+not silently ignored.
+
+Dependencies follow `docs/DEPENDENCY_POLICY.md`. Branches, review, versions,
+releases, and signing follow `docs/BRANCH_RELEASE_POLICY.md`.
 
 Generated files and large model weights must not be committed unless explicitly
 approved and documented.
