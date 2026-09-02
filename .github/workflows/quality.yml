@@ -23,10 +23,10 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install ShellCheck
+      - name: Install system test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes shellcheck
+          sudo apt-get install --yes bubblewrap shellcheck
 
       - name: Run repository checks
         run: python3 scripts/ci/check_repository.py

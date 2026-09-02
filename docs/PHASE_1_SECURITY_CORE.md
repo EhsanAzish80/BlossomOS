@@ -18,6 +18,11 @@ exists.
 - A narrow executor trait receiving an argv-style `CommandSpec`, cleared
   environment, fixed working directory, timeout, output limit, and no-network
   intent.
+- A Linux Bubblewrap adapter that accepts only the fixed diagnostic, exposes
+  `/usr` read-only, creates minimal proc/dev/tmp views, unshares network and other
+  namespaces, drops capabilities, disables nested user namespaces, and has no
+  unsandboxed fallback.
+- Timeout killing and a combined stdout/stderr capture limit outside the sandbox.
 - Deterministic result verification.
 - SHA-256 hash-chained structured audit records.
 - Audit output redaction: command output is represented by byte counts and
@@ -30,10 +35,8 @@ exists.
 
 ## Not implemented yet
 
-- A real executor. Tests use a scripted executor behind the production trait.
-- OS-level sandbox enforcement, process spawning, timeout killing, output
-  draining, filesystem scopes, or network namespaces.
-- Bubblewrap/systemd-run selection and Linux integration tests.
+- General-purpose execution or caller-selected programs/arguments.
+- Writable filesystem scopes, seccomp, Landlock, or cgroup resource limits.
 - An approval UI or IPC transport.
 - Persistent audit storage or cross-process tamper resistance.
 - Any privileged operation or privileged helper.
@@ -46,5 +49,6 @@ translated into the fixed `CommandSpec`. The executor is an untrusted operationa
 boundary: its result is recorded and independently verified before success is
 reported.
 
-The next checkpoint must implement and test a Linux sandbox adapter without
-weakening the portable core or adding a generic shell path.
+The next checkpoint must connect the real adapter to a minimal non-graphical
+approval/activity surface and exercise the complete flow without adding a generic
+shell path.

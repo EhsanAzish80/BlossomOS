@@ -35,8 +35,9 @@ reporting, branch/release policy, and explicitly defined baseline quality gates.
 Entry gate satisfied. Begin on a separate scoped branch without integrating an
 LLM or restructuring the preserved prototype.
 
-Status: in progress. The portable security core checkpoint is documented in
-`docs/PHASE_1_SECURITY_CORE.md`; a real Linux sandbox adapter remains required.
+Status: in progress. The portable security core and fixed Linux Bubblewrap
+adapter are documented in `docs/PHASE_1_SECURITY_CORE.md`; a minimal approval and
+activity surface remains required.
 
 - Define versioned IPC and tool/capability schemas.
 - Implement broker, deny-by-default policy engine, approval state machine,
