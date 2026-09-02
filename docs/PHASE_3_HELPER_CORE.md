@@ -51,3 +51,21 @@ Local evidence for this checkpoint is:
 
 Target-Linux integration and installed-boundary evidence remain required before
 the Phase 3 implementation item or exit gate can be marked complete.
+
+## Fixed systemd adapter
+
+On GNU/Linux, `SystemdBluetoothManager` implements the manager boundary with
+native zbus calls only. Its production constructor fixes the local system bus,
+20-second deadline, systemd destination/path/interface, `bluetooth.service`,
+`TryRestartUnit`, and `replace` mode in code. It subscribes to the fixed
+`JobRemoved` signal before submission, matches the returned job object path,
+accepts only bounded terminal categories, and re-reads the closed unit property
+set including the 16-byte invocation ID. It has no subprocess or configurable
+unit, method, mode, address, or argument surface.
+
+The target-Linux test uses a private mock D-Bus address compiled only in the test
+configuration. It proves the exact pre-observation, single restart submission,
+matching completion, and post-observation sequence without touching the runner's
+real Bluetooth service. A missing bus produces only a disconnected/timeout
+error. Installation, system-bus service exposure, polkit authorization, and a
+real privileged mutation remain separate gates.
