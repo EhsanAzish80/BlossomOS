@@ -3,14 +3,8 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ApprovalToken(u64);
-
-impl ApprovalToken {
-    pub fn value(self) -> u64 {
-        self.0
-    }
-}
 
 #[derive(Clone, Debug)]
 struct ApprovalRecord {

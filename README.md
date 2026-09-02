@@ -30,6 +30,18 @@ not been validated as a secure or production-ready distribution and include
 insecure development defaults. See `SECURITY_MODEL.md` and
 `docs/PHASE_0_BASELINE.md` before running them.
 
+Phase 1 also implements a separate Rust security vertical slice:
+
+- One typed `system.uname` request mapped only to `/usr/bin/uname -s`.
+- A deny-by-default capability policy and exact, once-only terminal approval.
+- Approval binding, expiry, cancellation, and replay protection.
+- A Linux Bubblewrap adapter with a read-only system view, isolated network,
+  cleared environment, dropped capabilities, timeout, and output limits.
+- Result verification and hash-chained, content-redacted audit activity.
+- Non-interactive denial and no unsandboxed fallback.
+
+This slice is a tested foundation, not a general command runner or finished OS.
+
 ### Planned, not implemented
 
 The following are architectural goals only:
@@ -37,11 +49,8 @@ The following are architectural goals only:
 - Hyprland integration and a Quickshell-based Blossom Shell.
 - A provider-neutral local AI runtime with replaceable model backends.
 - A typed Blossom Bus and structured desktop/system context.
-- A capability broker and deny-by-default policy engine.
-- User approval flows bound to exact operations and scopes.
-- A sandboxed unprivileged executor.
 - A minimal typed privileged helper with no generic root shell.
-- Structured, local, inspectable audit records.
+- Persistent, user-manageable local audit storage.
 - Agent planning, execution verification, memory, packaging, and safe updates.
 
 No security property described in the target documents should be treated as a
@@ -66,8 +75,10 @@ the relevant contract documents.
 
 ```text
 ai-core/               rule-based Python prototype
+apps/blossom-cli/      Phase 1 interactive approval and activity client
 build/                 prototype ArchISO/Alpine build scripts and helpers
 config/                prototype XFCE/Picom configuration
+core/blossom-core/     typed policy, approval, executor, verification, and audit core
 docs/                  prototype docs, Phase 0 evidence, and ADRs
 scripts/               prototype installation and utility scripts
 ```
@@ -77,9 +88,9 @@ not been moved or restructured.
 
 ## Development
 
-Phase 0 is complete. Phase 1 may implement only the deterministic security
-vertical slice described in `ROADMAP.md`; it must not integrate an LLM or
-restructure the preserved prototype.
+Phases 0 and 1 are complete. Phase 2 expands the capability and sandbox
+foundation through typed tools and containment tests; it must not integrate an
+LLM or restructure the preserved prototype merely for appearance.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.

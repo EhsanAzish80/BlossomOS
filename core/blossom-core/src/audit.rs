@@ -1,4 +1,4 @@
-use crate::approval::{ApprovalError, ApprovalToken};
+use crate::approval::ApprovalError;
 use crate::executor::{ExecutionResult, ExecutorError};
 use crate::policy::{Capability, PolicyDecision};
 use crate::request::ToolRequest;
@@ -24,7 +24,6 @@ pub enum AuditEvent {
     },
     ApprovalIssued {
         request_id: String,
-        token: ApprovalToken,
     },
     ApprovalRejected {
         request_id: String,
@@ -32,11 +31,12 @@ pub enum AuditEvent {
     },
     ApprovalConsumed {
         request_id: String,
-        token: ApprovalToken,
     },
     ApprovalDenied {
         request_id: String,
-        token: ApprovalToken,
+    },
+    ApprovalCancelled {
+        request_id: String,
     },
     ExecutionStarted {
         request_id: String,

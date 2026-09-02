@@ -35,15 +35,16 @@ reporting, branch/release policy, and explicitly defined baseline quality gates.
 Entry gate satisfied. Begin on a separate scoped branch without integrating an
 LLM or restructuring the preserved prototype.
 
-Status: in progress. The portable security core and fixed Linux Bubblewrap
-adapter are documented in `docs/PHASE_1_SECURITY_CORE.md`; a minimal approval and
-activity surface remains required.
+Status: complete (2026-09-02). Evidence is documented in
+`docs/PHASE_1_SECURITY_CORE.md`.
 
-- Define versioned IPC and tool/capability schemas.
-- Implement broker, deny-by-default policy engine, approval state machine,
+- [x] Define the initial typed request and tool/capability schemas. Versioned IPC
+  transport remains intentionally deferred until a separate process exists.
+- [x] Implement broker, deny-by-default policy engine, approval state machine,
   sandboxed diagnostic executor, verification, and audit records.
-- Build the smallest approval and activity UI needed to exercise the path.
-- Use a fixed harmless diagnostic; do not integrate an LLM.
+- [x] Build the smallest interactive terminal approval and activity surface needed
+  to exercise the path, including non-TTY denial and audited cancellation.
+- [x] Use a fixed harmless diagnostic; do not integrate an LLM.
 
 Exit: end-to-end tests prove request -> policy -> approval -> execution ->
 verification -> audit, including denial and failure paths.

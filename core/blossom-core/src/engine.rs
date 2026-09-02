@@ -55,7 +55,6 @@ impl<E: Executor> BlossomEngine<E> {
                 let token = self.approvals.issue(request.clone(), now_ms);
                 self.audit.append(AuditEvent::ApprovalIssued {
                     request_id: request.request_id().as_str().into(),
-                    token,
                 });
                 Ok(BeginOutcome::ApprovalRequired { request, token })
             }
@@ -78,7 +77,6 @@ impl<E: Executor> BlossomEngine<E> {
         }
         self.audit.append(AuditEvent::ApprovalConsumed {
             request_id: request.request_id().as_str().into(),
-            token,
         });
         self.execute(request)
     }
@@ -98,7 +96,27 @@ impl<E: Executor> BlossomEngine<E> {
         }
         self.audit.append(AuditEvent::ApprovalDenied {
             request_id: request.request_id().as_str().into(),
-            token,
+        });
+        Ok(())
+    }
+
+    pub fn cancel_approval(
+        &mut self,
+        token: ApprovalToken,
+        request: ToolRequest,
+        now_ms: u64,
+    ) -> Result<(), EngineError> {
+        if let Err(error) = self.approvals.consume(token, &request, now_ms) {
+            self.audit.append(AuditEvent::ApprovalRejected {
+                request_id: request.request_id().as_str().into(),
+                error,
+            });
+            if error != ApprovalError::Expired {
+                return Err(EngineError::Approval(error));
+            }
+        }
+        self.audit.append(AuditEvent::ApprovalCancelled {
+            request_id: request.request_id().as_str().into(),
         });
         Ok(())
     }
@@ -137,7 +155,7 @@ impl<E: Executor> BlossomEngine<E> {
     }
 }
 
-fn command_for(request: &ToolRequest) -> CommandSpec {
+pub fn command_for(request: &ToolRequest) -> CommandSpec {
     match request {
         ToolRequest::SystemUname { .. } => CommandSpec::system_uname(),
     }
@@ -275,6 +293,44 @@ mod tests {
             Err(EngineError::Approval(ApprovalError::Replay))
         ));
         assert!(engine.audit().verify_chain());
+    }
+
+    #[test]
+    fn cancellation_consumes_approval_without_execution() {
+        let mut engine = engine(PolicyDecision::Ask, ScriptedExecutor::successful());
+        let (request, token) = match engine.begin(REQUEST, 1_000).expect("begin should work") {
+            BeginOutcome::ApprovalRequired { request, token } => (request, token),
+            outcome => panic!("unexpected begin outcome: {outcome:?}"),
+        };
+        engine
+            .cancel_approval(token, request.clone(), 1_001)
+            .expect("cancellation should consume approval");
+        assert!(engine.executor.calls.is_empty());
+        assert!(matches!(
+            engine.approve(token, request, 1_002),
+            Err(EngineError::Approval(ApprovalError::Replay))
+        ));
+        assert!(matches!(
+            engine.audit().records()[3].event,
+            AuditEvent::ApprovalCancelled { .. }
+        ));
+    }
+
+    #[test]
+    fn cancellation_is_recorded_even_after_approval_expires() {
+        let mut engine = engine(PolicyDecision::Ask, ScriptedExecutor::successful());
+        let (request, token) = match engine.begin(REQUEST, 1_000).expect("begin should work") {
+            BeginOutcome::ApprovalRequired { request, token } => (request, token),
+            outcome => panic!("unexpected begin outcome: {outcome:?}"),
+        };
+        engine
+            .cancel_approval(token, request, 1_101)
+            .expect("cancellation should remain auditable after expiry");
+        assert!(engine.executor.calls.is_empty());
+        assert!(matches!(
+            engine.audit().records().last().map(|record| &record.event),
+            Some(AuditEvent::ApprovalCancelled { .. })
+        ));
     }
 
     #[test]
