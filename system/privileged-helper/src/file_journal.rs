@@ -287,19 +287,23 @@ mod tests {
         PRIVILEGED_PROTOCOL_VERSION,
     };
     use std::os::unix::fs::symlink;
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static NEXT_TEST_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
     struct TestDirectory(PathBuf);
 
     impl TestDirectory {
         fn new() -> Self {
             let path = std::env::temp_dir().join(format!(
-                "blossom-journal-{}-{}",
+                "blossom-journal-{}-{}-{}",
                 std::process::id(),
                 SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
-                    .as_nanos()
+                    .as_nanos(),
+                NEXT_TEST_DIRECTORY.fetch_add(1, Ordering::Relaxed)
             ));
             fs::create_dir(&path).unwrap();
             fs::set_permissions(&path, fs::Permissions::from_mode(DIRECTORY_MODE)).unwrap();

@@ -69,3 +69,21 @@ matching completion, and post-observation sequence without touching the runner's
 real Bluetooth service. A missing bus produces only a disconnected/timeout
 error. Installation, system-bus service exposure, polkit authorization, and a
 real privileged mutation remain separate gates.
+
+## Fixed polkit adapter
+
+On GNU/Linux, `PolkitAuthorizer` calls only the system polkit Authority's
+`CheckAuthorization` method. It constructs a `system-bus-name` subject from the
+helper-authenticated unique sender, fixes the action to
+`org.blossomos.privileged1.try-restart-bluetooth`, supplies only bounded
+operation/unit/correlation details, requests one interactive authorization, and
+does not request retained authority. Invalid senders and noninteractive requests
+are denied before bus contact; authority errors fail unavailable and the human
+authorization deadline expires closed.
+
+The adapter accepts no PID, process name, executable, action identifier,
+authorization token, unit, or arbitrary detail from the caller. Target-Linux
+tests verify the exact subject, action, details, and flags against a private mock
+Authority. Capturing the real method sender, resolving its UID through the bus,
+checking that it remains connected after authorization, and exposing the helper
+method remain part of the system-service checkpoint.
