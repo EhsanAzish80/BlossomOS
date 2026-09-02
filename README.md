@@ -42,6 +42,11 @@ Phase 1 also implements a separate Rust security vertical slice:
 
 This slice is a tested foundation, not a general command runner or finished OS.
 
+Phase 2 currently adds one native read capability, `system.read:os.identity`.
+It parses the selected os-release file without launching a process, exposes only
+an allowlisted identity schema, and records verified provenance without copying
+identity values into the audit log. No other Phase 2 capability is implemented.
+
 ### Planned, not implemented
 
 The following are architectural goals only:

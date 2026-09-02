@@ -1,24 +1,46 @@
 use crate::approval::{ApprovalError, ApprovalStore, ApprovalToken};
 use crate::audit::{AuditEvent, AuditLog};
 use crate::executor::{CommandSpec, Executor, ExecutorError};
+use crate::os_identity::{
+    OsIdentity, OsIdentityError, OsIdentityProvider, UnavailableOsIdentityProvider,
+};
 use crate::policy::{PolicyDecision, PolicyEngine};
 use crate::request::{RequestError, ToolRequest};
-use crate::verification::{Verification, verify_execution};
+use crate::verification::{Verification, verify_execution, verify_os_identity};
 
 #[derive(Debug)]
-pub struct BlossomEngine<E> {
+pub struct BlossomEngine<E, O = UnavailableOsIdentityProvider> {
     policy: PolicyEngine,
     approvals: ApprovalStore,
     executor: E,
+    os_identity: O,
     audit: AuditLog,
 }
 
-impl<E: Executor> BlossomEngine<E> {
+impl<E: Executor> BlossomEngine<E, UnavailableOsIdentityProvider> {
     pub fn new(policy: PolicyEngine, approvals: ApprovalStore, executor: E) -> Self {
         Self {
             policy,
             approvals,
             executor,
+            os_identity: UnavailableOsIdentityProvider,
+            audit: AuditLog::default(),
+        }
+    }
+}
+
+impl<E: Executor, O: OsIdentityProvider> BlossomEngine<E, O> {
+    pub fn with_os_identity(
+        policy: PolicyEngine,
+        approvals: ApprovalStore,
+        executor: E,
+        os_identity: O,
+    ) -> Self {
+        Self {
+            policy,
+            approvals,
+            executor,
+            os_identity,
             audit: AuditLog::default(),
         }
     }
@@ -126,7 +148,14 @@ impl<E: Executor> BlossomEngine<E> {
     }
 
     fn execute(&mut self, request: ToolRequest) -> Result<CompletionOutcome, EngineError> {
-        let command = command_for(&request);
+        match request {
+            ToolRequest::SystemUname { .. } => self.execute_command(request),
+            ToolRequest::SystemOsIdentity { .. } => self.execute_os_identity(request),
+        }
+    }
+
+    fn execute_command(&mut self, request: ToolRequest) -> Result<CompletionOutcome, EngineError> {
+        let command = command_for(&request).expect("command request has a fixed command");
         self.audit.append(AuditEvent::ExecutionStarted {
             request_id: request.request_id().as_str().into(),
             program: command.program.display().to_string(),
@@ -151,13 +180,48 @@ impl<E: Executor> BlossomEngine<E> {
         Ok(CompletionOutcome {
             request,
             verification,
+            output: ToolOutput::SystemUname,
+        })
+    }
+
+    fn execute_os_identity(
+        &mut self,
+        request: ToolRequest,
+    ) -> Result<CompletionOutcome, EngineError> {
+        self.audit.append(AuditEvent::NativeReadStarted {
+            request_id: request.request_id().as_str().into(),
+            resource: "os.identity".into(),
+        });
+        let identity = match self.os_identity.read_os_identity() {
+            Ok(identity) => identity,
+            Err(error) => {
+                self.audit.append(AuditEvent::NativeReadFailed {
+                    request_id: request.request_id().as_str().into(),
+                    resource: "os.identity".into(),
+                    error,
+                });
+                return Err(EngineError::OsIdentity(error));
+            }
+        };
+        self.audit
+            .append(AuditEvent::os_identity_finished(&request, &identity));
+        let verification = verify_os_identity(&identity);
+        self.audit.append(AuditEvent::VerificationFinished {
+            request_id: request.request_id().as_str().into(),
+            verification: verification.clone(),
+        });
+        Ok(CompletionOutcome {
+            request,
+            verification,
+            output: ToolOutput::OsIdentity(Box::new(identity)),
         })
     }
 }
 
-pub fn command_for(request: &ToolRequest) -> CommandSpec {
+pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
     match request {
-        ToolRequest::SystemUname { .. } => CommandSpec::system_uname(),
+        ToolRequest::SystemUname { .. } => Some(CommandSpec::system_uname()),
+        ToolRequest::SystemOsIdentity { .. } => None,
     }
 }
 
@@ -184,6 +248,13 @@ pub enum BeginOutcome {
 pub struct CompletionOutcome {
     pub request: ToolRequest,
     pub verification: Verification,
+    pub output: ToolOutput,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ToolOutput {
+    SystemUname,
+    OsIdentity(Box<OsIdentity>),
 }
 
 #[derive(Debug)]
@@ -191,6 +262,7 @@ pub enum EngineError {
     InvalidRequest(RequestError),
     Approval(ApprovalError),
     Executor(ExecutorError),
+    OsIdentity(OsIdentityError),
 }
 
 #[cfg(test)]
@@ -229,6 +301,37 @@ mod tests {
             self.outcomes
                 .pop_front()
                 .unwrap_or(Err(ExecutorError::Failed))
+        }
+    }
+
+    #[derive(Debug)]
+    struct ScriptedOsIdentity {
+        result: Option<Result<OsIdentity, OsIdentityError>>,
+        calls: usize,
+    }
+
+    impl OsIdentityProvider for ScriptedOsIdentity {
+        fn read_os_identity(&mut self) -> Result<OsIdentity, OsIdentityError> {
+            self.calls += 1;
+            self.result
+                .take()
+                .unwrap_or(Err(OsIdentityError::ReadFailed))
+        }
+    }
+
+    fn os_identity() -> OsIdentity {
+        OsIdentity {
+            source: crate::os_identity::OsReleaseSource::EtcOsRelease,
+            source_path: "/etc/os-release".into(),
+            source_sha256: "a".repeat(64),
+            source_bytes: 8,
+            id: Some("arch".into()),
+            name: Some("Arch Linux".into()),
+            pretty_name: Some("Arch Linux".into()),
+            version_id: None,
+            version_codename: None,
+            build_id: Some("rolling".into()),
+            variant_id: None,
         }
     }
 
@@ -339,6 +442,76 @@ mod tests {
         let outcome = engine.begin(REQUEST, 1_000).expect("begin should work");
         assert!(matches!(outcome, BeginOutcome::Completed(_)));
         assert_eq!(engine.executor.calls.len(), 1);
+    }
+
+    #[test]
+    fn os_identity_allow_uses_native_provider_not_executor() {
+        let policy = PolicyEngine::new(vec![PolicyRule {
+            capability: Capability::SystemReadOsIdentity,
+            decision: PolicyDecision::Allow,
+        }]);
+        let provider = ScriptedOsIdentity {
+            result: Some(Ok(os_identity())),
+            calls: 0,
+        };
+        let mut engine = BlossomEngine::with_os_identity(
+            policy,
+            ApprovalStore::new(100),
+            ScriptedExecutor::successful(),
+            provider,
+        );
+        let outcome = engine
+            .begin(
+                r#"{"request_id":"req-os","tool":"system.os.identity","arguments":{}}"#,
+                1_000,
+            )
+            .expect("native read should complete");
+        let completed = match outcome {
+            BeginOutcome::Completed(completed) => completed,
+            other => panic!("unexpected outcome: {other:?}"),
+        };
+        assert!(completed.verification.succeeded);
+        assert!(matches!(completed.output, ToolOutput::OsIdentity(_)));
+        assert!(engine.executor.calls.is_empty());
+        assert_eq!(engine.os_identity.calls, 1);
+        assert!(engine.audit().verify_chain());
+        assert!(
+            engine
+                .audit()
+                .records()
+                .iter()
+                .any(|record| matches!(record.event, AuditEvent::OsIdentityReadFinished { .. }))
+        );
+    }
+
+    #[test]
+    fn os_identity_failure_is_audited_without_executor_fallback() {
+        let policy = PolicyEngine::new(vec![PolicyRule {
+            capability: Capability::SystemReadOsIdentity,
+            decision: PolicyDecision::Allow,
+        }]);
+        let provider = ScriptedOsIdentity {
+            result: Some(Err(OsIdentityError::Missing)),
+            calls: 0,
+        };
+        let mut engine = BlossomEngine::with_os_identity(
+            policy,
+            ApprovalStore::new(100),
+            ScriptedExecutor::successful(),
+            provider,
+        );
+        assert!(matches!(
+            engine.begin(
+                r#"{"request_id":"req-os","tool":"system.os.identity","arguments":{}}"#,
+                1_000,
+            ),
+            Err(EngineError::OsIdentity(OsIdentityError::Missing))
+        ));
+        assert!(engine.executor.calls.is_empty());
+        assert!(matches!(
+            engine.audit().records().last().map(|record| &record.event),
+            Some(AuditEvent::NativeReadFailed { .. })
+        ));
     }
 
     #[test]

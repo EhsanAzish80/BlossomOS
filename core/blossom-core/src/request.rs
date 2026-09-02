@@ -29,6 +29,7 @@ impl RequestId {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum ToolRequest {
     SystemUname { request_id: RequestId },
+    SystemOsIdentity { request_id: RequestId },
 }
 
 impl ToolRequest {
@@ -47,6 +48,14 @@ impl ToolRequest {
                 })?;
                 Ok(Self::SystemUname { request_id })
             }
+            "system.os.identity" => {
+                serde_json::from_value::<NoArguments>(envelope.arguments).map_err(|error| {
+                    RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    }
+                })?;
+                Ok(Self::SystemOsIdentity { request_id })
+            }
             _ => Err(RequestError::UnknownTool {
                 tool: envelope.tool,
             }),
@@ -55,13 +64,14 @@ impl ToolRequest {
 
     pub fn request_id(&self) -> &RequestId {
         match self {
-            Self::SystemUname { request_id } => request_id,
+            Self::SystemUname { request_id } | Self::SystemOsIdentity { request_id } => request_id,
         }
     }
 
     pub fn tool_name(&self) -> &'static str {
         match self {
             Self::SystemUname { .. } => "system.uname",
+            Self::SystemOsIdentity { .. } => "system.os.identity",
         }
     }
 }
@@ -114,6 +124,15 @@ mod tests {
     }
 
     #[test]
+    fn parses_os_identity_without_arguments() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-2","tool":"system.os.identity","arguments":{}}"#,
+        )
+        .expect("OS identity request should parse");
+        assert_eq!(request.tool_name(), "system.os.identity");
+    }
+
+    #[test]
     fn rejects_unknown_fields_and_tools() {
         assert!(matches!(
             ToolRequest::parse_json(
@@ -134,6 +153,12 @@ mod tests {
         assert!(matches!(
             ToolRequest::parse_json(
                 r#"{"request_id":"req-1","tool":"system.uname","arguments":{"flag":"-a"}}"#
+            ),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+        assert!(matches!(
+            ToolRequest::parse_json(
+                r#"{"request_id":"req-2","tool":"system.os.identity","arguments":{"path":"/tmp/fake"}}"#
             ),
             Err(RequestError::InvalidArguments { .. })
         ));

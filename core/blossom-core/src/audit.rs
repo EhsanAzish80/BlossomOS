@@ -1,5 +1,6 @@
 use crate::approval::ApprovalError;
 use crate::executor::{ExecutionResult, ExecutorError};
+use crate::os_identity::{OsIdentity, OsIdentityError};
 use crate::policy::{Capability, PolicyDecision};
 use crate::request::ToolRequest;
 use crate::verification::Verification;
@@ -56,6 +57,21 @@ pub enum AuditEvent {
         request_id: String,
         error: ExecutorError,
     },
+    NativeReadStarted {
+        request_id: String,
+        resource: String,
+    },
+    OsIdentityReadFinished {
+        request_id: String,
+        source_path: String,
+        source_sha256: String,
+        source_bytes: usize,
+    },
+    NativeReadFailed {
+        request_id: String,
+        resource: String,
+        error: OsIdentityError,
+    },
     VerificationFinished {
         request_id: String,
         verification: Verification,
@@ -76,6 +92,15 @@ impl AuditEvent {
             stderr_sha256: digest(&result.stderr),
             timed_out: result.timed_out,
             output_truncated: result.output_truncated,
+        }
+    }
+
+    pub fn os_identity_finished(request: &ToolRequest, identity: &OsIdentity) -> Self {
+        Self::OsIdentityReadFinished {
+            request_id: request.request_id().as_str().into(),
+            source_path: identity.source_path.clone(),
+            source_sha256: identity.source_sha256.clone(),
+            source_bytes: identity.source_bytes,
         }
     }
 }
@@ -182,5 +207,33 @@ mod tests {
         assert!(audit.verify_chain());
         let encoded = serde_json::to_string(audit.records()).expect("serializable audit records");
         assert!(!encoded.contains("secret-output"));
+    }
+
+    #[test]
+    fn os_identity_audit_records_provenance_not_identity_values() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-os","tool":"system.os.identity","arguments":{}}"#,
+        )
+        .expect("valid OS identity request");
+        let identity = OsIdentity {
+            source: crate::os_identity::OsReleaseSource::EtcOsRelease,
+            source_path: "/etc/os-release".into(),
+            source_sha256: "a".repeat(64),
+            source_bytes: 42,
+            id: Some("private-id-value".into()),
+            name: Some("private-name-value".into()),
+            pretty_name: None,
+            version_id: None,
+            version_codename: None,
+            build_id: None,
+            variant_id: None,
+        };
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::os_identity_finished(&request, &identity));
+        let encoded = serde_json::to_string(audit.records()).expect("serializable audit records");
+        assert!(encoded.contains("/etc/os-release"));
+        assert!(encoded.contains(&"a".repeat(64)));
+        assert!(!encoded.contains("private-id-value"));
+        assert!(!encoded.contains("private-name-value"));
     }
 }
