@@ -42,3 +42,14 @@ sudo ./build/build-iso.sh
 - **Storage**: 20GB minimum
 - **CPU**: 64-bit processor with 2+ cores
 - **LLM**: Runs Phi-3 (3B) or Llama 3.2 (3B-8B) models
+
+## Project status
+
+Blossom OS is a pre-alpha research project. The original XFCE and rule-based AI
+prototype is preserved in Git; the agent-native target architecture is defined
+in `VISION.md`, `ARCHITECTURE.md`, and `SECURITY_MODEL.md`. Target security
+properties are not claims about the current prototype.
+
+## License
+
+Licensed under the Apache License, Version 2.0. See `LICENSE`.

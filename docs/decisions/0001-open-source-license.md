@@ -1,6 +1,6 @@
 # ADR-0001: Open-source license
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-02
 - Owners: Project maintainers
 
@@ -13,13 +13,12 @@ integrations, contributor expectations, and compatibility with dependencies.
 
 ## Decision
 
-Select and add a project license before accepting external contributions or
-making the initial public source push. This ADR intentionally does not choose on
-the maintainer's behalf.
+Use the Apache License, Version 2.0 (`Apache-2.0`) for Blossom OS. Add the
+canonical license text at the repository root before the initial public push.
 
 ## Alternatives considered
 
-- Apache-2.0: permissive use plus an explicit patent grant.
+- Apache-2.0: selected for permissive use plus an explicit patent grant.
 - MPL-2.0: file-level copyleft that permits combination with differently licensed
   components.
 - GPL-3.0-or-later: strong copyleft for distributed derivative works.
@@ -42,10 +41,10 @@ need them. Contributor terms and release artifacts must match the decision.
 
 Add `LICENSE`, update contribution and packaging metadata, and record the accepted
 SPDX identifier. Relicensing after outside contributions may require contributor
-consent, so decide before accepting them.
+consent.
 
 ## Validation
 
-- Maintainer explicitly approves the license.
+- Maintainer explicitly approved Apache-2.0 on 2026-09-02.
 - Dependency compatibility is reviewed.
 - `LICENSE`, README, package metadata, and contribution guidance agree.
