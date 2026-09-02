@@ -4,6 +4,7 @@ use crate::memory_summary::{MemorySummary, MemorySummaryError};
 use crate::os_identity::{OsIdentity, OsIdentityError};
 use crate::policy::{Capability, PolicyDecision};
 use crate::request::ToolRequest;
+use crate::storage_summary::{StorageSummary, StorageSummaryError};
 use crate::uptime::{SystemUptime, UptimeError};
 use crate::verification::Verification;
 use serde::Serialize;
@@ -81,6 +82,11 @@ pub enum AuditEvent {
         source_sha256: String,
         source_bytes: usize,
     },
+    StorageSummaryReadFinished {
+        request_id: String,
+        resource_path: String,
+        source: String,
+    },
     NativeReadFailed {
         request_id: String,
         resource: String,
@@ -95,6 +101,11 @@ pub enum AuditEvent {
         request_id: String,
         resource: String,
         error: MemorySummaryError,
+    },
+    StorageSummaryReadFailed {
+        request_id: String,
+        resource: String,
+        error: StorageSummaryError,
     },
     VerificationFinished {
         request_id: String,
@@ -143,6 +154,14 @@ impl AuditEvent {
             source_path: summary.source_path.clone(),
             source_sha256: summary.source_sha256.clone(),
             source_bytes: summary.source_bytes,
+        }
+    }
+
+    pub fn storage_summary_finished(request: &ToolRequest, summary: &StorageSummary) -> Self {
+        Self::StorageSummaryReadFinished {
+            request_id: request.request_id().as_str().into(),
+            resource_path: summary.resource_path.clone(),
+            source: "statvfs".into(),
         }
     }
 }
@@ -321,5 +340,25 @@ mod tests {
         assert!(encoded.contains("/proc/meminfo"));
         assert!(!encoded.contains("17179869184"));
         assert!(!encoded.contains("8589934592"));
+    }
+
+    #[test]
+    fn storage_audit_records_scope_not_capacity_values() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-storage","tool":"system.storage.summary","arguments":{}}"#,
+        )
+        .expect("valid storage summary request");
+        let summary = StorageSummary {
+            source: crate::storage_summary::StorageSummarySource::RootStatvfs,
+            resource_path: "/".into(),
+            total_bytes: 987_654_321,
+            available_bytes: 123_456_789,
+        };
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::storage_summary_finished(&request, &summary));
+        let encoded = serde_json::to_string(audit.records()).expect("serializable audit records");
+        assert!(encoded.contains("statvfs"));
+        assert!(!encoded.contains("987654321"));
+        assert!(!encoded.contains("123456789"));
     }
 }

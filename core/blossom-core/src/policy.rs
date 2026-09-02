@@ -7,6 +7,7 @@ pub enum Capability {
     SystemReadOsIdentity,
     SystemReadUptime,
     SystemReadMemorySummary,
+    SystemReadStorageSummary,
 }
 
 impl Capability {
@@ -16,6 +17,7 @@ impl Capability {
             Self::SystemReadOsIdentity => "system.read:os.identity",
             Self::SystemReadUptime => "system.read:uptime",
             Self::SystemReadMemorySummary => "system.read:memory.summary",
+            Self::SystemReadStorageSummary => "system.read:storage.summary",
         }
     }
 }
@@ -49,6 +51,7 @@ impl PolicyEngine {
             ToolRequest::SystemOsIdentity { .. } => Capability::SystemReadOsIdentity,
             ToolRequest::SystemUptime { .. } => Capability::SystemReadUptime,
             ToolRequest::SystemMemorySummary { .. } => Capability::SystemReadMemorySummary,
+            ToolRequest::SystemStorageSummary { .. } => Capability::SystemReadStorageSummary,
         }
     }
 
@@ -98,6 +101,13 @@ mod tests {
         };
         assert_eq!(
             PolicyEngine::default().evaluate(&memory),
+            PolicyDecision::Deny
+        );
+        let storage = ToolRequest::SystemStorageSummary {
+            request_id: RequestId::parse("req-storage".into()).expect("valid test id"),
+        };
+        assert_eq!(
+            PolicyEngine::default().evaluate(&storage),
             PolicyDecision::Deny
         );
     }

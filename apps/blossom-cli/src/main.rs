@@ -2,11 +2,11 @@
 
 use blossom_cli::{
     ApprovalChoice, Clock, Interaction, exact_preview, run_fixed_diagnostic, run_memory_summary,
-    run_os_identity, run_uptime,
+    run_os_identity, run_storage_summary, run_uptime,
 };
 use blossom_core::{
-    OsReleaseReader, ProcMeminfoReader, ProcUptimeReader, RequestId, ToolRequest,
-    executor::bubblewrap::BubblewrapExecutor,
+    OsReleaseReader, ProcMeminfoReader, ProcUptimeReader, RequestId, RootStorageReader,
+    ToolRequest, executor::bubblewrap::BubblewrapExecutor,
 };
 use std::io::{self, IsTerminal, Write};
 use std::sync::mpsc;
@@ -77,9 +77,15 @@ fn main() {
     let os_identity_requested = arguments.as_slice() == ["os-identity"];
     let uptime_requested = arguments.as_slice() == ["uptime"];
     let memory_requested = arguments.as_slice() == ["memory-summary"];
-    if !arguments.is_empty() && !os_identity_requested && !uptime_requested && !memory_requested {
+    let storage_requested = arguments.as_slice() == ["storage-summary"];
+    if !arguments.is_empty()
+        && !os_identity_requested
+        && !uptime_requested
+        && !memory_requested
+        && !storage_requested
+    {
         eprintln!(
-            "Usage: blossom-cli [os-identity|uptime|memory-summary]\nNo executable or argument input is supported."
+            "Usage: blossom-cli [os-identity|uptime|memory-summary|storage-summary]\nNo executable or argument input is supported."
         );
         std::process::exit(64);
     }
@@ -125,6 +131,20 @@ fn main() {
         let outcome = run_memory_summary(
             BubblewrapExecutor::phase1_default(),
             ProcMeminfoReader::default(),
+            &mut clock,
+            request_id,
+        );
+        if let Some(result) = outcome.result {
+            println!("{result}");
+        }
+        print!("{}", outcome.activity);
+        std::process::exit(outcome.exit_code);
+    }
+
+    if storage_requested {
+        let outcome = run_storage_summary(
+            BubblewrapExecutor::phase1_default(),
+            RootStorageReader,
             &mut clock,
             request_id,
         );

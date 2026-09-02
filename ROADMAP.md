@@ -61,7 +61,7 @@ remain narrow native reads; later Phase 2 capabilities are not implemented.
   - [x] `system.read:os.identity` via bounded native os-release parsing.
   - [x] `system.read:uptime` via a bounded native `/proc/uptime` read.
   - [x] `system.read:memory.summary` via a bounded native `/proc/meminfo` read.
-  - [ ] `system.read:storage.summary`.
+  - [x] `system.read:storage.summary` via native root-filesystem `statvfs`.
   - [ ] `process.read:self`.
   - [ ] `process.read:list` with once-only approval.
   - [ ] One user-selected exact-file read.

@@ -8,6 +8,7 @@ pub mod memory_summary;
 pub mod os_identity;
 pub mod policy;
 pub mod request;
+pub mod storage_summary;
 pub mod uptime;
 pub mod verification;
 
@@ -28,10 +29,15 @@ pub use os_identity::{
 };
 pub use policy::{Capability, PolicyDecision, PolicyEngine, PolicyRule};
 pub use request::{RequestError, RequestId, ToolRequest};
+pub use storage_summary::{
+    ROOT_FILESYSTEM_PATH, RootStorageReader, StorageSummary, StorageSummaryError,
+    StorageSummaryProvider, StorageSummarySource, UnavailableStorageSummaryProvider,
+};
 pub use uptime::{
     MAX_PROC_UPTIME_BYTES, PROC_UPTIME_PATH, ProcUptimeReader, SystemUptime,
     UnavailableUptimeProvider, UptimeError, UptimeProvider, parse_proc_uptime,
 };
 pub use verification::{
-    Verification, verify_execution, verify_memory_summary, verify_os_identity, verify_uptime,
+    Verification, verify_execution, verify_memory_summary, verify_os_identity,
+    verify_storage_summary, verify_uptime,
 };
