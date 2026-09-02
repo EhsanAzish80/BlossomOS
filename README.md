@@ -77,9 +77,9 @@ not been moved or restructured.
 
 ## Development
 
-Phase 0 is still in progress. Do not begin the Phase 1 architecture skeleton
-until every unresolved item in `docs/PHASE_0_BASELINE.md` is closed and the
-roadmap status is updated.
+Phase 0 is complete. Phase 1 may implement only the deterministic security
+vertical slice described in `ROADMAP.md`; it must not integrate an LLM or
+restructure the preserved prototype.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.

@@ -65,5 +65,4 @@ approved and documented.
 ## Reporting security issues
 
 Follow `SECURITY.md`. Do not open a public issue containing an exploitable
-vulnerability before GitHub Private Vulnerability Reporting is enabled and linked
-from that policy.
+vulnerability; use the linked GitHub Private Vulnerability Reporting form.

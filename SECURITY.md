@@ -11,15 +11,10 @@ No release is currently supported with security updates.
 
 ## Reporting a vulnerability
 
-GitHub Private Vulnerability Reporting is the preferred reporting channel once it
-is enabled for this repository. It is currently disabled, so no private project
-reporting channel is available yet. Until the repository owner enables it and
-this file links to the active reporting form, do not post exploitable details in
-a public issue.
-
-Enabling Private Vulnerability Reporting is a repository-owner GitHub setting and
-remains an explicit Phase 0 owner action. The presence of this policy file does
-not mean that setting has been enabled.
+Use [GitHub Private Vulnerability Reporting](https://github.com/EhsanAzish80/BlossomOS/security/advisories/new)
+for suspected vulnerabilities. The repository setting and private reporting form
+were verified enabled on 2026-09-02. Do not post exploitable details in a public
+issue.
 
 When reporting, include affected revision, environment, reproduction steps,
 impact, and any suggested mitigation. Do not access other people's data or
