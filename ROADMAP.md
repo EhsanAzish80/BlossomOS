@@ -94,7 +94,7 @@ its applicable containment tests. See `docs/PHASE_2_BASELINE.md`.
 
 ## Phase 3: Privileged operations
 
-Status: completion review. ADR-0009 selects the system D-Bus, polkit, idempotency, audit,
+Status: complete. ADR-0009 selects the system D-Bus, polkit, idempotency, audit,
 and hardening boundary. ADR-0010 fixes the first operation to a try-restart of
 the already-running `bluetooth.service`. The single system-bus method, fixed
 native adapters, durable state, packaging boundary, and interactive client are
@@ -129,9 +129,9 @@ implemented. They remain pre-alpha and are not installed by this repository.
     systemd operation, interactive client, double audit, and Linux evidence.
 - [x] Complete threat review, negative tests, replay protection, and audit coverage.
 
-Exit candidate: `docs/PHASE_3_BASELINE.md` records the requirement-by-requirement
-evidence and independent no-generic-root-path review. Phase 3 becomes complete
-only after that checkpoint passes protected CI and is merged to `main`.
+Exit satisfied: `docs/PHASE_3_BASELINE.md` records the requirement-by-requirement
+evidence and independent no-generic-root-path review. The exit checkpoint passed
+protected CI and merged to `main` as `0662e51`.
 
 ## Phase 4: Replaceable local AI runtime
 

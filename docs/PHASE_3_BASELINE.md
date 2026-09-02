@@ -1,7 +1,8 @@
 # Phase 3 privileged-operation baseline
 
-Status: review candidate. This document becomes the Phase 3 completion record
-only after its pull request and all protected checks pass on target Linux.
+Status: complete. The exit review passed all checks and merged to `main` in
+PR #34 as `0662e51`. Phase 3's adversarial evidence checkpoint passed and
+merged in PR #33 as `8cfb9b9`.
 
 Blossom OS remains pre-alpha. The Phase 3 implementation proves one narrowly
 typed privileged boundary; it is not a general-purpose root automation system
@@ -78,6 +79,9 @@ not be interpreted as a supported privileged interface.
 
 ## Completion decision
 
-Phase 3 may be marked complete after this checkpoint passes the protected Linux
-test, lint, packaging, secret, static-analysis, and dependency-review checks and
-is merged to `main`. A failed or unavailable required check keeps Phase 3 active.
+Phase 3 is complete. The checkpoint passed the protected Linux test, lint,
+packaging, secret, static-analysis, and dependency-review checks before merge.
+The repository dependency graph was enabled so dependency review runs for real,
+and `Dependency review` is now a required `main` branch check. Private
+vulnerability reporting, secret scanning, push protection, strict up-to-date
+required checks, and administrator enforcement were verified enabled at exit.
