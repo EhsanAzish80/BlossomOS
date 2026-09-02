@@ -1,55 +1,94 @@
-# BlossomOS
+# Blossom OS
 
-An intelligent Linux distribution with integrated offline LLM for system-level assistance.
+Blossom OS is an open-source, local-first, agent-native Linux desktop project.
+Its target platform is Arch Linux with Hyprland and a custom Quickshell shell,
+backed by a replaceable local AI runtime, capability broker, policy engine,
+sandboxed executor, minimal privileged helper, and structured audit system.
 
-## Features
-
-- 🤖 **Offline AI Assistant** - Local LLM for coding, security, and system management
-- 🖥️ **Modern GUI** - Lightweight XFCE desktop with Picom compositor
-- 🚀 **VM Optimized** - Works seamlessly on VirtualBox, QEMU, and VMware
-- 🍎 **Mac Compatible** - Bootable USB support for Mac hardware
-- 🔒 **Security Focused** - Built-in security tools and AI-assisted hardening
-- ⚡ **Fast & Minimal** - Based on Arch Linux for performance
-
-## Project Structure
-
-```
-BlossomOs/
-├── build/              # ISO build scripts and configuration
-├── rootfs/             # Root filesystem overlay
-├── config/             # System configurations
-├── ai-core/            # LLM integration and system bridge
-├── gui/                # Desktop environment customization
-├── scripts/            # Installation and utility scripts
-└── docs/               # Documentation
-```
-
-## Building
-
-```bash
-sudo ./build/build-iso.sh
-```
-
-## Testing in VM
-
-```bash
-./scripts/test-vm.sh
-```
-
-## System Requirements
-
-- **RAM**: 4GB minimum, 8GB recommended
-- **Storage**: 20GB minimum
-- **CPU**: 64-bit processor with 2+ cores
-- **LLM**: Runs Phi-3 (3B) or Llama 3.2 (3B-8B) models
+That is the target architecture, not the current implementation.
 
 ## Project status
 
-Blossom OS is a pre-alpha research project. The original XFCE and rule-based AI
-prototype is preserved in Git; the agent-native target architecture is defined
-in `VISION.md`, `ARCHITECTURE.md`, and `SECURITY_MODEL.md`. Target security
-properties are not claims about the current prototype.
+Blossom OS is pre-alpha research software. It is not ready for installation as a
+trusted daily operating system and has no supported release.
+
+### Implemented today
+
+The repository currently contains the preserved original prototype:
+
+- ArchISO and experimental Alpine build/setup scripts.
+- XFCE and Picom configuration.
+- A Python command-line assistant with rule-based responses and system inspection.
+- VM, installer, theme, autologin, and bootable-media helper scripts.
+- Early prototype documentation.
+
+The untouched initial state is preserved by the Git tag
+`prototype-pre-agent-architecture`.
+
+The Python assistant does **not** load or run a real LLM. The legacy scripts have
+not been validated as a secure or production-ready distribution and include
+insecure development defaults. See `SECURITY_MODEL.md` and
+`docs/PHASE_0_BASELINE.md` before running them.
+
+### Planned, not implemented
+
+The following are architectural goals only:
+
+- Hyprland integration and a Quickshell-based Blossom Shell.
+- A provider-neutral local AI runtime with replaceable model backends.
+- A typed Blossom Bus and structured desktop/system context.
+- A capability broker and deny-by-default policy engine.
+- User approval flows bound to exact operations and scopes.
+- A sandboxed unprivileged executor.
+- A minimal typed privileged helper with no generic root shell.
+- Structured, local, inspectable audit records.
+- Agent planning, execution verification, memory, packaging, and safe updates.
+
+No security property described in the target documents should be treated as a
+claim about the current prototype.
+
+## Architectural contract
+
+- `VISION.md` defines what Blossom is and is not.
+- `ARCHITECTURE.md` defines target components and trust boundaries.
+- `SECURITY_MODEL.md` defines required security properties and tests.
+- `ROADMAP.md` defines phased delivery and exit gates.
+- `CONTRIBUTING.md` defines contribution and review expectations.
+- `SECURITY.md` describes the current security and reporting status.
+- `docs/decisions/` records accepted and proposed architecture decisions.
+
+Material architecture changes require an accepted ADR and matching updates to
+the relevant contract documents.
+
+## Repository layout today
+
+```text
+ai-core/               rule-based Python prototype
+build/                 prototype ArchISO/Alpine build scripts and helpers
+config/                prototype XFCE/Picom configuration
+docs/                  prototype docs, Phase 0 evidence, and ADRs
+scripts/               prototype installation and utility scripts
+```
+
+The target layout in `ARCHITECTURE.md` has not been created. The prototype has
+not been moved or restructured.
+
+## Development
+
+Phase 0 is still in progress. Do not begin the Phase 1 architecture skeleton
+until every unresolved item in `docs/PHASE_0_BASELINE.md` is closed and the
+roadmap status is updated.
+
+Prototype commands in older documentation are historical development material,
+not supported installation instructions.
+
+## Contributing and security
+
+Read `CONTRIBUTING.md` before proposing changes. Do not report exploitable
+vulnerabilities in public issues; follow `SECURITY.md` for the current reporting
+status.
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See `LICENSE`.
+Blossom OS is licensed under the Apache License, Version 2.0. See `LICENSE` and
+accepted ADR-0001.

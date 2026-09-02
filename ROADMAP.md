@@ -7,18 +7,30 @@ test requirements from an earlier phase.
 
 Status: in progress.
 
-- Preserve the original prototype unchanged in Git and tag it.
-- Record which features are implemented versus aspirational.
-- Connect the empty remote without pushing until the initial history is reviewed.
-- Select an open-source license through an ADR.
-- Add formatting, linting, tests, CI, dependency policy, and security scanning
-  appropriate to each language as it is introduced.
-- Decide branch and release policy before accepting external contributions.
+- [x] Preserve the original prototype unchanged in Git and tag it as
+  `prototype-pre-agent-architecture`.
+- [x] Publish the reviewed initial history to the GitHub `main` branch.
+- [x] Record which features are implemented versus aspirational.
+- [x] Select Apache-2.0 through accepted ADR-0001 and add the canonical license.
+- [x] Add authoritative vision, architecture, security, roadmap, contribution,
+  and vulnerability-policy documents.
+- [x] Audit the preserved prototype for obvious credentials, unsafe defaults,
+  generated artifacts, large binaries, and machine-specific paths.
+- [ ] Enable GitHub Private Vulnerability Reporting and then update
+  `SECURITY.md` with the active reporting link.
+- [ ] Finalize and enforce branch/review policy for `main`.
+- [ ] Define baseline formatting, linting, tests, CI, dependency policy, and
+  security scanning. None currently exists in the repository.
 
-Exit: clean local history, approved foundation documents, license decision, and
-reviewed first push.
+Evidence and unresolved items are recorded in `docs/PHASE_0_BASELINE.md`.
+
+Exit: clean published history, approved internally consistent foundation
+documents, accepted license, accurate implementation inventory, private security
+reporting, branch/release policy, and explicitly defined baseline quality gates.
 
 ## Phase 1: Deterministic security vertical slice
+
+Do not begin until Phase 0 is marked complete.
 
 - Define versioned IPC and tool/capability schemas.
 - Implement broker, deny-by-default policy engine, approval state machine,

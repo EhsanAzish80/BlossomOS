@@ -46,5 +46,6 @@ consent.
 ## Validation
 
 - Maintainer explicitly approved Apache-2.0 on 2026-09-02.
-- Dependency compatibility is reviewed.
-- `LICENSE`, README, package metadata, and contribution guidance agree.
+- The root `LICENSE`, README, and contribution guidance identify Apache-2.0.
+- No package manifest or release metadata exists yet. Dependency and packaging
+  license compatibility must be reviewed when those files are introduced.
