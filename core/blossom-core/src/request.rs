@@ -31,6 +31,7 @@ pub enum ToolRequest {
     SystemUname { request_id: RequestId },
     SystemOsIdentity { request_id: RequestId },
     SystemUptime { request_id: RequestId },
+    SystemMemorySummary { request_id: RequestId },
 }
 
 impl ToolRequest {
@@ -65,6 +66,14 @@ impl ToolRequest {
                 })?;
                 Ok(Self::SystemUptime { request_id })
             }
+            "system.memory.summary" => {
+                serde_json::from_value::<NoArguments>(envelope.arguments).map_err(|error| {
+                    RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    }
+                })?;
+                Ok(Self::SystemMemorySummary { request_id })
+            }
             _ => Err(RequestError::UnknownTool {
                 tool: envelope.tool,
             }),
@@ -75,7 +84,8 @@ impl ToolRequest {
         match self {
             Self::SystemUname { request_id }
             | Self::SystemOsIdentity { request_id }
-            | Self::SystemUptime { request_id } => request_id,
+            | Self::SystemUptime { request_id }
+            | Self::SystemMemorySummary { request_id } => request_id,
         }
     }
 
@@ -84,6 +94,7 @@ impl ToolRequest {
             Self::SystemUname { .. } => "system.uname",
             Self::SystemOsIdentity { .. } => "system.os.identity",
             Self::SystemUptime { .. } => "system.uptime",
+            Self::SystemMemorySummary { .. } => "system.memory.summary",
         }
     }
 }
@@ -154,6 +165,15 @@ mod tests {
     }
 
     #[test]
+    fn parses_memory_summary_without_arguments() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-4","tool":"system.memory.summary","arguments":{}}"#,
+        )
+        .expect("memory summary request should parse");
+        assert_eq!(request.tool_name(), "system.memory.summary");
+    }
+
+    #[test]
     fn rejects_unknown_fields_and_tools() {
         assert!(matches!(
             ToolRequest::parse_json(
@@ -186,6 +206,12 @@ mod tests {
         assert!(matches!(
             ToolRequest::parse_json(
                 r#"{"request_id":"req-2","tool":"system.os.identity","arguments":{"path":"/tmp/fake"}}"#
+            ),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+        assert!(matches!(
+            ToolRequest::parse_json(
+                r#"{"request_id":"req-4","tool":"system.memory.summary","arguments":{"field":"Cached"}}"#
             ),
             Err(RequestError::InvalidArguments { .. })
         ));

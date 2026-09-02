@@ -1,25 +1,43 @@
 use crate::approval::{ApprovalError, ApprovalStore, ApprovalToken};
 use crate::audit::{AuditEvent, AuditLog};
 use crate::executor::{CommandSpec, Executor, ExecutorError};
+use crate::memory_summary::{
+    MemorySummary, MemorySummaryError, MemorySummaryProvider, UnavailableMemorySummaryProvider,
+};
 use crate::os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, UnavailableOsIdentityProvider,
 };
 use crate::policy::{PolicyDecision, PolicyEngine};
 use crate::request::{RequestError, ToolRequest};
 use crate::uptime::{SystemUptime, UnavailableUptimeProvider, UptimeError, UptimeProvider};
-use crate::verification::{Verification, verify_execution, verify_os_identity, verify_uptime};
+use crate::verification::{
+    Verification, verify_execution, verify_memory_summary, verify_os_identity, verify_uptime,
+};
 
 #[derive(Debug)]
-pub struct BlossomEngine<E, O = UnavailableOsIdentityProvider, U = UnavailableUptimeProvider> {
+pub struct BlossomEngine<
+    E,
+    O = UnavailableOsIdentityProvider,
+    U = UnavailableUptimeProvider,
+    M = UnavailableMemorySummaryProvider,
+> {
     policy: PolicyEngine,
     approvals: ApprovalStore,
     executor: E,
     os_identity: O,
     uptime: U,
+    memory_summary: M,
     audit: AuditLog,
 }
 
-impl<E: Executor> BlossomEngine<E, UnavailableOsIdentityProvider, UnavailableUptimeProvider> {
+impl<E: Executor>
+    BlossomEngine<
+        E,
+        UnavailableOsIdentityProvider,
+        UnavailableUptimeProvider,
+        UnavailableMemorySummaryProvider,
+    >
+{
     pub fn new(policy: PolicyEngine, approvals: ApprovalStore, executor: E) -> Self {
         Self {
             policy,
@@ -27,12 +45,15 @@ impl<E: Executor> BlossomEngine<E, UnavailableOsIdentityProvider, UnavailableUpt
             executor,
             os_identity: UnavailableOsIdentityProvider,
             uptime: UnavailableUptimeProvider,
+            memory_summary: UnavailableMemorySummaryProvider,
             audit: AuditLog::default(),
         }
     }
 }
 
-impl<E: Executor, O: OsIdentityProvider> BlossomEngine<E, O, UnavailableUptimeProvider> {
+impl<E: Executor, O: OsIdentityProvider>
+    BlossomEngine<E, O, UnavailableUptimeProvider, UnavailableMemorySummaryProvider>
+{
     pub fn with_os_identity(
         policy: PolicyEngine,
         approvals: ApprovalStore,
@@ -45,12 +66,15 @@ impl<E: Executor, O: OsIdentityProvider> BlossomEngine<E, O, UnavailableUptimePr
             executor,
             os_identity,
             uptime: UnavailableUptimeProvider,
+            memory_summary: UnavailableMemorySummaryProvider,
             audit: AuditLog::default(),
         }
     }
 }
 
-impl<E: Executor, U: UptimeProvider> BlossomEngine<E, UnavailableOsIdentityProvider, U> {
+impl<E: Executor, U: UptimeProvider>
+    BlossomEngine<E, UnavailableOsIdentityProvider, U, UnavailableMemorySummaryProvider>
+{
     pub fn with_uptime(
         policy: PolicyEngine,
         approvals: ApprovalStore,
@@ -63,12 +87,36 @@ impl<E: Executor, U: UptimeProvider> BlossomEngine<E, UnavailableOsIdentityProvi
             executor,
             os_identity: UnavailableOsIdentityProvider,
             uptime,
+            memory_summary: UnavailableMemorySummaryProvider,
             audit: AuditLog::default(),
         }
     }
 }
 
-impl<E: Executor, O: OsIdentityProvider, U: UptimeProvider> BlossomEngine<E, O, U> {
+impl<E: Executor, M: MemorySummaryProvider>
+    BlossomEngine<E, UnavailableOsIdentityProvider, UnavailableUptimeProvider, M>
+{
+    pub fn with_memory_summary(
+        policy: PolicyEngine,
+        approvals: ApprovalStore,
+        executor: E,
+        memory_summary: M,
+    ) -> Self {
+        Self {
+            policy,
+            approvals,
+            executor,
+            os_identity: UnavailableOsIdentityProvider,
+            uptime: UnavailableUptimeProvider,
+            memory_summary,
+            audit: AuditLog::default(),
+        }
+    }
+}
+
+impl<E: Executor, O: OsIdentityProvider, U: UptimeProvider, M: MemorySummaryProvider>
+    BlossomEngine<E, O, U, M>
+{
     pub fn begin(&mut self, input: &str, now_ms: u64) -> Result<BeginOutcome, EngineError> {
         let request = match ToolRequest::parse_json(input) {
             Ok(request) => request,
@@ -176,6 +224,7 @@ impl<E: Executor, O: OsIdentityProvider, U: UptimeProvider> BlossomEngine<E, O, 
             ToolRequest::SystemUname { .. } => self.execute_command(request),
             ToolRequest::SystemOsIdentity { .. } => self.execute_os_identity(request),
             ToolRequest::SystemUptime { .. } => self.execute_uptime(request),
+            ToolRequest::SystemMemorySummary { .. } => self.execute_memory_summary(request),
         }
     }
 
@@ -271,6 +320,39 @@ impl<E: Executor, O: OsIdentityProvider, U: UptimeProvider> BlossomEngine<E, O, 
             output: ToolOutput::Uptime(uptime),
         })
     }
+
+    fn execute_memory_summary(
+        &mut self,
+        request: ToolRequest,
+    ) -> Result<CompletionOutcome, EngineError> {
+        self.audit.append(AuditEvent::NativeReadStarted {
+            request_id: request.request_id().as_str().into(),
+            resource: "memory.summary".into(),
+        });
+        let summary = match self.memory_summary.read_memory_summary() {
+            Ok(summary) => summary,
+            Err(error) => {
+                self.audit.append(AuditEvent::MemorySummaryReadFailed {
+                    request_id: request.request_id().as_str().into(),
+                    resource: "memory.summary".into(),
+                    error,
+                });
+                return Err(EngineError::MemorySummary(error));
+            }
+        };
+        self.audit
+            .append(AuditEvent::memory_summary_finished(&request, &summary));
+        let verification = verify_memory_summary(&summary);
+        self.audit.append(AuditEvent::VerificationFinished {
+            request_id: request.request_id().as_str().into(),
+            verification: verification.clone(),
+        });
+        Ok(CompletionOutcome {
+            request,
+            verification,
+            output: ToolOutput::MemorySummary(summary),
+        })
+    }
 }
 
 pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
@@ -278,6 +360,7 @@ pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
         ToolRequest::SystemUname { .. } => Some(CommandSpec::system_uname()),
         ToolRequest::SystemOsIdentity { .. } => None,
         ToolRequest::SystemUptime { .. } => None,
+        ToolRequest::SystemMemorySummary { .. } => None,
     }
 }
 
@@ -312,6 +395,7 @@ pub enum ToolOutput {
     SystemUname,
     OsIdentity(Box<OsIdentity>),
     Uptime(SystemUptime),
+    MemorySummary(MemorySummary),
 }
 
 #[derive(Debug)]
@@ -321,6 +405,7 @@ pub enum EngineError {
     Executor(ExecutorError),
     OsIdentity(OsIdentityError),
     Uptime(UptimeError),
+    MemorySummary(MemorySummaryError),
 }
 
 #[cfg(test)]
@@ -387,6 +472,33 @@ mod tests {
         fn read_uptime(&mut self) -> Result<SystemUptime, UptimeError> {
             self.calls += 1;
             self.result.take().unwrap_or(Err(UptimeError::ReadFailed))
+        }
+    }
+
+    #[derive(Debug)]
+    struct ScriptedMemorySummary {
+        result: Option<Result<MemorySummary, MemorySummaryError>>,
+        calls: usize,
+    }
+
+    impl MemorySummaryProvider for ScriptedMemorySummary {
+        fn read_memory_summary(&mut self) -> Result<MemorySummary, MemorySummaryError> {
+            self.calls += 1;
+            self.result
+                .take()
+                .unwrap_or(Err(MemorySummaryError::ReadFailed))
+        }
+    }
+
+    fn memory_summary() -> MemorySummary {
+        MemorySummary {
+            total_bytes: 16 * 1024,
+            available_bytes: 8 * 1024,
+            swap_total_bytes: 4 * 1024,
+            swap_free_bytes: 2 * 1024,
+            source_path: "/proc/meminfo".into(),
+            source_sha256: "c".repeat(64),
+            source_bytes: 128,
         }
     }
 
@@ -662,6 +774,76 @@ mod tests {
         assert!(matches!(
             engine.audit().records().last().map(|record| &record.event),
             Some(AuditEvent::UptimeReadFailed { .. })
+        ));
+    }
+
+    #[test]
+    fn memory_summary_allow_uses_native_provider_not_executor() {
+        let policy = PolicyEngine::new(vec![PolicyRule {
+            capability: Capability::SystemReadMemorySummary,
+            decision: PolicyDecision::Allow,
+        }]);
+        let provider = ScriptedMemorySummary {
+            result: Some(Ok(memory_summary())),
+            calls: 0,
+        };
+        let mut engine = BlossomEngine::with_memory_summary(
+            policy,
+            ApprovalStore::new(100),
+            ScriptedExecutor::successful(),
+            provider,
+        );
+        let outcome = engine
+            .begin(
+                r#"{"request_id":"req-memory","tool":"system.memory.summary","arguments":{}}"#,
+                1_000,
+            )
+            .expect("native read should complete");
+        let completed = match outcome {
+            BeginOutcome::Completed(completed) => completed,
+            other => panic!("unexpected outcome: {other:?}"),
+        };
+        assert!(completed.verification.succeeded);
+        assert!(matches!(completed.output, ToolOutput::MemorySummary(_)));
+        assert!(engine.executor.calls.is_empty());
+        assert_eq!(engine.memory_summary.calls, 1);
+        assert!(engine.audit().verify_chain());
+        assert!(
+            engine
+                .audit()
+                .records()
+                .iter()
+                .any(|record| matches!(record.event, AuditEvent::MemorySummaryReadFinished { .. }))
+        );
+    }
+
+    #[test]
+    fn memory_summary_failure_is_audited_without_executor_fallback() {
+        let policy = PolicyEngine::new(vec![PolicyRule {
+            capability: Capability::SystemReadMemorySummary,
+            decision: PolicyDecision::Allow,
+        }]);
+        let provider = ScriptedMemorySummary {
+            result: Some(Err(MemorySummaryError::Missing)),
+            calls: 0,
+        };
+        let mut engine = BlossomEngine::with_memory_summary(
+            policy,
+            ApprovalStore::new(100),
+            ScriptedExecutor::successful(),
+            provider,
+        );
+        assert!(matches!(
+            engine.begin(
+                r#"{"request_id":"req-memory","tool":"system.memory.summary","arguments":{}}"#,
+                1_000,
+            ),
+            Err(EngineError::MemorySummary(MemorySummaryError::Missing))
+        ));
+        assert!(engine.executor.calls.is_empty());
+        assert!(matches!(
+            engine.audit().records().last().map(|record| &record.event),
+            Some(AuditEvent::MemorySummaryReadFailed { .. })
         ));
     }
 

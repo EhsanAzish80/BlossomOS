@@ -1,5 +1,6 @@
 use crate::approval::ApprovalError;
 use crate::executor::{ExecutionResult, ExecutorError};
+use crate::memory_summary::{MemorySummary, MemorySummaryError};
 use crate::os_identity::{OsIdentity, OsIdentityError};
 use crate::policy::{Capability, PolicyDecision};
 use crate::request::ToolRequest;
@@ -74,6 +75,12 @@ pub enum AuditEvent {
         source_sha256: String,
         source_bytes: usize,
     },
+    MemorySummaryReadFinished {
+        request_id: String,
+        source_path: String,
+        source_sha256: String,
+        source_bytes: usize,
+    },
     NativeReadFailed {
         request_id: String,
         resource: String,
@@ -83,6 +90,11 @@ pub enum AuditEvent {
         request_id: String,
         resource: String,
         error: UptimeError,
+    },
+    MemorySummaryReadFailed {
+        request_id: String,
+        resource: String,
+        error: MemorySummaryError,
     },
     VerificationFinished {
         request_id: String,
@@ -122,6 +134,15 @@ impl AuditEvent {
             source_path: uptime.source_path.clone(),
             source_sha256: uptime.source_sha256.clone(),
             source_bytes: uptime.source_bytes,
+        }
+    }
+
+    pub fn memory_summary_finished(request: &ToolRequest, summary: &MemorySummary) -> Self {
+        Self::MemorySummaryReadFinished {
+            request_id: request.request_id().as_str().into(),
+            source_path: summary.source_path.clone(),
+            source_sha256: summary.source_sha256.clone(),
+            source_bytes: summary.source_bytes,
         }
     }
 }
@@ -277,5 +298,28 @@ mod tests {
         assert!(encoded.contains("/proc/uptime"));
         assert!(!encoded.contains("12345"));
         assert!(!encoded.contains("670000000"));
+    }
+
+    #[test]
+    fn memory_audit_records_provenance_not_memory_values() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-memory","tool":"system.memory.summary","arguments":{}}"#,
+        )
+        .expect("valid memory summary request");
+        let summary = MemorySummary {
+            total_bytes: 17_179_869_184,
+            available_bytes: 8_589_934_592,
+            swap_total_bytes: 4_294_967_296,
+            swap_free_bytes: 2_147_483_648,
+            source_path: "/proc/meminfo".into(),
+            source_sha256: "c".repeat(64),
+            source_bytes: 128,
+        };
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::memory_summary_finished(&request, &summary));
+        let encoded = serde_json::to_string(audit.records()).expect("serializable audit records");
+        assert!(encoded.contains("/proc/meminfo"));
+        assert!(!encoded.contains("17179869184"));
+        assert!(!encoded.contains("8589934592"));
     }
 }

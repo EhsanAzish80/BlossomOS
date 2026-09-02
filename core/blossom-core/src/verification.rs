@@ -1,4 +1,5 @@
 use crate::executor::ExecutionResult;
+use crate::memory_summary::{MAX_PROC_MEMINFO_BYTES, MemorySummary, PROC_MEMINFO_PATH};
 use crate::os_identity::{MAX_OS_RELEASE_BYTES, MAX_OS_RELEASE_VALUE_BYTES, OsIdentity};
 use crate::uptime::{MAX_PROC_UPTIME_BYTES, PROC_UPTIME_PATH, SystemUptime};
 use serde::Serialize;
@@ -22,6 +23,32 @@ pub enum VerificationReason {
     ValidUptime,
     InvalidUptimeProvenance,
     InvalidUptimeSchema,
+    ValidMemorySummary,
+    InvalidMemorySummaryProvenance,
+    InvalidMemorySummarySchema,
+}
+
+pub fn verify_memory_summary(summary: &MemorySummary) -> Verification {
+    let provenance_valid = summary.source_path == PROC_MEMINFO_PATH
+        && summary.source_bytes <= MAX_PROC_MEMINFO_BYTES
+        && summary.source_sha256.len() == 64
+        && summary
+            .source_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
+    let schema_valid = summary.available_bytes <= summary.total_bytes
+        && summary.swap_free_bytes <= summary.swap_total_bytes;
+    let reason = if !provenance_valid {
+        VerificationReason::InvalidMemorySummaryProvenance
+    } else if !schema_valid {
+        VerificationReason::InvalidMemorySummarySchema
+    } else {
+        VerificationReason::ValidMemorySummary
+    };
+    Verification {
+        succeeded: reason == VerificationReason::ValidMemorySummary,
+        reason,
+    }
 }
 
 pub fn verify_uptime(uptime: &SystemUptime) -> Verification {
@@ -176,6 +203,31 @@ mod tests {
         assert_eq!(
             verify_uptime(&uptime).reason,
             VerificationReason::InvalidUptimeSchema
+        );
+    }
+
+    #[test]
+    fn verifies_memory_summary_schema_and_provenance_without_io() {
+        let mut summary = MemorySummary {
+            total_bytes: 16 * 1024,
+            available_bytes: 8 * 1024,
+            swap_total_bytes: 4 * 1024,
+            swap_free_bytes: 2 * 1024,
+            source_path: PROC_MEMINFO_PATH.into(),
+            source_sha256: "c".repeat(64),
+            source_bytes: 128,
+        };
+        assert!(verify_memory_summary(&summary).succeeded);
+        summary.source_path = "/tmp/meminfo".into();
+        assert_eq!(
+            verify_memory_summary(&summary).reason,
+            VerificationReason::InvalidMemorySummaryProvenance
+        );
+        summary.source_path = PROC_MEMINFO_PATH.into();
+        summary.available_bytes = summary.total_bytes + 1;
+        assert_eq!(
+            verify_memory_summary(&summary).reason,
+            VerificationReason::InvalidMemorySummarySchema
         );
     }
 }
