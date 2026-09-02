@@ -11,6 +11,10 @@ use std::collections::HashMap;
 mod file_journal;
 #[cfg(unix)]
 pub use file_journal::FileJournal;
+#[cfg(unix)]
+mod file_audit;
+#[cfg(unix)]
+pub use file_audit::FileAudit;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -168,7 +172,8 @@ impl IdempotencyJournal for MemoryJournal {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum HelperAuditEvent {
     RequestReceived {
@@ -459,10 +464,23 @@ impl<A: Authorizer, M: BluetoothManager, J: IdempotencyJournal, L: HelperAudit>
                 );
             }
         };
-        let _ = self.audit.record(HelperAuditEvent::JobFinished {
-            correlation_id: correlation.clone(),
-            category: bounded_category(&completion.job_result),
-        });
+        if self
+            .audit
+            .record(HelperAuditEvent::JobFinished {
+                correlation_id: correlation.clone(),
+                category: bounded_category(&completion.job_result),
+            })
+            .is_err()
+        {
+            return self.complete_failure(
+                &request,
+                caller_uid,
+                &key,
+                &digest,
+                BluetoothRestartFailure::OutcomeIndeterminate,
+                true,
+            );
+        }
         let candidate = result(
             &request,
             caller_uid,
@@ -517,10 +535,33 @@ impl<A: Authorizer, M: BluetoothManager, J: IdempotencyJournal, L: HelperAudit>
             JournalState::Submitted { .. } => "submitted",
             JournalState::Completed { .. } => "completed",
         };
-        let _ = self.audit.record(HelperAuditEvent::ReplayReturned {
-            correlation_id: request.correlation_id.clone(),
-            phase: phase.into(),
-        });
+        if self
+            .audit
+            .record(HelperAuditEvent::ReplayReturned {
+                correlation_id: request.correlation_id.clone(),
+                phase: phase.into(),
+            })
+            .is_err()
+        {
+            let prior = match &state {
+                JournalState::Completed { result, .. } => (**result).clone(),
+                JournalState::Claimed { .. } => failure(
+                    request,
+                    uid,
+                    digest,
+                    BluetoothRestartFailure::InterruptedBeforeSubmission,
+                    false,
+                ),
+                JournalState::Submitted { .. } => failure(
+                    request,
+                    uid,
+                    digest,
+                    BluetoothRestartFailure::OutcomeIndeterminate,
+                    true,
+                ),
+            };
+            return journal_failure_from_result(&prior);
+        }
         match state {
             JournalState::Completed { result, .. } => {
                 let mut result = *result;
@@ -553,11 +594,18 @@ impl<A: Authorizer, M: BluetoothManager, J: IdempotencyJournal, L: HelperAudit>
         submitted: bool,
     ) -> BluetoothRestartResult {
         let result = failure(request, uid, digest, error, submitted);
-        let _ = self.audit.record(HelperAuditEvent::RequestFinished {
-            correlation_id: request.correlation_id.clone(),
-            category: "failed".into(),
-        });
-        result
+        if self
+            .audit
+            .record(HelperAuditEvent::RequestFinished {
+                correlation_id: request.correlation_id.clone(),
+                category: "failed".into(),
+            })
+            .is_err()
+        {
+            journal_failure_from_result(&result)
+        } else {
+            result
+        }
     }
 
     fn complete_failure(
@@ -915,5 +963,42 @@ mod tests {
         let first = audit_chain_hash(&zero_digest(), &event).unwrap();
         assert_eq!(first, audit_chain_hash(&zero_digest(), &event).unwrap());
         assert_ne!(first, audit_chain_hash(&"1".repeat(64), &event).unwrap());
+    }
+
+    #[test]
+    fn post_operation_audit_failure_cannot_report_success() {
+        let audit = FailAuditAt {
+            call: 0,
+            // request, authorization, claim, observation, submitted, job result
+            fail_at: 6,
+        };
+        let mut helper = PrivilegedHelper::new(Allow, manager(), MemoryJournal::default(), audit);
+        let result = helper.handle(1000, request());
+        assert!(matches!(
+            result.outcome,
+            BluetoothRestartOutcome::Failed {
+                error: BluetoothRestartFailure::OutcomeIndeterminate,
+                job_submitted: true
+            }
+        ));
+        assert_eq!(helper.into_parts().1.calls, 1);
+    }
+
+    #[test]
+    fn terminal_audit_failure_replaces_a_pre_submission_denial() {
+        let audit = FailAuditAt {
+            call: 0,
+            // request, authorization, terminal result
+            fail_at: 3,
+        };
+        let mut helper = PrivilegedHelper::new(Deny, manager(), MemoryJournal::default(), audit);
+        assert!(matches!(
+            helper.handle(1000, request()).outcome,
+            BluetoothRestartOutcome::Failed {
+                error: BluetoothRestartFailure::JournalUnavailable,
+                job_submitted: false
+            }
+        ));
+        assert_eq!(helper.into_parts().1.calls, 0);
     }
 }

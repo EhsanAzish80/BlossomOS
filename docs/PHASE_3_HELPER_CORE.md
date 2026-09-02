@@ -27,16 +27,26 @@ Tests substitute the current test user's UID while enforcing the same modes.
 
 The durable backend is not yet wired into an executable or installed runtime
 directory. No D-Bus server or client, polkit call, systemd mutation adapter,
-root audit backend, packaging, service unit, activation policy, or CLI
-registration is present at this checkpoint. The crate therefore cannot restart
-a service and is not a security claim about an installed privileged boundary.
+packaging, service unit, activation policy, or CLI registration is present at
+this checkpoint. The crate therefore cannot restart a service and is not a
+security claim about an installed privileged boundary.
+
+The Unix `FileAudit` backend similarly requires its own pre-created trusted
+`0700` directory and maintains a synced `0600` JSON-lines log. Each bounded
+record contains a monotonic sequence, the previous digest, a closed redacted
+event, and the resulting digest. Recovery validates the complete chain and
+rejects truncation, tampering, symlinks, unexpected files, permission drift,
+record overflow, and byte overflow. The sequence and record digest provide the
+local audit identity; exposure through the future broker activity view remains
+unimplemented.
 
 Local evidence for this checkpoint is:
 
 - workspace formatting passes;
 - all workspace tests pass, including denial, inactive-unit, successful replay,
   changed-digest rejection, timeout after submission, recovered journal states,
-  durable transition recovery, and journal corruption/containment cases; and
+  durable transition recovery, journal corruption/containment, and audit
+  persistence/tamper cases; and
 - strict workspace Clippy passes with warnings denied.
 
 Target-Linux integration and installed-boundary evidence remain required before

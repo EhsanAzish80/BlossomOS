@@ -110,6 +110,8 @@ implemented, but it is not yet a root service and exposes no system-bus method.
   - [x] Add a bounded, durable file-journal backend with root ownership and mode
     checks, no-follow opens, synced transitions, atomic replacement, and
     fail-closed corruption/recovery behavior.
+  - [x] Add a bounded, synced, hash-chained helper audit backend that validates
+    its complete chain on recovery and fails closed on loss or tampering.
   - [ ] Wire and package the helper, polkit check, root-owned runtime journal,
     systemd operation, interactive client, double audit, and Linux evidence.
 - Complete threat review, negative tests, replay protection, and audit coverage.
