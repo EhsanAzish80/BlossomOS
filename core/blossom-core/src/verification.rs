@@ -1,6 +1,7 @@
 use crate::executor::ExecutionResult;
 use crate::memory_summary::{MAX_PROC_MEMINFO_BYTES, MemorySummary, PROC_MEMINFO_PATH};
 use crate::os_identity::{MAX_OS_RELEASE_BYTES, MAX_OS_RELEASE_VALUE_BYTES, OsIdentity};
+use crate::storage_summary::{ROOT_FILESYSTEM_PATH, StorageSummary, StorageSummarySource};
 use crate::uptime::{MAX_PROC_UPTIME_BYTES, PROC_UPTIME_PATH, SystemUptime};
 use serde::Serialize;
 
@@ -26,6 +27,27 @@ pub enum VerificationReason {
     ValidMemorySummary,
     InvalidMemorySummaryProvenance,
     InvalidMemorySummarySchema,
+    ValidStorageSummary,
+    InvalidStorageSummaryProvenance,
+    InvalidStorageSummarySchema,
+}
+
+pub fn verify_storage_summary(summary: &StorageSummary) -> Verification {
+    let provenance_valid = summary.source == StorageSummarySource::RootStatvfs
+        && summary.resource_path == ROOT_FILESYSTEM_PATH
+        && summary.resource_path == summary.source.as_path();
+    let schema_valid = summary.total_bytes > 0 && summary.available_bytes <= summary.total_bytes;
+    let reason = if !provenance_valid {
+        VerificationReason::InvalidStorageSummaryProvenance
+    } else if !schema_valid {
+        VerificationReason::InvalidStorageSummarySchema
+    } else {
+        VerificationReason::ValidStorageSummary
+    };
+    Verification {
+        succeeded: reason == VerificationReason::ValidStorageSummary,
+        reason,
+    }
 }
 
 pub fn verify_memory_summary(summary: &MemorySummary) -> Verification {
@@ -228,6 +250,28 @@ mod tests {
         assert_eq!(
             verify_memory_summary(&summary).reason,
             VerificationReason::InvalidMemorySummarySchema
+        );
+    }
+
+    #[test]
+    fn verifies_storage_summary_schema_and_provenance_without_io() {
+        let mut summary = StorageSummary {
+            source: StorageSummarySource::RootStatvfs,
+            resource_path: ROOT_FILESYSTEM_PATH.into(),
+            total_bytes: 100,
+            available_bytes: 25,
+        };
+        assert!(verify_storage_summary(&summary).succeeded);
+        summary.resource_path = "/home".into();
+        assert_eq!(
+            verify_storage_summary(&summary).reason,
+            VerificationReason::InvalidStorageSummaryProvenance
+        );
+        summary.resource_path = ROOT_FILESYSTEM_PATH.into();
+        summary.available_bytes = 101;
+        assert_eq!(
+            verify_storage_summary(&summary).reason,
+            VerificationReason::InvalidStorageSummarySchema
         );
     }
 }

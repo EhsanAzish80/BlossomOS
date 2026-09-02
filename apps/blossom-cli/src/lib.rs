@@ -3,8 +3,8 @@
 use blossom_core::{
     ApprovalError, ApprovalStore, AuditEvent, AuditLog, BeginOutcome, BlossomEngine, Capability,
     EngineError, Executor, MemorySummary, MemorySummaryProvider, OsIdentity, OsIdentityProvider,
-    PolicyDecision, PolicyEngine, PolicyRule, RequestId, SystemUptime, ToolOutput, ToolRequest,
-    UptimeProvider, command_for,
+    PolicyDecision, PolicyEngine, PolicyRule, RequestId, StorageSummary, StorageSummaryProvider,
+    SystemUptime, ToolOutput, ToolRequest, UptimeProvider, command_for,
 };
 use std::fmt::Write as _;
 
@@ -195,6 +195,43 @@ where
     outcome_with_result(0, result, &engine)
 }
 
+pub fn run_storage_summary<E, S, C>(
+    executor: E,
+    storage_summary: S,
+    clock: &mut C,
+    request_id: RequestId,
+) -> RunOutcome
+where
+    E: Executor,
+    S: StorageSummaryProvider,
+    C: Clock,
+{
+    let policy = PolicyEngine::new(vec![PolicyRule {
+        capability: Capability::SystemReadStorageSummary,
+        decision: PolicyDecision::Allow,
+    }]);
+    let mut engine = BlossomEngine::with_storage_summary(
+        policy,
+        ApprovalStore::new(APPROVAL_TTL_MS),
+        executor,
+        storage_summary,
+    );
+    let request_json = format!(
+        r#"{{"request_id":"{}","tool":"system.storage.summary","arguments":{{}}}}"#,
+        request_id.as_str()
+    );
+    let result = match engine.begin(&request_json, clock.now_ms()) {
+        Ok(BeginOutcome::Completed(completed)) => match completed.output {
+            ToolOutput::StorageSummary(summary) if completed.verification.succeeded => {
+                Some(render_storage_summary(&summary))
+            }
+            _ => return outcome_with_result(1, None, &engine),
+        },
+        _ => return outcome_with_result(1, None, &engine),
+    };
+    outcome_with_result(0, result, &engine)
+}
+
 pub fn exact_preview(request: &ToolRequest) -> String {
     let command = command_for(request).expect("approval preview is command-backed");
     let command_line = std::iter::once(command.program.display().to_string())
@@ -228,9 +265,15 @@ pub fn render_activity(audit: &AuditLog) -> String {
     output
 }
 
-fn outcome<E: Executor, O: OsIdentityProvider, U: UptimeProvider, M: MemorySummaryProvider>(
+fn outcome<
+    E: Executor,
+    O: OsIdentityProvider,
+    U: UptimeProvider,
+    M: MemorySummaryProvider,
+    S: StorageSummaryProvider,
+>(
     exit_code: i32,
-    engine: &BlossomEngine<E, O, U, M>,
+    engine: &BlossomEngine<E, O, U, M, S>,
 ) -> RunOutcome {
     outcome_with_result(exit_code, None, engine)
 }
@@ -240,10 +283,11 @@ fn outcome_with_result<
     O: OsIdentityProvider,
     U: UptimeProvider,
     M: MemorySummaryProvider,
+    S: StorageSummaryProvider,
 >(
     exit_code: i32,
     result: Option<String>,
-    engine: &BlossomEngine<E, O, U, M>,
+    engine: &BlossomEngine<E, O, U, M, S>,
 ) -> RunOutcome {
     RunOutcome {
         exit_code,
@@ -296,6 +340,16 @@ fn render_memory_summary(summary: &MemorySummary) -> String {
         gib(summary.swap_free_bytes),
         summary.source_path,
         summary.source_sha256
+    )
+}
+
+fn render_storage_summary(summary: &StorageSummary) -> String {
+    let gib = |bytes: u64| bytes as f64 / 1_073_741_824_f64;
+    format!(
+        "Root storage summary\n  Total: {:.2} GiB\n  Available to this user: {:.2} GiB\n  Scope: {}\n  Source: statvfs\n",
+        gib(summary.total_bytes),
+        gib(summary.available_bytes),
+        summary.resource_path
     )
 }
 
@@ -373,6 +427,11 @@ fn describe_event(event: &AuditEvent) -> String {
         } => format!(
             "request {request_id} read {source_bytes} bytes from {source_path}, sha256={source_sha256}"
         ),
+        AuditEvent::StorageSummaryReadFinished {
+            request_id,
+            resource_path,
+            source,
+        } => format!("request {request_id} read {resource_path} storage summary via {source}"),
         AuditEvent::NativeReadFailed {
             request_id,
             resource,
@@ -384,6 +443,11 @@ fn describe_event(event: &AuditEvent) -> String {
             error,
         } => format!("request {request_id} native read of {resource} failed ({error})"),
         AuditEvent::MemorySummaryReadFailed {
+            request_id,
+            resource,
+            error,
+        } => format!("request {request_id} native read of {resource} failed ({error})"),
+        AuditEvent::StorageSummaryReadFailed {
             request_id,
             resource,
             error,
