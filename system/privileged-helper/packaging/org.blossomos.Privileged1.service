@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.blossomos.Privileged1
+Exec=/usr/lib/blossom-os/blossom-privileged-helper
+User=root
+SystemdService=blossom-privileged-helper.service

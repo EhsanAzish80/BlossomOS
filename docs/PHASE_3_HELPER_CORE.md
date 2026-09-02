@@ -84,6 +84,30 @@ authorization deadline expires closed.
 The adapter accepts no PID, process name, executable, action identifier,
 authorization token, unit, or arbitrary detail from the caller. Target-Linux
 tests verify the exact subject, action, details, and flags against a private mock
-Authority. Capturing the real method sender, resolving its UID through the bus,
-checking that it remains connected after authorization, and exposing the helper
-method remain part of the system-service checkpoint.
+Authority. The following system-service checkpoint captures the real method
+sender, resolves its UID through the bus, rechecks ownership after authorization,
+and exposes the one helper method.
+
+## System service and package boundary
+
+The GNU/Linux binary now constructs only the concrete fixed polkit authorizer,
+Bluetooth systemd adapter, durable idempotency journal, and durable audit log.
+Its D-Bus object exports one method, `TryRestartBluetooth1`, with four bounded
+protocol fields. The service captures the message's unique sender, resolves its
+Unix UID through the bus, rejects missing credentials and root callers, and
+serializes requests through one handler lock. Unknown methods never enter the
+handler. Results are bounded closed-schema JSON bytes for the version-1 client.
+
+The polkit adapter rechecks `NameHasOwner` for the exact unique sender after a
+successful authorization; a disconnected caller cannot proceed into the
+journal or systemd operation. Target-Linux controlled-bus tests prove real
+sender/UID capture, fixed action binding, disconnect rejection, one-method
+dispatch, and unknown-method rejection.
+
+`packaging/` defines the intended root-owned binary, Type=dbus systemd unit,
+system-bus activation and exact-member policy, and one polkit XML action with
+`no`/`no`/`auth_admin` defaults. The service has empty capability and ambient
+sets, AF_UNIX-only IPC, no IP networking, a strict read-only host view except
+its boot runtime, and standard namespace/kernel/device/process hardening. A CI
+validator pins these identifiers and rejects polkit rules or generic execution
+surfaces. The files are not installed by tests and no release package exists.

@@ -11,6 +11,9 @@ use zbus::{Proxy, connection};
 const POLKIT_DESTINATION: &str = "org.freedesktop.PolicyKit1";
 const POLKIT_PATH: &str = "/org/freedesktop/PolicyKit1/Authority";
 const POLKIT_INTERFACE: &str = "org.freedesktop.PolicyKit1.Authority";
+const DBUS_DESTINATION: &str = "org.freedesktop.DBus";
+const DBUS_PATH: &str = "/org/freedesktop/DBus";
+const DBUS_INTERFACE: &str = "org.freedesktop.DBus";
 const SYSTEM_BUS_ADDRESS: &str = "unix:path=/run/dbus/system_bus_socket";
 const AUTHORIZATION_TIMEOUT: Duration = Duration::from_secs(120);
 const ALLOW_USER_INTERACTION: u32 = 1;
@@ -118,10 +121,35 @@ async fn check(
         )
         .await;
     match response {
-        Ok(Some((true, _, _))) => AuthorizationDecision::Authorized,
+        Ok(Some((true, _, _))) if sender_still_owned(&connection, caller).await => {
+            AuthorizationDecision::Authorized
+        }
         Ok(Some((false, _, _))) => AuthorizationDecision::Denied,
         _ => AuthorizationDecision::Unavailable,
     }
+}
+
+async fn sender_still_owned(connection: &zbus::Connection, caller: &AuthenticatedCaller) -> bool {
+    let bus: Proxy<'_> = match ProxyBuilder::new(connection)
+        .destination(DBUS_DESTINATION)
+        .and_then(|builder| builder.path(DBUS_PATH))
+        .and_then(|builder| builder.interface(DBUS_INTERFACE))
+    {
+        Ok(builder) => match builder.cache_properties(CacheProperties::No).build().await {
+            Ok(proxy) => proxy,
+            Err(_) => return false,
+        },
+        Err(_) => return false,
+    };
+    matches!(
+        bus.call_with_flags::<_, _, bool>(
+            "NameHasOwner",
+            MethodFlags::NoAutoStart.into(),
+            &(caller.system_bus_name.as_str(),),
+        )
+        .await,
+        Ok(Some(true))
+    )
 }
 
 #[cfg(test)]
@@ -145,6 +173,7 @@ mod tests {
     struct Seen {
         valid: bool,
         calls: usize,
+        expected_name: String,
     }
 
     struct Authority(Arc<Mutex<Seen>>);
@@ -165,15 +194,15 @@ mod tests {
                 .get("name")
                 .and_then(|value| value.try_clone().ok())
                 .and_then(|value| String::try_from(value).ok());
+            let mut seen = self.0.lock().unwrap();
             let valid = subject.0 == "system-bus-name"
-                && name.as_deref() == Some(":1.42")
+                && name.as_deref() == Some(seen.expected_name.as_str())
                 && action == BLUETOOTH_POLKIT_ACTION
                 && details.get("blossom.operation").map(String::as_str) == Some(BLUETOOTH_METHOD)
                 && details.get("blossom.unit").map(String::as_str) == Some(BLUETOOTH_UNIT)
                 && details.get("blossom.correlation").map(String::as_str) == Some("request-1")
                 && flags == ALLOW_USER_INTERACTION
                 && cancellation_id.is_empty();
-            let mut seen = self.0.lock().unwrap();
             seen.calls += 1;
             seen.valid = valid;
             (valid, false, HashMap::new())
@@ -194,10 +223,10 @@ mod tests {
         (TestBus(child), address.trim().into())
     }
 
-    fn caller() -> AuthenticatedCaller {
+    fn caller(name: &str) -> AuthenticatedCaller {
         AuthenticatedCaller {
             uid: 1000,
-            system_bus_name: ":1.42".into(),
+            system_bus_name: name.into(),
         }
     }
 
@@ -213,7 +242,15 @@ mod tests {
     #[test]
     fn binds_the_fixed_action_and_details_to_the_system_bus_subject() {
         let (_bus, address) = test_bus();
-        let seen = Arc::new(Mutex::new(Seen::default()));
+        let client = zbus::blocking::connection::Builder::address(address.as_str())
+            .unwrap()
+            .build()
+            .unwrap();
+        let sender = client.inner().unique_name().unwrap().to_string();
+        let seen = Arc::new(Mutex::new(Seen {
+            expected_name: sender.clone(),
+            ..Seen::default()
+        }));
         let _service = zbus::blocking::connection::Builder::address(address.as_str())
             .unwrap()
             .name(POLKIT_DESTINATION)
@@ -227,12 +264,18 @@ mod tests {
             timeout: Duration::from_secs(2),
         };
         assert_eq!(
-            authorizer.authorize(&caller(), &request(true)),
+            authorizer.authorize(&caller(&sender), &request(true)),
             AuthorizationDecision::Authorized
         );
         let seen = seen.lock().unwrap();
         assert_eq!(seen.calls, 1);
         assert!(seen.valid);
+        drop(seen);
+        drop(client);
+        assert_eq!(
+            authorizer.authorize(&caller(&sender), &request(true)),
+            AuthorizationDecision::Unavailable
+        );
     }
 
     #[test]
@@ -242,10 +285,10 @@ mod tests {
             timeout: Duration::from_millis(20),
         };
         assert_eq!(
-            authorizer.authorize(&caller(), &request(false)),
+            authorizer.authorize(&caller(":1.42"), &request(false)),
             AuthorizationDecision::Denied
         );
-        let mut invalid = caller();
+        let mut invalid = caller(":1.42");
         invalid.system_bus_name = "caller-selected-name".into();
         assert_eq!(
             authorizer.authorize(&invalid, &request(true)),

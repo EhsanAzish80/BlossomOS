@@ -117,6 +117,10 @@ implemented, but it is not yet a root service and exposes no system-bus method.
     completion and changed-invocation observation on target Linux.
   - [x] Add the native fixed-action polkit adapter using only the authenticated
     system-bus sender subject and non-retained interactive authorization.
+  - [x] Wire the single exported system-bus method to authenticated sender/UID
+    capture and the concrete polkit, journal, audit, and systemd components.
+  - [x] Add the reviewed package boundary: hardened systemd unit, exact D-Bus
+    activation/policy files, one polkit action, and automated drift validation.
   - [ ] Wire and package the helper, polkit check, root-owned runtime journal,
     systemd operation, interactive client, double audit, and Linux evidence.
 - Complete threat review, negative tests, replay protection, and audit coverage.
