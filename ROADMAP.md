@@ -77,6 +77,9 @@ remain narrow native reads; later Phase 2 capabilities are not implemented.
   - [x] Workspace file creation: retained directory descriptors, no mount or
     symlink traversal, and unnamed-inode atomic no-replace publication
     (ADR-0007, superseding ADR-0006).
+  - [x] Exact service-status reads: fixed systemd system-bus calls for one
+    approval-bound `.service` unit, with no listing, loading, mutation, generic
+    D-Bus, or subprocess fallback (ADR-0008; implementation pending).
 - Enforce environment, working-directory, filesystem, network, timeout, output,
   process, and resource controls.
 - Add property, adversarial, and integration tests for the security boundary.
