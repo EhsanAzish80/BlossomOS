@@ -101,6 +101,10 @@ the already-running `bluetooth.service`. No privileged code is implemented yet.
 - [x] Design a minimal typed helper and polkit policy boundary.
 - [ ] Add the fixed low-complexity Bluetooth try-restart operation with approval
   and verification.
+  - [x] Define the closed shared request/result protocol, normalized digest, and
+    independent result verifier without registering or exposing the tool.
+  - [ ] Implement and package the helper, polkit check, idempotency journal,
+    systemd operation, interactive client, double audit, and Linux evidence.
 - Complete threat review, negative tests, replay protection, and audit coverage.
 
 Exit: independent review confirms there is no generic root command path.

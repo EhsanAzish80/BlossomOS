@@ -8,6 +8,7 @@ pub mod file_read;
 pub mod memory_summary;
 pub mod os_identity;
 pub mod policy;
+pub mod privileged;
 pub mod process_list;
 pub mod process_self;
 pub mod request;
