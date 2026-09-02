@@ -95,10 +95,12 @@ its applicable containment tests. See `docs/PHASE_2_BASELINE.md`.
 ## Phase 3: Privileged operations
 
 Status: active. ADR-0009 selects the system D-Bus, polkit, idempotency, audit,
-and hardening boundary. No privileged code or operation is implemented yet.
+and hardening boundary. ADR-0010 fixes the first operation to a try-restart of
+the already-running `bluetooth.service`. No privileged code is implemented yet.
 
 - [x] Design a minimal typed helper and polkit policy boundary.
-- Add one low-complexity privileged operation with approval and verification.
+- [ ] Add the fixed low-complexity Bluetooth try-restart operation with approval
+  and verification.
 - Complete threat review, negative tests, replay protection, and audit coverage.
 
 Exit: independent review confirms there is no generic root command path.
