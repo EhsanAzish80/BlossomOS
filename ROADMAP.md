@@ -5,7 +5,7 @@ test requirements from an earlier phase.
 
 ## Phase 0: Preserve and baseline
 
-Status: in progress.
+Status: complete (2026-09-02).
 
 - [x] Preserve the original prototype unchanged in Git and tag it as
   `prototype-pre-agent-architecture`.
@@ -16,14 +16,13 @@ Status: in progress.
   and vulnerability-policy documents.
 - [x] Audit the preserved prototype for obvious credentials, unsafe defaults,
   generated artifacts, large binaries, and machine-specific paths.
-- [ ] Enable GitHub Private Vulnerability Reporting and then update
-  `SECURITY.md` with the active reporting link.
+- [x] Enable GitHub Private Vulnerability Reporting and publish the active link
+  in `SECURITY.md`.
 - [x] Document branch, review, release, and signing policy.
-- [ ] Enforce the documented policy for `main` with a GitHub ruleset or branch
-  protection.
+- [x] Enforce the documented policy for `main` with branch protection.
 - [x] Define baseline repository checks, shell linting, prototype smoke tests,
   CI, dependency policy, secret scanning, and Python CodeQL analysis.
-- [ ] Verify the initial GitHub Actions runs succeed on the default branch.
+- [x] Verify the initial GitHub Actions runs succeed on the default branch.
 
 Evidence and unresolved items are recorded in `docs/PHASE_0_BASELINE.md`.
 
@@ -33,7 +32,8 @@ reporting, branch/release policy, and explicitly defined baseline quality gates.
 
 ## Phase 1: Deterministic security vertical slice
 
-Do not begin until Phase 0 is marked complete.
+Entry gate satisfied. Begin on a separate scoped branch without integrating an
+LLM or restructuring the preserved prototype.
 
 - Define versioned IPC and tool/capability schemas.
 - Implement broker, deny-by-default policy engine, approval state machine,

@@ -61,12 +61,10 @@ phase. It is not a claim that the target agent-native system exists.
 
 ### Vulnerability reporting
 
-- Status: incomplete; repository-owner action required.
+- Status: complete.
 - `SECURITY.md` keeps the project explicitly pre-alpha and disclaims support.
-- GitHub Private Vulnerability Reporting was verified disabled on 2026-09-02.
-- Owner action: enable Private Vulnerability Reporting in GitHub repository
-  settings, verify the private reporting form, and add its active link to
-  `SECURITY.md`.
+- GitHub Private Vulnerability Reporting and its private reporting form were
+  verified enabled on 2026-09-02; `SECURITY.md` links to that form.
 - GitHub secret scanning and push protection were verified enabled. Non-provider
   pattern scanning, validity checks, and Dependabot security updates were
   verified disabled. These are repository settings, not implemented controls in
@@ -74,17 +72,18 @@ phase. It is not a claim that the target agent-native system exists.
 
 ### Branch and release policy
 
-- Status: documented; GitHub enforcement incomplete.
-- `main` is the default branch and contributor guidance says not to rewrite shared
-  history, but GitHub reported no branch protection on 2026-09-02.
+- Status: complete for Phase 0.
+- `main` is the default branch. Branch protection was verified enabled on
+  2026-09-02 and applies to administrators.
+- Changes require a pull request, current required checks, and resolved review
+  conversations. Force-pushes and branch deletion are disabled.
 - `docs/BRANCH_RELEASE_POLICY.md` defines the initial branch, review, versioning,
   release, checksum, and signing policy. No supported releases exist.
-- Owner action: configure a GitHub ruleset or branch protection matching the
-  documented policy and require the repository checks after they pass on `main`.
+- Required checks are `Repository checks`, `Analyze Python`, and `Gitleaks`.
 
 ### CI, lint, tests, and security scanning
 
-- Status: configured locally; initial default-branch runs not yet verified.
+- Status: complete for the Phase 0 baseline.
 - `Quality` runs dependency-free repository checks, characterization tests, and
   ShellCheck at error severity.
 - `CodeQL` analyzes the prototype Python on pushes, pull requests, and weekly.
@@ -94,9 +93,10 @@ phase. It is not a claim that the target agent-native system exists.
 - ADR-0002 selects stable Rust for the Phase 1 security core; Rust format,
   Clippy, and test gates become required when its workspace is introduced.
 - Local evidence on 2026-09-02: repository checks passed, three prototype smoke
-  tests passed, all tracked shell scripts passed syntax parsing, and workflow YAML
-  parsed successfully. ShellCheck, CodeQL, and Gitleaks require the first remote
-  workflow runs before they can be recorded as passing.
+  tests passed, all tracked shell scripts passed syntax parsing and ShellCheck at
+  error severity, and Actionlint passed.
+- Default-branch evidence on commit `42aa8d0`: Quality, CodeQL, and Secret scan
+  completed successfully.
 
 ## Prototype safety and repository-hygiene findings
 
@@ -143,13 +143,12 @@ must not present these commands as production-ready.
 
 ## Phase 0 exit decision
 
-Phase 0 remains **in progress**. Preservation, publication, licensing, contract
-documents, implementation inventory, and the focused hygiene audit are complete.
-The exit gate is not satisfied until:
+Phase 0 is **complete** as of 2026-09-02. Preservation, publication, licensing,
+contract documents, implementation inventory, hygiene audit, private reporting,
+branch/release policy, protected review flow, and repository quality/security
+gates have direct evidence.
 
-1. GitHub Private Vulnerability Reporting is enabled and linked.
-2. Branch/review and initial release policies are approved and enforced where
-   applicable.
-3. The initial Quality, CodeQL, and Secret scan workflows pass on `main`.
-
-Phase 1 implementation must not begin before this status is deliberately updated.
+Phase 1 may begin on a separate branch. It remains limited to the deterministic
+broker -> policy -> approval -> sandboxed execution -> verification -> audit
+vertical slice. No LLM, privileged helper, shell migration, or prototype
+restructuring is authorized by Phase 0 completion.
