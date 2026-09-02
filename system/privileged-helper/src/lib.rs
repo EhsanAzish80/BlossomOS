@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use blossom_core::privileged::{
     BluetoothObservation, BluetoothRestartFailure, BluetoothRestartOutcome,
     BluetoothRestartRequest, BluetoothRestartResult, PRIVILEGED_PROTOCOL_VERSION,

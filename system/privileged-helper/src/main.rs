@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     use blossom_core::privileged::{PRIVILEGED_BUS_NAME, PRIVILEGED_OBJECT_PATH};

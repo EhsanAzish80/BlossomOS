@@ -175,6 +175,7 @@ mod tests {
         Allow,
         Deny,
         Challenge,
+        Dismissed,
         Delay,
     }
 
@@ -188,6 +189,14 @@ mod tests {
 
     struct Authority(Arc<Mutex<Seen>>);
 
+    #[derive(Debug, zbus::DBusError)]
+    #[zbus(prefix = "org.freedesktop.PolicyKit1.Error")]
+    enum AuthorityError {
+        Cancelled(String),
+        #[zbus(error)]
+        ZBus(zbus::Error),
+    }
+
     #[zbus::interface(name = "org.freedesktop.PolicyKit1.Authority")]
     impl Authority {
         #[zbus(name = "CheckAuthorization")]
@@ -198,7 +207,7 @@ mod tests {
             details: HashMap<String, String>,
             flags: u32,
             cancellation_id: String,
-        ) -> (bool, bool, HashMap<String, String>) {
+        ) -> Result<(bool, bool, HashMap<String, String>), AuthorityError> {
             let name = subject
                 .1
                 .get("name")
@@ -222,11 +231,12 @@ mod tests {
             if matches!(behavior, Behavior::Delay) {
                 async_io::Timer::after(Duration::from_millis(100)).await;
             }
-            match behavior {
+            Ok(match behavior {
                 Behavior::Allow | Behavior::Delay => (valid, false, HashMap::new()),
                 Behavior::Deny => (false, false, HashMap::new()),
                 Behavior::Challenge => (false, true, HashMap::new()),
-            }
+                Behavior::Dismissed => return Err(AuthorityError::Cancelled("dismissed".into())),
+            })
         }
     }
 
@@ -339,6 +349,14 @@ mod tests {
         assert_eq!(
             authorize_with_behavior(Behavior::Delay, Duration::from_millis(10)),
             AuthorizationDecision::Expired
+        );
+    }
+
+    #[test]
+    fn dismissed_authorization_is_unavailable_and_never_authorizes() {
+        assert_eq!(
+            authorize_with_behavior(Behavior::Dismissed, Duration::from_secs(2)),
+            AuthorizationDecision::Unavailable
         );
     }
 
