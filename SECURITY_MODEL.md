@@ -1,7 +1,8 @@
 # Blossom OS Security Model
 
-Status: architectural security contract. This document describes required
-boundaries, not claims that the current prototype already satisfies them.
+Status: architectural security contract. Phase evidence documents identify the
+small subset implemented and tested; this contract must not be read as claiming
+that the preserved prototype or target desktop already satisfies every boundary.
 
 ## Assets to protect
 
@@ -81,9 +82,9 @@ The executor must support:
 - Captured exit status, stdout, stderr, signal, and termination reason.
 - Verification separated from execution.
 
-Bubblewrap, systemd-run, Linux namespaces, seccomp, Landlock, and polkit are
-candidates, not yet selected guarantees. Their combination must be decided and
-tested by ADR on the target Arch environment.
+ADR-0003 selects Bubblewrap for the fixed Phase 1 diagnostic and records its
+tested guarantees and omissions. systemd-run, seccomp, Landlock, and polkit
+remain candidates for later scoped decisions and target-Arch validation.
 
 Raw shell is a fallback capability, never the default tool interface. A generic
 privileged shell is prohibited.
