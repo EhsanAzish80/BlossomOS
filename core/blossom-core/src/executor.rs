@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 
+pub mod bubblewrap;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct CommandSpec {
     pub program: PathBuf,
