@@ -112,6 +112,9 @@ implemented, but it is not yet a root service and exposes no system-bus method.
     fail-closed corruption/recovery behavior.
   - [x] Add a bounded, synced, hash-chained helper audit backend that validates
     its complete chain on recovery and fails closed on loss or tampering.
+  - [x] Add the native code-owned systemd adapter for only
+    `TryRestartUnit("bluetooth.service", "replace")`, including matching job
+    completion and changed-invocation observation on target Linux.
   - [ ] Wire and package the helper, polkit check, root-owned runtime journal,
     systemd operation, interactive client, double audit, and Linux evidence.
 - Complete threat review, negative tests, replay protection, and audit coverage.

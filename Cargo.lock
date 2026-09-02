@@ -210,11 +210,14 @@ dependencies = [
 name = "blossom-privileged-helper"
 version = "0.1.0"
 dependencies = [
+ "async-io",
  "blossom-core",
+ "futures-lite",
  "libc",
  "serde",
  "serde_json",
  "sha2",
+ "zbus",
 ]
 
 [[package]]

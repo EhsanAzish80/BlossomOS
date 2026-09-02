@@ -11,6 +11,10 @@ use std::collections::HashMap;
 mod file_journal;
 #[cfg(unix)]
 pub use file_journal::FileJournal;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod systemd_bluetooth;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+pub use systemd_bluetooth::SystemdBluetoothManager;
 #[cfg(unix)]
 mod file_audit;
 #[cfg(unix)]
@@ -415,6 +419,16 @@ impl<A: Authorizer, M: BluetoothManager, J: IdempotencyJournal, L: HelperAudit>
             );
             return self.complete_result(&key, &digest, result);
         }
+        if before.invocation_id.iter().all(|byte| *byte == 0) {
+            return self.complete_failure(
+                &request,
+                caller_uid,
+                &key,
+                &digest,
+                BluetoothRestartFailure::ProtocolViolation,
+                false,
+            );
+        }
         if self.journal.mark_submitted(&key, &digest).is_err() {
             return self.complete_failure(
                 &request,
@@ -481,6 +495,16 @@ impl<A: Authorizer, M: BluetoothManager, J: IdempotencyJournal, L: HelperAudit>
                 true,
             );
         }
+        if completion.job_result != "done" {
+            return self.complete_failure(
+                &request,
+                caller_uid,
+                &key,
+                &digest,
+                BluetoothRestartFailure::JobFailed,
+                true,
+            );
+        }
         let candidate = result(
             &request,
             caller_uid,
@@ -505,7 +529,7 @@ impl<A: Authorizer, M: BluetoothManager, J: IdempotencyJournal, L: HelperAudit>
                 caller_uid,
                 &key,
                 &digest,
-                BluetoothRestartFailure::JournalUnavailable,
+                BluetoothRestartFailure::OutcomeIndeterminate,
                 true,
             );
         }
@@ -885,6 +909,55 @@ mod tests {
         let replay = helper.handle(1000, request());
         assert!(replay.replayed);
         assert_eq!(helper.into_parts().1.calls, 1);
+    }
+
+    #[test]
+    fn active_zero_invocation_is_rejected_before_submission() {
+        let mut invalid = manager();
+        invalid.before = Ok(observation(0, "active"));
+        let mut helper = PrivilegedHelper::new(
+            Allow,
+            invalid,
+            MemoryJournal::default(),
+            MemoryAudit::default(),
+        );
+        assert!(matches!(
+            helper.handle(1000, request()).outcome,
+            BluetoothRestartOutcome::Failed {
+                error: BluetoothRestartFailure::ProtocolViolation,
+                job_submitted: false
+            }
+        ));
+        assert_eq!(helper.into_parts().1.calls, 0);
+    }
+
+    #[test]
+    fn terminal_non_done_job_is_audited_and_reported_as_job_failed() {
+        let mut failed = manager();
+        failed.restart = Ok(RestartCompletion {
+            job_result: "failed".into(),
+            after: observation(2, "active"),
+        });
+        let mut helper = PrivilegedHelper::new(
+            Allow,
+            failed,
+            MemoryJournal::default(),
+            MemoryAudit::default(),
+        );
+        let result = helper.handle(1000, request());
+        assert!(matches!(
+            result.outcome,
+            BluetoothRestartOutcome::Failed {
+                error: BluetoothRestartFailure::JobFailed,
+                job_submitted: true
+            }
+        ));
+        let (_, manager, _, audit) = helper.into_parts();
+        assert_eq!(manager.calls, 1);
+        assert!(audit.events.iter().any(|event| matches!(
+            event,
+            HelperAuditEvent::JobFinished { category, .. } if category == "failed"
+        )));
     }
 
     #[test]
