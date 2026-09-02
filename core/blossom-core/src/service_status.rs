@@ -340,18 +340,31 @@ mod tests {
         }
 
         struct Manager;
+        #[derive(Debug, zbus::DBusError)]
+        #[zbus(prefix = "org.freedesktop.systemd1")]
+        enum ManagerError {
+            NoSuchUnit(String),
+            UnexpectedUnit(String),
+            #[zbus(error)]
+            ZBus(zbus::Error),
+        }
+
         #[zbus::interface(name = "org.freedesktop.systemd1.Manager")]
         impl Manager {
             #[zbus(name = "GetUnit")]
-            fn get_unit(&self, name: &str) -> zbus::fdo::Result<OwnedObjectPath> {
+            fn get_unit(&self, name: &str) -> Result<OwnedObjectPath, ManagerError> {
                 if name == "slow.service" {
                     std::thread::sleep(std::time::Duration::from_millis(100));
                 }
+                if name == "missing.service" {
+                    return Err(ManagerError::NoSuchUnit(name.into()));
+                }
                 if name != "blossom-test.service" {
-                    return Err(zbus::fdo::Error::Failed("unexpected exact unit".into()));
+                    return Err(ManagerError::UnexpectedUnit(name.into()));
                 }
                 OwnedObjectPath::try_from(TEST_UNIT_PATH)
-                    .map_err(|_| zbus::fdo::Error::Failed("invalid test path".into()))
+                    .map_err(zbus::Error::from)
+                    .map_err(ManagerError::ZBus)
             }
         }
 
@@ -424,7 +437,7 @@ mod tests {
             );
             assert_eq!(
                 read_systemd_status_at(&address, "missing.service"),
-                Err(ServiceStatusError::LookupFailed)
+                Err(ServiceStatusError::UnitUnavailable)
             );
             assert_eq!(
                 read_systemd_status_at_with_timeout(
@@ -433,6 +446,14 @@ mod tests {
                     std::time::Duration::from_millis(20),
                 ),
                 Err(ServiceStatusError::Timeout)
+            );
+            assert_eq!(
+                read_systemd_status_at_with_timeout(
+                    "unix:path=/run/blossom-definitely-missing-system-bus",
+                    "blossom-test.service",
+                    std::time::Duration::from_millis(100),
+                ),
+                Err(ServiceStatusError::ConnectionFailed)
             );
         }
 

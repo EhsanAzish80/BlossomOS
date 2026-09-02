@@ -6,6 +6,8 @@ use serde_json::Value;
 use std::fmt;
 
 const MAX_REQUEST_ID_BYTES: usize = 64;
+const MAX_REQUEST_BYTES: usize = 512 * 1024;
+const MAX_TOOL_NAME_BYTES: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct RequestId(String);
@@ -68,10 +70,22 @@ pub enum ToolRequest {
 
 impl ToolRequest {
     pub fn parse_json(input: &str) -> Result<Self, RequestError> {
+        if input.len() > MAX_REQUEST_BYTES {
+            return Err(RequestError::RequestTooLarge);
+        }
         let envelope: RequestEnvelope =
             serde_json::from_str(input).map_err(|error| RequestError::MalformedJson {
                 message: error.to_string(),
             })?;
+        if envelope.tool.is_empty()
+            || envelope.tool.len() > MAX_TOOL_NAME_BYTES
+            || !envelope
+                .tool
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte == b'.')
+        {
+            return Err(RequestError::InvalidToolName);
+        }
         let request_id = RequestId::parse(envelope.request_id)?;
         match envelope.tool.as_str() {
             "system.uname" => {
@@ -252,8 +266,10 @@ struct ServiceStatusArguments {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RequestError {
+    RequestTooLarge,
     MalformedJson { message: String },
     InvalidRequestId,
+    InvalidToolName,
     UnknownTool { tool: String },
     InvalidArguments { message: String },
 }
@@ -261,8 +277,10 @@ pub enum RequestError {
 impl fmt::Display for RequestError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::RequestTooLarge => formatter.write_str("request exceeds the fixed size limit"),
             Self::MalformedJson { .. } => formatter.write_str("malformed request JSON"),
             Self::InvalidRequestId => formatter.write_str("invalid request identifier"),
+            Self::InvalidToolName => formatter.write_str("invalid tool name"),
             Self::UnknownTool { tool } => write!(formatter, "unknown tool: {tool}"),
             Self::InvalidArguments { .. } => formatter.write_str("invalid tool arguments"),
         }
@@ -373,6 +391,32 @@ mod tests {
             ToolRequest::parse_json(&expanded.to_string()),
             Err(RequestError::InvalidArguments { .. })
         ));
+    }
+
+    #[test]
+    fn rejects_oversized_envelopes_and_unbounded_tool_names_before_dispatch() {
+        let oversized = " ".repeat(MAX_REQUEST_BYTES + 1);
+        assert_eq!(
+            ToolRequest::parse_json(&oversized),
+            Err(RequestError::RequestTooLarge)
+        );
+        for tool in ["", "SYSTEM.UPTIME", "system/up", "system.\nuptime"] {
+            let value = serde_json::json!({
+                "request_id": "req-tool", "tool": tool, "arguments": {}
+            });
+            assert_eq!(
+                ToolRequest::parse_json(&value.to_string()),
+                Err(RequestError::InvalidToolName)
+            );
+        }
+        let long_tool = "a".repeat(MAX_TOOL_NAME_BYTES + 1);
+        let value = serde_json::json!({
+            "request_id": "req-tool", "tool": long_tool, "arguments": {}
+        });
+        assert_eq!(
+            ToolRequest::parse_json(&value.to_string()),
+            Err(RequestError::InvalidToolName)
+        );
     }
 
     #[test]

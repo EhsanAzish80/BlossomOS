@@ -123,9 +123,9 @@ not been moved or restructured.
 
 ## Development
 
-Phases 0 and 1 are complete. Phase 2 expands the capability and sandbox
-foundation through typed tools and containment tests; it must not integrate an
-LLM or restructure the preserved prototype merely for appearance.
+Phases 0, 1, and 2 are complete. Phase 2's closed capability inventory,
+containment evidence, composition review, and exit audit are recorded in
+`docs/PHASE_2_BASELINE.md`. Phase 3 privileged-operation design has not begun.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.
