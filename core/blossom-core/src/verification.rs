@@ -6,6 +6,7 @@ use crate::process_list::{
     MAX_PROCESS_NAME_BYTES, MAX_PROCESS_RESULTS, ProcessList, ProcessListSource,
 };
 use crate::process_self::{ProcessSelf, ProcessSelfSource};
+use crate::service_status::{ServiceStatus, validate_service_status};
 use crate::storage_summary::{ROOT_FILESYSTEM_PATH, StorageSummary, StorageSummarySource};
 use crate::uptime::{MAX_PROC_UPTIME_BYTES, PROC_UPTIME_PATH, SystemUptime};
 use crate::workspace_create::{
@@ -52,6 +53,23 @@ pub enum VerificationReason {
     WorkspaceFileDurabilityUncertain,
     InvalidWorkspaceFileProvenance,
     InvalidWorkspaceFileSchema,
+    ValidServiceStatus,
+    InvalidServiceStatusProvenance,
+    InvalidServiceStatusSchema,
+}
+
+pub fn verify_service_status(status: &ServiceStatus, expected_unit: &str) -> Verification {
+    let reason = match validate_service_status(status, expected_unit) {
+        Ok(()) => VerificationReason::ValidServiceStatus,
+        Err(crate::service_status::ServiceStatusError::ProtocolViolation) => {
+            VerificationReason::InvalidServiceStatusProvenance
+        }
+        Err(_) => VerificationReason::InvalidServiceStatusSchema,
+    };
+    Verification {
+        succeeded: reason == VerificationReason::ValidServiceStatus,
+        reason,
+    }
 }
 
 pub fn verify_workspace_file_created(
@@ -520,5 +538,23 @@ mod tests {
             verify_process_self(&identity).reason,
             VerificationReason::InvalidProcessSelfSchema
         );
+    }
+
+    #[test]
+    fn verifies_exact_service_status_without_a_second_observation() {
+        let mut status = crate::service_status::ServiceStatus {
+            requested_unit: "sshd.service".into(),
+            scope: "system".into(),
+            canonical_unit: "sshd.service".into(),
+            load_state: "loaded".into(),
+            active_state: "future-state".into(),
+            sub_state: "future-substate".into(),
+            destination: crate::service_status::SYSTEMD_DESTINATION.into(),
+            manager_interface: crate::service_status::SYSTEMD_MANAGER_INTERFACE.into(),
+            unit_interface: crate::service_status::SYSTEMD_UNIT_INTERFACE.into(),
+        };
+        assert!(verify_service_status(&status, "sshd.service").succeeded);
+        status.requested_unit = "other.service".into();
+        assert!(!verify_service_status(&status, "sshd.service").succeeded);
     }
 }

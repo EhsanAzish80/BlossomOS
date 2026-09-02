@@ -4,9 +4,10 @@ use blossom_core::{
     ApprovalError, ApprovalStore, AuditEvent, AuditLog, BeginOutcome, BlossomEngine, Capability,
     EngineError, Executor, FileContent, FileContentProvider, MemorySummary, MemorySummaryProvider,
     OsIdentity, OsIdentityProvider, PolicyDecision, PolicyEngine, PolicyRule, ProcessList,
-    ProcessListProvider, ProcessSelf, ProcessSelfProvider, RequestId, StorageSummary,
-    StorageSummaryProvider, SystemUptime, ToolOutput, ToolRequest, UptimeProvider,
-    WorkspaceCreateProvider, WorkspaceCreateState, WorkspaceFileCreated, command_for,
+    ProcessListProvider, ProcessSelf, ProcessSelfProvider, RequestId, ServiceStatus,
+    ServiceStatusProvider, StorageSummary, StorageSummaryProvider, SystemUptime, ToolOutput,
+    ToolRequest, UptimeProvider, WorkspaceCreateProvider, WorkspaceCreateState,
+    WorkspaceFileCreated, command_for,
 };
 use std::fmt::Write as _;
 
@@ -510,6 +511,80 @@ pub fn workspace_create_preview(request: &ToolRequest) -> String {
     )
 }
 
+pub fn run_service_status<E, V, I, C>(
+    executor: E,
+    service_status: V,
+    interaction: &mut I,
+    clock: &mut C,
+    request_id: RequestId,
+    unit: String,
+) -> RunOutcome
+where
+    E: Executor,
+    V: ServiceStatusProvider,
+    I: Interaction,
+    C: Clock,
+{
+    let policy = PolicyEngine::new(vec![PolicyRule {
+        capability: Capability::ServicesReadStatus,
+        decision: PolicyDecision::Ask,
+    }]);
+    let mut engine = BlossomEngine::with_service_status(
+        policy,
+        ApprovalStore::new(APPROVAL_TTL_MS),
+        executor,
+        service_status,
+    );
+    let request_json = serde_json::json!({
+        "request_id": request_id.as_str(), "tool": "services.read.status",
+        "arguments": { "selection": { "unit": unit } }
+    })
+    .to_string();
+    let (request, token) = match engine.begin(&request_json, clock.now_ms()) {
+        Ok(BeginOutcome::ApprovalRequired { request, token }) => (request, token),
+        _ => return outcome(1, &engine),
+    };
+    let preview = service_status_preview(&request);
+    let choice = if interaction.is_interactive() {
+        interaction.choose(&preview)
+    } else {
+        ApprovalChoice::Deny
+    };
+    let decided_at = clock.now_ms();
+    match choice {
+        ApprovalChoice::ApproveOnce => match engine.approve(token, request, decided_at) {
+            Ok(completed) => match completed.output {
+                ToolOutput::ServiceStatus(result) if completed.verification.succeeded => {
+                    outcome_with_result(0, Some(render_service_status(&result)), &engine)
+                }
+                _ => outcome(1, &engine),
+            },
+            Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+        ApprovalChoice::Deny => match engine.deny_approval(token, request, decided_at) {
+            Ok(()) => outcome(2, &engine),
+            Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+        ApprovalChoice::Cancel => match engine.cancel_approval(token, request, decided_at) {
+            Ok(()) => outcome(2, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+    }
+}
+
+pub fn service_status_preview(request: &ToolRequest) -> String {
+    let ToolRequest::ServicesReadStatus { selection, .. } = request else {
+        return "Invalid service-status request".into();
+    };
+    format!(
+        "Request: {}\nReason: read one exact loaded system service status\nPolicy decision: ask\nApproval: once only\nCapability: services.read:status\nExact unit: {}\nScope: local system manager\nDestination: org.freedesktop.systemd1\nCalls: GetUnit, then Id, LoadState, ActiveState, SubState only\nDeadline: 3000 ms for the complete D-Bus operation\nCommand: none (native D-Bus)\nListing, loading, GetAll, mutation, service logs, process data, network, and privilege: denied",
+        request.request_id().as_str(),
+        selection.unit,
+    )
+}
+
 pub fn exact_preview(request: &ToolRequest) -> String {
     let command = command_for(request).expect("approval preview is command-backed");
     let command_line = std::iter::once(command.program.display().to_string())
@@ -553,9 +628,10 @@ fn outcome<
     L: ProcessListProvider,
     F: FileContentProvider,
     W: WorkspaceCreateProvider,
+    V: ServiceStatusProvider,
 >(
     exit_code: i32,
-    engine: &BlossomEngine<E, O, U, M, S, P, L, F, W>,
+    engine: &BlossomEngine<E, O, U, M, S, P, L, F, W, V>,
 ) -> RunOutcome {
     outcome_with_result(exit_code, None, engine)
 }
@@ -570,10 +646,11 @@ fn outcome_with_result<
     L: ProcessListProvider,
     F: FileContentProvider,
     W: WorkspaceCreateProvider,
+    V: ServiceStatusProvider,
 >(
     exit_code: i32,
     result: Option<String>,
-    engine: &BlossomEngine<E, O, U, M, S, P, L, F, W>,
+    engine: &BlossomEngine<E, O, U, M, S, P, L, F, W, V>,
 ) -> RunOutcome {
     RunOutcome {
         exit_code,
@@ -687,6 +764,17 @@ fn render_workspace_created(result: &WorkspaceFileCreated) -> String {
         result.source_sha256,
         result.mode,
         result.state,
+    )
+}
+
+fn render_service_status(result: &ServiceStatus) -> String {
+    format!(
+        "Service status observation\n  Requested unit: {}\n  Canonical unit: {}\n  Load state: {}\n  Active state: {}\n  Sub-state: {}\n  Scope: system\n  Source: systemd D-Bus\n  Note: observed state may change after this response\n",
+        result.requested_unit,
+        result.canonical_unit,
+        result.load_state,
+        result.active_state,
+        result.sub_state,
     )
 }
 
@@ -820,6 +908,15 @@ fn describe_event(event: &AuditEvent) -> String {
         } => format!(
             "request {request_id} workspace create finished root_sha256={workspace_sha256}, destination_sha256={destination_sha256}, created={created_device}:{created_inode}, bytes={source_bytes}, content_sha256={source_sha256}, state={state:?}"
         ),
+        AuditEvent::ServiceStatusReadFinished {
+            request_id,
+            requested_unit_sha256,
+            canonical_unit_sha256,
+            scope,
+            provider,
+        } => format!(
+            "request {request_id} service status finished requested_sha256={requested_unit_sha256}, canonical_sha256={canonical_unit_sha256}, scope={scope}, provider={provider}"
+        ),
         AuditEvent::NativeReadFailed {
             request_id,
             resource,
@@ -868,6 +965,13 @@ fn describe_event(event: &AuditEvent) -> String {
             error,
         } => format!(
             "request {request_id} workspace create failed root_sha256={workspace_sha256}, destination_sha256={destination_sha256} ({error})"
+        ),
+        AuditEvent::ServiceStatusReadFailed {
+            request_id,
+            requested_unit_sha256,
+            error,
+        } => format!(
+            "request {request_id} service status failed unit_sha256={requested_unit_sha256} ({error})"
         ),
         AuditEvent::VerificationFinished {
             request_id,

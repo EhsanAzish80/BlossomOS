@@ -12,3 +12,8 @@ serde_json.workspace = true
 sha2.workspace = true
 libc.workspace = true
 nix.workspace = true
+
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
+async-io = "2.6.0"
+futures-lite = "2.6.1"
+zbus = { version = "5.19.0", default-features = false, features = ["async-io", "blocking-api"] }

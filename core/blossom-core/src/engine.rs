@@ -18,14 +18,17 @@ use crate::process_self::{
     ProcessSelf, ProcessSelfError, ProcessSelfProvider, UnavailableProcessSelfProvider,
 };
 use crate::request::{RequestError, ToolRequest};
+use crate::service_status::{
+    ServiceStatus, ServiceStatusError, ServiceStatusProvider, UnavailableServiceStatusProvider,
+};
 use crate::storage_summary::{
     StorageSummary, StorageSummaryError, StorageSummaryProvider, UnavailableStorageSummaryProvider,
 };
 use crate::uptime::{SystemUptime, UnavailableUptimeProvider, UptimeError, UptimeProvider};
 use crate::verification::{
     Verification, verify_execution, verify_file_content, verify_memory_summary, verify_os_identity,
-    verify_process_list, verify_process_self, verify_storage_summary, verify_uptime,
-    verify_workspace_file_created,
+    verify_process_list, verify_process_self, verify_service_status, verify_storage_summary,
+    verify_uptime, verify_workspace_file_created,
 };
 use crate::workspace_create::{
     UnavailableWorkspaceCreateProvider, WorkspaceCreateError, WorkspaceCreateProvider,
@@ -43,6 +46,7 @@ pub struct BlossomEngine<
     L = UnavailableProcessListProvider,
     F = UnavailableFileContentProvider,
     W = UnavailableWorkspaceCreateProvider,
+    V = UnavailableServiceStatusProvider,
 > {
     policy: PolicyEngine,
     approvals: ApprovalStore,
@@ -55,6 +59,7 @@ pub struct BlossomEngine<
     process_list: L,
     file_content: F,
     workspace_create: W,
+    service_status: V,
     audit: AuditLog,
 }
 
@@ -84,6 +89,7 @@ impl<E: Executor>
             process_list: UnavailableProcessListProvider,
             file_content: UnavailableFileContentProvider::default(),
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
+            service_status: UnavailableServiceStatusProvider,
             audit: AuditLog::default(),
         }
     }
@@ -110,6 +116,7 @@ impl<E: Executor, O: OsIdentityProvider>
             process_list: UnavailableProcessListProvider,
             file_content: UnavailableFileContentProvider::default(),
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
+            service_status: UnavailableServiceStatusProvider,
             audit: AuditLog::default(),
         }
     }
@@ -136,6 +143,7 @@ impl<E: Executor, U: UptimeProvider>
             process_list: UnavailableProcessListProvider,
             file_content: UnavailableFileContentProvider::default(),
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
+            service_status: UnavailableServiceStatusProvider,
             audit: AuditLog::default(),
         }
     }
@@ -162,6 +170,7 @@ impl<E: Executor, M: MemorySummaryProvider>
             process_list: UnavailableProcessListProvider,
             file_content: UnavailableFileContentProvider::default(),
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
+            service_status: UnavailableServiceStatusProvider,
             audit: AuditLog::default(),
         }
     }
@@ -194,6 +203,7 @@ impl<E: Executor, S: StorageSummaryProvider>
             process_list: UnavailableProcessListProvider,
             file_content: UnavailableFileContentProvider::default(),
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
+            service_status: UnavailableServiceStatusProvider,
             audit: AuditLog::default(),
         }
     }
@@ -230,6 +240,7 @@ impl<E: Executor, P: ProcessSelfProvider>
             process_list: UnavailableProcessListProvider,
             file_content: UnavailableFileContentProvider::default(),
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
+            service_status: UnavailableServiceStatusProvider,
             audit: AuditLog::default(),
         }
     }
@@ -265,6 +276,7 @@ impl<E: Executor, L: ProcessListProvider>
             process_list,
             file_content: UnavailableFileContentProvider::default(),
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
+            service_status: UnavailableServiceStatusProvider,
             audit: AuditLog::default(),
         }
     }
@@ -301,6 +313,7 @@ impl<E: Executor, F: FileContentProvider>
             process_list: UnavailableProcessListProvider,
             file_content,
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
+            service_status: UnavailableServiceStatusProvider,
             audit: AuditLog::default(),
         }
     }
@@ -337,6 +350,45 @@ impl<E: Executor, W: WorkspaceCreateProvider>
             process_list: UnavailableProcessListProvider,
             file_content: UnavailableFileContentProvider::default(),
             workspace_create,
+            service_status: UnavailableServiceStatusProvider,
+            audit: AuditLog::default(),
+        }
+    }
+}
+
+impl<E: Executor, V: ServiceStatusProvider>
+    BlossomEngine<
+        E,
+        UnavailableOsIdentityProvider,
+        UnavailableUptimeProvider,
+        UnavailableMemorySummaryProvider,
+        UnavailableStorageSummaryProvider,
+        UnavailableProcessSelfProvider,
+        UnavailableProcessListProvider,
+        UnavailableFileContentProvider,
+        UnavailableWorkspaceCreateProvider,
+        V,
+    >
+{
+    pub fn with_service_status(
+        policy: PolicyEngine,
+        approvals: ApprovalStore,
+        executor: E,
+        service_status: V,
+    ) -> Self {
+        Self {
+            policy,
+            approvals,
+            executor,
+            os_identity: UnavailableOsIdentityProvider,
+            uptime: UnavailableUptimeProvider,
+            memory_summary: UnavailableMemorySummaryProvider,
+            storage_summary: UnavailableStorageSummaryProvider,
+            process_self: UnavailableProcessSelfProvider,
+            process_list: UnavailableProcessListProvider,
+            file_content: UnavailableFileContentProvider::default(),
+            workspace_create: UnavailableWorkspaceCreateProvider::default(),
+            service_status,
             audit: AuditLog::default(),
         }
     }
@@ -352,7 +404,8 @@ impl<
     L: ProcessListProvider,
     F: FileContentProvider,
     W: WorkspaceCreateProvider,
-> BlossomEngine<E, O, U, M, S, P, L, F, W>
+    V: ServiceStatusProvider,
+> BlossomEngine<E, O, U, M, S, P, L, F, W, V>
 {
     pub fn begin(&mut self, input: &str, now_ms: u64) -> Result<BeginOutcome, EngineError> {
         let request = match ToolRequest::parse_json(input) {
@@ -467,6 +520,7 @@ impl<
             ToolRequest::ProcessList { .. } => self.execute_process_list(request),
             ToolRequest::FilesReadContent { .. } => self.execute_file_content(request),
             ToolRequest::FilesWriteCreate { .. } => self.execute_workspace_create(request),
+            ToolRequest::ServicesReadStatus { .. } => self.execute_service_status(request),
         }
     }
 
@@ -772,6 +826,44 @@ impl<
             output: ToolOutput::WorkspaceFileCreated(Box::new(result)),
         })
     }
+
+    fn execute_service_status(
+        &mut self,
+        request: ToolRequest,
+    ) -> Result<CompletionOutcome, EngineError> {
+        let unit = match &request {
+            ToolRequest::ServicesReadStatus { selection, .. } => selection.unit.clone(),
+            _ => unreachable!("service status requires an exact service request"),
+        };
+        let unit_sha256 = crate::audit::digest_bytes(unit.as_bytes());
+        self.audit.append(AuditEvent::NativeReadStarted {
+            request_id: request.request_id().as_str().into(),
+            resource: format!("service.status:sha256:{unit_sha256}"),
+        });
+        let result = match self.service_status.read_status(&unit) {
+            Ok(result) => result,
+            Err(error) => {
+                self.audit.append(AuditEvent::ServiceStatusReadFailed {
+                    request_id: request.request_id().as_str().into(),
+                    requested_unit_sha256: unit_sha256,
+                    error,
+                });
+                return Err(EngineError::ServiceStatus(error));
+            }
+        };
+        self.audit
+            .append(AuditEvent::service_status_finished(&request, &result));
+        let verification = verify_service_status(&result, &unit);
+        self.audit.append(AuditEvent::VerificationFinished {
+            request_id: request.request_id().as_str().into(),
+            verification: verification.clone(),
+        });
+        Ok(CompletionOutcome {
+            request,
+            verification,
+            output: ToolOutput::ServiceStatus(Box::new(result)),
+        })
+    }
 }
 
 pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
@@ -785,6 +877,7 @@ pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
         ToolRequest::ProcessList { .. } => None,
         ToolRequest::FilesReadContent { .. } => None,
         ToolRequest::FilesWriteCreate { .. } => None,
+        ToolRequest::ServicesReadStatus { .. } => None,
     }
 }
 
@@ -825,6 +918,7 @@ pub enum ToolOutput {
     ProcessList(ProcessList),
     FileContent(Box<FileContent>),
     WorkspaceFileCreated(Box<WorkspaceFileCreated>),
+    ServiceStatus(Box<ServiceStatus>),
 }
 
 #[derive(Debug)]
@@ -840,6 +934,7 @@ pub enum EngineError {
     ProcessList(ProcessListError),
     FileContent(FileReadError),
     WorkspaceCreate(WorkspaceCreateError),
+    ServiceStatus(ServiceStatusError),
 }
 
 #[cfg(test)]

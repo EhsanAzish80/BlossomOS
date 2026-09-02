@@ -7,6 +7,7 @@ use crate::policy::{Capability, PolicyDecision};
 use crate::process_list::{ProcessList, ProcessListError};
 use crate::process_self::{ProcessSelf, ProcessSelfError};
 use crate::request::ToolRequest;
+use crate::service_status::{ServiceStatus, ServiceStatusError};
 use crate::storage_summary::{StorageSummary, StorageSummaryError};
 use crate::uptime::{SystemUptime, UptimeError};
 use crate::verification::Verification;
@@ -133,6 +134,13 @@ pub enum AuditEvent {
         source_sha256: String,
         state: crate::workspace_create::WorkspaceCreateState,
     },
+    ServiceStatusReadFinished {
+        request_id: String,
+        requested_unit_sha256: String,
+        canonical_unit_sha256: String,
+        scope: String,
+        provider: String,
+    },
     NativeReadFailed {
         request_id: String,
         resource: String,
@@ -173,6 +181,11 @@ pub enum AuditEvent {
         workspace_sha256: String,
         destination_sha256: String,
         error: WorkspaceCreateError,
+    },
+    ServiceStatusReadFailed {
+        request_id: String,
+        requested_unit_sha256: String,
+        error: ServiceStatusError,
     },
     VerificationFinished {
         request_id: String,
@@ -287,6 +300,16 @@ impl AuditEvent {
             source_bytes: result.source_bytes,
             source_sha256: result.source_sha256.clone(),
             state: result.state,
+        }
+    }
+
+    pub fn service_status_finished(request: &ToolRequest, result: &ServiceStatus) -> Self {
+        Self::ServiceStatusReadFinished {
+            request_id: request.request_id().as_str().into(),
+            requested_unit_sha256: digest(result.requested_unit.as_bytes()),
+            canonical_unit_sha256: digest(result.canonical_unit.as_bytes()),
+            scope: "system".into(),
+            provider: "systemd_dbus_exact_unit".into(),
         }
     }
 }

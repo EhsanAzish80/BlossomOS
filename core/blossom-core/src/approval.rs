@@ -201,4 +201,30 @@ mod tests {
             Err(ApprovalError::Replay)
         );
     }
+
+    #[test]
+    fn service_approval_binds_the_exact_unit_and_rejects_replay() {
+        let selected = ToolRequest::ServicesReadStatus {
+            request_id: RequestId::parse("service-approval".into()).expect("id"),
+            selection: crate::service_status::ServiceSelection {
+                unit: "sshd.service".into(),
+            },
+        };
+        let mut changed = selected.clone();
+        let ToolRequest::ServicesReadStatus { selection, .. } = &mut changed else {
+            unreachable!()
+        };
+        selection.unit = "dbus.service".into();
+        let mut store = ApprovalStore::new(100);
+        let token = store.issue(selected.clone(), 1_000);
+        assert_eq!(
+            store.consume(token, &changed, 1_001),
+            Err(ApprovalError::BindingMismatch)
+        );
+        assert_eq!(store.consume(token, &selected, 1_001), Ok(()));
+        assert_eq!(
+            store.consume(token, &selected, 1_002),
+            Err(ApprovalError::Replay)
+        );
+    }
 }

@@ -12,6 +12,7 @@ pub enum Capability {
     ProcessReadList,
     FilesReadContent,
     FilesWriteCreate,
+    ServicesReadStatus,
 }
 
 impl Capability {
@@ -26,6 +27,7 @@ impl Capability {
             Self::ProcessReadList => "process.read:list",
             Self::FilesReadContent => "files.read:content",
             Self::FilesWriteCreate => "files.write:create",
+            Self::ServicesReadStatus => "services.read:status",
         }
     }
 }
@@ -64,6 +66,7 @@ impl PolicyEngine {
             ToolRequest::ProcessList { .. } => Capability::ProcessReadList,
             ToolRequest::FilesReadContent { .. } => Capability::FilesReadContent,
             ToolRequest::FilesWriteCreate { .. } => Capability::FilesWriteCreate,
+            ToolRequest::ServicesReadStatus { .. } => Capability::ServicesReadStatus,
         }
     }
 
