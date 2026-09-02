@@ -28,6 +28,8 @@ compatibility, packaging, or contributor obligations.
 - Exact-file read containment: accepted in ADR-0005.
 - Atomic create-only workspace file writes: ADR-0006 is superseded by the
   unnamed-inode publication correction in accepted ADR-0007.
+- Exact systemd service-status reads: accepted in ADR-0008; implementation is
+  pending.
 - Local IPC transport and schema format.
 - Sandbox and resource-control stack.
 - Privileged-helper authorization design.
