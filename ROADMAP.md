@@ -115,6 +115,8 @@ implemented, but it is not yet a root service and exposes no system-bus method.
   - [x] Add the native code-owned systemd adapter for only
     `TryRestartUnit("bluetooth.service", "replace")`, including matching job
     completion and changed-invocation observation on target Linux.
+  - [x] Add the native fixed-action polkit adapter using only the authenticated
+    system-bus sender subject and non-retained interactive authorization.
   - [ ] Wire and package the helper, polkit check, root-owned runtime journal,
     systemd operation, interactive client, double audit, and Linux evidence.
 - Complete threat review, negative tests, replay protection, and audit coverage.

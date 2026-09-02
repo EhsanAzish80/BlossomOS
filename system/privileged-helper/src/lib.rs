@@ -15,6 +15,10 @@ pub use file_journal::FileJournal;
 mod systemd_bluetooth;
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 pub use systemd_bluetooth::SystemdBluetoothManager;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod polkit_authorizer;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+pub use polkit_authorizer::PolkitAuthorizer;
 #[cfg(unix)]
 mod file_audit;
 #[cfg(unix)]
@@ -30,10 +34,32 @@ pub enum AuthorizationDecision {
     Unavailable,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AuthenticatedCaller {
+    pub uid: u32,
+    pub system_bus_name: String,
+}
+
+impl AuthenticatedCaller {
+    pub fn validate(&self) -> Result<(), ManagerError> {
+        let valid = self.system_bus_name.starts_with(':')
+            && self.system_bus_name.len() <= 255
+            && self.system_bus_name.split('.').count() >= 2
+            && self.system_bus_name.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b':' | b'.' | b'_' | b'-')
+            });
+        if valid {
+            Ok(())
+        } else {
+            Err(ManagerError::ProtocolViolation)
+        }
+    }
+}
+
 pub trait Authorizer {
     fn authorize(
         &mut self,
-        caller_uid: u32,
+        caller: &AuthenticatedCaller,
         request: &BluetoothRestartRequest,
     ) -> AuthorizationDecision;
 }
@@ -259,9 +285,10 @@ impl<A: Authorizer, M: BluetoothManager, J: IdempotencyJournal, L: HelperAudit>
 
     pub fn handle(
         &mut self,
-        caller_uid: u32,
+        caller: AuthenticatedCaller,
         request: BluetoothRestartRequest,
     ) -> BluetoothRestartResult {
+        let caller_uid = caller.uid;
         let correlation = request.correlation_id.clone();
         let fallback_digest = request
             .normalized_digest(caller_uid)
@@ -282,7 +309,7 @@ impl<A: Authorizer, M: BluetoothManager, J: IdempotencyJournal, L: HelperAudit>
                 false,
             );
         }
-        if request.validate().is_err() {
+        if request.validate().is_err() || caller.validate().is_err() {
             return self.finish_failure(
                 &request,
                 caller_uid,
@@ -294,7 +321,7 @@ impl<A: Authorizer, M: BluetoothManager, J: IdempotencyJournal, L: HelperAudit>
         let digest = request
             .normalized_digest(caller_uid)
             .expect("validated request digest");
-        let decision = self.authorizer.authorize(caller_uid, &request);
+        let decision = self.authorizer.authorize(&caller, &request);
         if self
             .audit
             .record(HelperAuditEvent::AuthorizationFinished {
@@ -764,13 +791,21 @@ mod tests {
 
     struct Allow;
     impl Authorizer for Allow {
-        fn authorize(&mut self, _: u32, _: &BluetoothRestartRequest) -> AuthorizationDecision {
+        fn authorize(
+            &mut self,
+            _: &AuthenticatedCaller,
+            _: &BluetoothRestartRequest,
+        ) -> AuthorizationDecision {
             AuthorizationDecision::Authorized
         }
     }
     struct Deny;
     impl Authorizer for Deny {
-        fn authorize(&mut self, _: u32, _: &BluetoothRestartRequest) -> AuthorizationDecision {
+        fn authorize(
+            &mut self,
+            _: &AuthenticatedCaller,
+            _: &BluetoothRestartRequest,
+        ) -> AuthorizationDecision {
             AuthorizationDecision::Denied
         }
     }
@@ -815,6 +850,12 @@ mod tests {
             interactive: true,
         }
     }
+    fn caller() -> AuthenticatedCaller {
+        AuthenticatedCaller {
+            uid: 1000,
+            system_bus_name: ":1.42".into(),
+        }
+    }
     fn observation(id: u8, state: &str) -> BluetoothObservation {
         BluetoothObservation {
             canonical_unit: BLUETOOTH_UNIT.into(),
@@ -842,12 +883,12 @@ mod tests {
             MemoryJournal::default(),
             MemoryAudit::default(),
         );
-        let first = helper.handle(1000, request());
+        let first = helper.handle(caller(), request());
         assert!(matches!(
             first.outcome,
             BluetoothRestartOutcome::RestartedActive { .. }
         ));
-        let replay = helper.handle(1000, request());
+        let replay = helper.handle(caller(), request());
         assert!(replay.replayed);
         let (_, manager, _, audit) = helper.into_parts();
         assert_eq!(manager.calls, 1);
@@ -866,7 +907,7 @@ mod tests {
             MemoryAudit::default(),
         );
         assert!(matches!(
-            denied.handle(1000, request()).outcome,
+            denied.handle(caller(), request()).outcome,
             BluetoothRestartOutcome::Failed {
                 error: BluetoothRestartFailure::Denied,
                 job_submitted: false
@@ -882,7 +923,7 @@ mod tests {
             MemoryAudit::default(),
         );
         assert!(matches!(
-            inactive.handle(1000, request()).outcome,
+            inactive.handle(caller(), request()).outcome,
             BluetoothRestartOutcome::NotRunning { .. }
         ));
         assert_eq!(inactive.into_parts().1.calls, 0);
@@ -898,7 +939,7 @@ mod tests {
             MemoryJournal::default(),
             MemoryAudit::default(),
         );
-        let first = helper.handle(1000, request());
+        let first = helper.handle(caller(), request());
         assert!(matches!(
             first.outcome,
             BluetoothRestartOutcome::Failed {
@@ -906,7 +947,7 @@ mod tests {
                 job_submitted: true
             }
         ));
-        let replay = helper.handle(1000, request());
+        let replay = helper.handle(caller(), request());
         assert!(replay.replayed);
         assert_eq!(helper.into_parts().1.calls, 1);
     }
@@ -922,7 +963,7 @@ mod tests {
             MemoryAudit::default(),
         );
         assert!(matches!(
-            helper.handle(1000, request()).outcome,
+            helper.handle(caller(), request()).outcome,
             BluetoothRestartOutcome::Failed {
                 error: BluetoothRestartFailure::ProtocolViolation,
                 job_submitted: false
@@ -944,7 +985,7 @@ mod tests {
             MemoryJournal::default(),
             MemoryAudit::default(),
         );
-        let result = helper.handle(1000, request());
+        let result = helper.handle(caller(), request());
         assert!(matches!(
             result.outcome,
             BluetoothRestartOutcome::Failed {
@@ -964,11 +1005,11 @@ mod tests {
     fn key_reuse_with_changed_digest_is_rejected() {
         let journal = MemoryJournal::default();
         let mut helper = PrivilegedHelper::new(Allow, manager(), journal, MemoryAudit::default());
-        helper.handle(1000, request());
+        helper.handle(caller(), request());
         let mut changed = request();
         changed.correlation_id = "request-2".into();
         assert!(matches!(
-            helper.handle(1000, changed).outcome,
+            helper.handle(caller(), changed).outcome,
             BluetoothRestartOutcome::Failed {
                 error: BluetoothRestartFailure::ProtocolViolation,
                 job_submitted: false
@@ -988,7 +1029,7 @@ mod tests {
         claimed.claim(&key, &digest).unwrap();
         let mut helper = PrivilegedHelper::new(Allow, manager(), claimed, MemoryAudit::default());
         assert!(matches!(
-            helper.handle(1000, request()).outcome,
+            helper.handle(caller(), request()).outcome,
             BluetoothRestartOutcome::Failed {
                 error: BluetoothRestartFailure::InterruptedBeforeSubmission,
                 job_submitted: false
@@ -1000,7 +1041,7 @@ mod tests {
         submitted.mark_submitted(&key, &digest).unwrap();
         let mut helper = PrivilegedHelper::new(Allow, manager(), submitted, MemoryAudit::default());
         assert!(matches!(
-            helper.handle(1000, request()).outcome,
+            helper.handle(caller(), request()).outcome,
             BluetoothRestartOutcome::Failed {
                 error: BluetoothRestartFailure::OutcomeIndeterminate,
                 job_submitted: true
@@ -1017,7 +1058,7 @@ mod tests {
             fail_at: 5,
         };
         let mut helper = PrivilegedHelper::new(Allow, manager(), MemoryJournal::default(), audit);
-        let result = helper.handle(1000, request());
+        let result = helper.handle(caller(), request());
         assert!(matches!(
             result.outcome,
             BluetoothRestartOutcome::Failed {
@@ -1046,7 +1087,7 @@ mod tests {
             fail_at: 6,
         };
         let mut helper = PrivilegedHelper::new(Allow, manager(), MemoryJournal::default(), audit);
-        let result = helper.handle(1000, request());
+        let result = helper.handle(caller(), request());
         assert!(matches!(
             result.outcome,
             BluetoothRestartOutcome::Failed {
@@ -1066,7 +1107,7 @@ mod tests {
         };
         let mut helper = PrivilegedHelper::new(Deny, manager(), MemoryJournal::default(), audit);
         assert!(matches!(
-            helper.handle(1000, request()).outcome,
+            helper.handle(caller(), request()).outcome,
             BluetoothRestartOutcome::Failed {
                 error: BluetoothRestartFailure::JournalUnavailable,
                 job_submitted: false
