@@ -281,7 +281,12 @@ mod tests {
         let result = executor
             .execute(&CommandSpec::system_uname())
             .expect("sandboxed uname should execute");
-        assert_eq!(result.exit_code, Some(0));
+        assert_eq!(
+            result.exit_code,
+            Some(0),
+            "bubblewrap stderr: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
         assert!(!result.stdout.is_empty());
         assert!(!result.output_truncated);
     }

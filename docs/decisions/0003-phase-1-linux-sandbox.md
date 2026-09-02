@@ -60,6 +60,11 @@ Linux test and target systems require the `bubblewrap` package. macOS runs the
 portable core tests and returns `Unavailable` from the Linux adapter. CI installs
 Bubblewrap and runs the real integration test on Ubuntu.
 
+GitHub's Ubuntu runner restricts unprivileged user namespaces through AppArmor by
+default. The repository check enables them only inside the disposable CI runner
+before exercising Bubblewrap, matching Bubblewrap upstream's own CI setup.
+Blossom does not change this host setting at runtime.
+
 ## Migration and rollback
 
 The adapter is behind the existing executor trait. It can be replaced by
