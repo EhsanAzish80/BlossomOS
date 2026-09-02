@@ -17,18 +17,26 @@ that marker reports `outcome_indeterminate`. Neither state is automatically
 retried.
 
 The in-memory journal and audit implementations exist only as deterministic test
-doubles. They are not suitable for the root service. No D-Bus server or client,
-polkit call, systemd mutation adapter, persistent root-owned journal, packaging,
-service unit, activation policy, or CLI registration is present at this
-checkpoint. The crate therefore cannot restart a service and is not a security
-claim about an installed privileged boundary.
+doubles. The Unix `FileJournal` is the durable backend intended for the future
+systemd `RuntimeDirectory`: it requires a pre-created root-owned `0700`
+directory, uses only `0600` regular files opened without following symlinks,
+bounds entries and post-write bytes, syncs each transition, and atomically
+replaces later states. Corruption, stale temporary files, unknown directory
+entries, permission drift, digest reuse, and invalid transitions fail closed.
+Tests substitute the current test user's UID while enforcing the same modes.
+
+The durable backend is not yet wired into an executable or installed runtime
+directory. No D-Bus server or client, polkit call, systemd mutation adapter,
+root audit backend, packaging, service unit, activation policy, or CLI
+registration is present at this checkpoint. The crate therefore cannot restart
+a service and is not a security claim about an installed privileged boundary.
 
 Local evidence for this checkpoint is:
 
 - workspace formatting passes;
 - all workspace tests pass, including denial, inactive-unit, successful replay,
-  changed-digest rejection, timeout after submission, and recovered journal
-  states; and
+  changed-digest rejection, timeout after submission, recovered journal states,
+  durable transition recovery, and journal corruption/containment cases; and
 - strict workspace Clippy passes with warnings denied.
 
 Target-Linux integration and installed-boundary evidence remain required before
