@@ -94,7 +94,10 @@ its applicable containment tests. See `docs/PHASE_2_BASELINE.md`.
 
 ## Phase 3: Privileged operations
 
-- Design a minimal typed helper and polkit policy.
+Status: active. ADR-0009 selects the system D-Bus, polkit, idempotency, audit,
+and hardening boundary. No privileged code or operation is implemented yet.
+
+- [x] Design a minimal typed helper and polkit policy boundary.
 - Add one low-complexity privileged operation with approval and verification.
 - Complete threat review, negative tests, replay protection, and audit coverage.
 
