@@ -8,6 +8,10 @@ use crate::process_list::{
 use crate::process_self::{ProcessSelf, ProcessSelfSource};
 use crate::storage_summary::{ROOT_FILESYSTEM_PATH, StorageSummary, StorageSummarySource};
 use crate::uptime::{MAX_PROC_UPTIME_BYTES, PROC_UPTIME_PATH, SystemUptime};
+use crate::workspace_create::{
+    WORKSPACE_FILE_MODE, WorkspaceCreateSelection, WorkspaceCreateState, WorkspaceFileCreated,
+    validate_relative_destination,
+};
 use serde::Serialize;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -44,6 +48,51 @@ pub enum VerificationReason {
     ValidFileContent,
     InvalidFileContentProvenance,
     InvalidFileContentSchema,
+    ValidWorkspaceFileCreated,
+    WorkspaceFileDurabilityUncertain,
+    InvalidWorkspaceFileProvenance,
+    InvalidWorkspaceFileSchema,
+}
+
+pub fn verify_workspace_file_created(
+    result: &WorkspaceFileCreated,
+    expected: &WorkspaceCreateSelection,
+) -> Verification {
+    let digest_valid = result.source_sha256.len() == 64
+        && result
+            .source_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
+    let provenance_valid = crate::file_read::validate_selected_path(&result.workspace_root).is_ok()
+        && validate_relative_destination(&result.relative_destination).is_ok()
+        && result.root_identity.is_valid()
+        && result.parent_identity.is_valid()
+        && result.root_identity.device == result.parent_identity.device
+        && result.created_device == result.parent_identity.device
+        && result.created_inode > 0
+        && result.workspace_root == expected.workspace_root
+        && result.relative_destination == expected.relative_destination
+        && result.root_identity == expected.root_identity
+        && result.parent_identity == expected.parent_identity
+        && result.source_bytes == expected.content.len()
+        && result.source_sha256 == expected.content_sha256
+        && result.mode == expected.mode;
+    let schema_valid = result.source_bytes <= MAX_FILE_CONTENT_BYTES
+        && digest_valid
+        && result.mode == WORKSPACE_FILE_MODE;
+    let reason = if !provenance_valid {
+        VerificationReason::InvalidWorkspaceFileProvenance
+    } else if !schema_valid {
+        VerificationReason::InvalidWorkspaceFileSchema
+    } else if result.state == WorkspaceCreateState::PublishedDurabilityUncertain {
+        VerificationReason::WorkspaceFileDurabilityUncertain
+    } else {
+        VerificationReason::ValidWorkspaceFileCreated
+    };
+    Verification {
+        succeeded: reason == VerificationReason::ValidWorkspaceFileCreated,
+        reason,
+    }
 }
 
 pub fn verify_file_content(result: &FileContent) -> Verification {
@@ -268,6 +317,47 @@ mod tests {
             verify_file_content(&result).reason,
             VerificationReason::InvalidFileContentProvenance
         );
+    }
+
+    #[test]
+    fn verifies_durable_workspace_creation_and_rejects_uncertain_durability() {
+        use crate::workspace_create::{
+            DirectoryIdentity, WorkspaceCreateSelection, WorkspaceCreateState,
+        };
+        let mut result = WorkspaceFileCreated {
+            workspace_root: "/home/user/workspace".into(),
+            relative_destination: "new.txt".into(),
+            root_identity: DirectoryIdentity {
+                device: 1,
+                inode: 2,
+            },
+            parent_identity: DirectoryIdentity {
+                device: 1,
+                inode: 3,
+            },
+            created_device: 1,
+            created_inode: 4,
+            source_bytes: 5,
+            source_sha256: "a".repeat(64),
+            mode: WORKSPACE_FILE_MODE,
+            state: WorkspaceCreateState::DurableCreated,
+        };
+        let expected = WorkspaceCreateSelection {
+            workspace_root: result.workspace_root.clone(),
+            root_identity: result.root_identity.clone(),
+            parent_identity: result.parent_identity.clone(),
+            relative_destination: result.relative_destination.clone(),
+            content: "hello".into(),
+            content_sha256: "a".repeat(64),
+            mode: WORKSPACE_FILE_MODE,
+        };
+        assert!(verify_workspace_file_created(&result, &expected).succeeded);
+        result.state = WorkspaceCreateState::PublishedDurabilityUncertain;
+        assert_eq!(
+            verify_workspace_file_created(&result, &expected).reason,
+            VerificationReason::WorkspaceFileDurabilityUncertain
+        );
+        assert!(!verify_workspace_file_created(&result, &expected).succeeded);
     }
 
     #[test]

@@ -5,7 +5,8 @@ use blossom_core::{
     EngineError, Executor, FileContent, FileContentProvider, MemorySummary, MemorySummaryProvider,
     OsIdentity, OsIdentityProvider, PolicyDecision, PolicyEngine, PolicyRule, ProcessList,
     ProcessListProvider, ProcessSelf, ProcessSelfProvider, RequestId, StorageSummary,
-    StorageSummaryProvider, SystemUptime, ToolOutput, ToolRequest, UptimeProvider, command_for,
+    StorageSummaryProvider, SystemUptime, ToolOutput, ToolRequest, UptimeProvider,
+    WorkspaceCreateProvider, WorkspaceCreateState, WorkspaceFileCreated, command_for,
 };
 use std::fmt::Write as _;
 
@@ -419,6 +420,96 @@ pub fn file_read_preview(request: &ToolRequest) -> String {
     )
 }
 
+pub fn run_workspace_create<E, W, I, C>(
+    executor: E,
+    workspace_create: W,
+    interaction: &mut I,
+    clock: &mut C,
+    request_id: RequestId,
+) -> RunOutcome
+where
+    E: Executor,
+    W: WorkspaceCreateProvider,
+    I: Interaction,
+    C: Clock,
+{
+    let selection = workspace_create.selection().clone();
+    let policy = PolicyEngine::new(vec![PolicyRule {
+        capability: Capability::FilesWriteCreate,
+        decision: PolicyDecision::Ask,
+    }]);
+    let mut engine = BlossomEngine::with_workspace_create(
+        policy,
+        ApprovalStore::new(APPROVAL_TTL_MS),
+        executor,
+        workspace_create,
+    );
+    let request_json = serde_json::json!({
+        "request_id": request_id.as_str(), "tool": "files.write.create",
+        "arguments": { "selection": selection }
+    })
+    .to_string();
+    let (request, token) = match engine.begin(&request_json, clock.now_ms()) {
+        Ok(BeginOutcome::ApprovalRequired { request, token }) => (request, token),
+        _ => return outcome(1, &engine),
+    };
+    let preview = workspace_create_preview(&request);
+    let choice = if interaction.is_interactive() {
+        interaction.choose(&preview)
+    } else {
+        ApprovalChoice::Deny
+    };
+    let decided_at = clock.now_ms();
+    match choice {
+        ApprovalChoice::ApproveOnce => match engine.approve(token, request, decided_at) {
+            Ok(completed) => match completed.output {
+                ToolOutput::WorkspaceFileCreated(result) => {
+                    let exit_code = if result.state == WorkspaceCreateState::DurableCreated
+                        && completed.verification.succeeded
+                    {
+                        0
+                    } else {
+                        4
+                    };
+                    outcome_with_result(exit_code, Some(render_workspace_created(&result)), &engine)
+                }
+                _ => outcome(1, &engine),
+            },
+            Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+        ApprovalChoice::Deny => match engine.deny_approval(token, request, decided_at) {
+            Ok(()) => outcome(2, &engine),
+            Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+        ApprovalChoice::Cancel => match engine.cancel_approval(token, request, decided_at) {
+            Ok(()) => outcome(2, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+    }
+}
+
+pub fn workspace_create_preview(request: &ToolRequest) -> String {
+    let ToolRequest::FilesWriteCreate { selection, .. } = request else {
+        return "Invalid workspace-create request".into();
+    };
+    let escaped = serde_json::to_string(&selection.content).expect("UTF-8 content serializes");
+    format!(
+        "Request: {}\nReason: atomically create one new workspace text file\nPolicy decision: ask\nApproval: once only\nCapability: files.write:create\nWorkspace root: {}\nExact relative destination: {}\nRoot identity: device={}, inode={}\nParent identity: device={}, inode={}\nPermissions: 0600\nContent bytes: {}\nContent SHA-256: {}\nExact content (JSON escaped): {}\nPublication: verified unnamed O_TMPFILE inode via linkat AT_EMPTY_PATH\nDurability: fsync file and parent directory\nOverwrite, append, delete, symlinks, mount crossing, commands, network, and privilege: denied",
+        request.request_id().as_str(),
+        selection.workspace_root,
+        selection.relative_destination,
+        selection.root_identity.device,
+        selection.root_identity.inode,
+        selection.parent_identity.device,
+        selection.parent_identity.inode,
+        selection.content.len(),
+        selection.content_sha256,
+        escaped,
+    )
+}
+
 pub fn exact_preview(request: &ToolRequest) -> String {
     let command = command_for(request).expect("approval preview is command-backed");
     let command_line = std::iter::once(command.program.display().to_string())
@@ -461,9 +552,10 @@ fn outcome<
     P: ProcessSelfProvider,
     L: ProcessListProvider,
     F: FileContentProvider,
+    W: WorkspaceCreateProvider,
 >(
     exit_code: i32,
-    engine: &BlossomEngine<E, O, U, M, S, P, L, F>,
+    engine: &BlossomEngine<E, O, U, M, S, P, L, F, W>,
 ) -> RunOutcome {
     outcome_with_result(exit_code, None, engine)
 }
@@ -477,10 +569,11 @@ fn outcome_with_result<
     P: ProcessSelfProvider,
     L: ProcessListProvider,
     F: FileContentProvider,
+    W: WorkspaceCreateProvider,
 >(
     exit_code: i32,
     result: Option<String>,
-    engine: &BlossomEngine<E, O, U, M, S, P, L, F>,
+    engine: &BlossomEngine<E, O, U, M, S, P, L, F, W>,
 ) -> RunOutcome {
     RunOutcome {
         exit_code,
@@ -582,6 +675,18 @@ fn render_file_content(result: &FileContent) -> String {
     format!(
         "Selected text file\n  Path: {}\n  Bytes: {}\n  SHA-256: {}\n  Content (JSON escaped): {}\n",
         result.selection.absolute_path, result.source_bytes, result.source_sha256, escaped
+    )
+}
+
+fn render_workspace_created(result: &WorkspaceFileCreated) -> String {
+    format!(
+        "Workspace file creation\n  Workspace: {}\n  Destination: {}\n  Bytes: {}\n  SHA-256: {}\n  Permissions: {:04o}\n  State: {:?}\n",
+        result.workspace_root,
+        result.relative_destination,
+        result.source_bytes,
+        result.source_sha256,
+        result.mode,
+        result.state,
     )
 }
 
@@ -690,6 +795,31 @@ fn describe_event(event: &AuditEvent) -> String {
                 "request {request_id} read {source_bytes} bytes from selected file path_sha256={path_sha256}, device={device}, inode={inode}, content_sha256={source_sha256}"
             )
         }
+        AuditEvent::WorkspaceCreateStarted {
+            request_id,
+            workspace_sha256,
+            destination_sha256,
+            root_device,
+            root_inode,
+            parent_device,
+            parent_inode,
+            source_bytes,
+            source_sha256,
+        } => format!(
+            "request {request_id} started workspace create root_sha256={workspace_sha256}, destination_sha256={destination_sha256}, root={root_device}:{root_inode}, parent={parent_device}:{parent_inode}, bytes={source_bytes}, content_sha256={source_sha256}"
+        ),
+        AuditEvent::WorkspaceCreateFinished {
+            request_id,
+            workspace_sha256,
+            destination_sha256,
+            created_device,
+            created_inode,
+            source_bytes,
+            source_sha256,
+            state,
+        } => format!(
+            "request {request_id} workspace create finished root_sha256={workspace_sha256}, destination_sha256={destination_sha256}, created={created_device}:{created_inode}, bytes={source_bytes}, content_sha256={source_sha256}, state={state:?}"
+        ),
         AuditEvent::NativeReadFailed {
             request_id,
             resource,
@@ -731,6 +861,14 @@ fn describe_event(event: &AuditEvent) -> String {
                 "request {request_id} selected file read failed for path_sha256={path_sha256} ({error})"
             )
         }
+        AuditEvent::WorkspaceCreateFailed {
+            request_id,
+            workspace_sha256,
+            destination_sha256,
+            error,
+        } => format!(
+            "request {request_id} workspace create failed root_sha256={workspace_sha256}, destination_sha256={destination_sha256} ({error})"
+        ),
         AuditEvent::VerificationFinished {
             request_id,
             verification,

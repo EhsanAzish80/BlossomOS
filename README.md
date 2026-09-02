@@ -59,7 +59,16 @@ path and once-only approval. On Linux it uses `openat2` to reject symlinked path
 components, retains the selected descriptor across approval, revalidates file
 identity, and reads at most 64 KiB of UTF-8 text. It provides no relative paths,
 directory listing, globbing, binary-file transport, or write access.
-Remaining Phase 2 capabilities are not implemented.
+
+Phase 2 also implements one narrowly scoped write capability:
+`files.write:create`. After explicit once-only approval, it can atomically
+create one previously absent UTF-8 file beneath a selected workspace using
+retained directory descriptors, fixed `0600` permissions, verified temporary
+content in an unnamed `O_TMPFILE` inode, atomic no-replace publication with
+`linkat(AT_EMPTY_PATH)`, and file/directory durability sync. It cannot
+overwrite, append, delete, choose permissions, follow symlinks, or cross a
+nested mount.
+The remaining Phase 2 service-status capability is not implemented.
 
 ### Planned, not implemented
 

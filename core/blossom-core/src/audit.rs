@@ -10,6 +10,9 @@ use crate::request::ToolRequest;
 use crate::storage_summary::{StorageSummary, StorageSummaryError};
 use crate::uptime::{SystemUptime, UptimeError};
 use crate::verification::Verification;
+use crate::workspace_create::{
+    WorkspaceCreateError, WorkspaceCreateSelection, WorkspaceFileCreated,
+};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
@@ -109,6 +112,27 @@ pub enum AuditEvent {
         source_bytes: usize,
         source_sha256: String,
     },
+    WorkspaceCreateStarted {
+        request_id: String,
+        workspace_sha256: String,
+        destination_sha256: String,
+        root_device: u64,
+        root_inode: u64,
+        parent_device: u64,
+        parent_inode: u64,
+        source_bytes: usize,
+        source_sha256: String,
+    },
+    WorkspaceCreateFinished {
+        request_id: String,
+        workspace_sha256: String,
+        destination_sha256: String,
+        created_device: u64,
+        created_inode: u64,
+        source_bytes: usize,
+        source_sha256: String,
+        state: crate::workspace_create::WorkspaceCreateState,
+    },
     NativeReadFailed {
         request_id: String,
         resource: String,
@@ -143,6 +167,12 @@ pub enum AuditEvent {
         request_id: String,
         path_sha256: String,
         error: FileReadError,
+    },
+    WorkspaceCreateFailed {
+        request_id: String,
+        workspace_sha256: String,
+        destination_sha256: String,
+        error: WorkspaceCreateError,
     },
     VerificationFinished {
         request_id: String,
@@ -227,6 +257,36 @@ impl AuditEvent {
             inode: result.selection.identity.inode,
             source_bytes: result.source_bytes,
             source_sha256: result.source_sha256.clone(),
+        }
+    }
+
+    pub fn workspace_create_started(
+        request: &ToolRequest,
+        selection: &WorkspaceCreateSelection,
+    ) -> Self {
+        Self::WorkspaceCreateStarted {
+            request_id: request.request_id().as_str().into(),
+            workspace_sha256: digest(selection.workspace_root.as_bytes()),
+            destination_sha256: digest(selection.relative_destination.as_bytes()),
+            root_device: selection.root_identity.device,
+            root_inode: selection.root_identity.inode,
+            parent_device: selection.parent_identity.device,
+            parent_inode: selection.parent_identity.inode,
+            source_bytes: selection.content.len(),
+            source_sha256: selection.content_sha256.clone(),
+        }
+    }
+
+    pub fn workspace_create_finished(request: &ToolRequest, result: &WorkspaceFileCreated) -> Self {
+        Self::WorkspaceCreateFinished {
+            request_id: request.request_id().as_str().into(),
+            workspace_sha256: digest(result.workspace_root.as_bytes()),
+            destination_sha256: digest(result.relative_destination.as_bytes()),
+            created_device: result.created_device,
+            created_inode: result.created_inode,
+            source_bytes: result.source_bytes,
+            source_sha256: result.source_sha256.clone(),
+            state: result.state,
         }
     }
 }

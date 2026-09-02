@@ -160,4 +160,45 @@ mod tests {
             Err(ApprovalError::Replay)
         );
     }
+
+    #[test]
+    fn workspace_approval_binds_destination_and_exact_content() {
+        use crate::workspace_create::{
+            DirectoryIdentity, WORKSPACE_FILE_MODE, WorkspaceCreateSelection, digest,
+        };
+        let selected = ToolRequest::FilesWriteCreate {
+            request_id: RequestId::parse("workspace-approval".into()).expect("id"),
+            selection: WorkspaceCreateSelection {
+                workspace_root: "/home/user/workspace".into(),
+                root_identity: DirectoryIdentity {
+                    device: 1,
+                    inode: 2,
+                },
+                parent_identity: DirectoryIdentity {
+                    device: 1,
+                    inode: 3,
+                },
+                relative_destination: "new.txt".into(),
+                content: "approved".into(),
+                content_sha256: digest(b"approved"),
+                mode: WORKSPACE_FILE_MODE,
+            },
+        };
+        let mut changed = selected.clone();
+        let ToolRequest::FilesWriteCreate { selection, .. } = &mut changed else {
+            unreachable!()
+        };
+        selection.relative_destination = "other.txt".into();
+        let mut store = ApprovalStore::new(100);
+        let token = store.issue(selected.clone(), 1_000);
+        assert_eq!(
+            store.consume(token, &changed, 1_001),
+            Err(ApprovalError::BindingMismatch)
+        );
+        assert_eq!(store.consume(token, &selected, 1_001), Ok(()));
+        assert_eq!(
+            store.consume(token, &selected, 1_002),
+            Err(ApprovalError::Replay)
+        );
+    }
 }
