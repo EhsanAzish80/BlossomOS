@@ -3,6 +3,7 @@ use crate::executor::{ExecutionResult, ExecutorError};
 use crate::memory_summary::{MemorySummary, MemorySummaryError};
 use crate::os_identity::{OsIdentity, OsIdentityError};
 use crate::policy::{Capability, PolicyDecision};
+use crate::process_self::{ProcessSelf, ProcessSelfError};
 use crate::request::ToolRequest;
 use crate::storage_summary::{StorageSummary, StorageSummaryError};
 use crate::uptime::{SystemUptime, UptimeError};
@@ -87,6 +88,10 @@ pub enum AuditEvent {
         resource_path: String,
         source: String,
     },
+    ProcessSelfReadFinished {
+        request_id: String,
+        source: String,
+    },
     NativeReadFailed {
         request_id: String,
         resource: String,
@@ -106,6 +111,11 @@ pub enum AuditEvent {
         request_id: String,
         resource: String,
         error: StorageSummaryError,
+    },
+    ProcessSelfReadFailed {
+        request_id: String,
+        resource: String,
+        error: ProcessSelfError,
     },
     VerificationFinished {
         request_id: String,
@@ -162,6 +172,13 @@ impl AuditEvent {
             request_id: request.request_id().as_str().into(),
             resource_path: summary.resource_path.clone(),
             source: "statvfs".into(),
+        }
+    }
+
+    pub fn process_self_finished(request: &ToolRequest, _identity: &ProcessSelf) -> Self {
+        Self::ProcessSelfReadFinished {
+            request_id: request.request_id().as_str().into(),
+            source: "native_process_identity".into(),
         }
     }
 }
@@ -360,5 +377,28 @@ mod tests {
         assert!(encoded.contains("statvfs"));
         assert!(!encoded.contains("987654321"));
         assert!(!encoded.contains("123456789"));
+    }
+
+    #[test]
+    fn process_self_audit_omits_process_and_user_identifiers() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-self","tool":"process.self","arguments":{}}"#,
+        )
+        .expect("valid process self request");
+        let identity = ProcessSelf {
+            source: crate::process_self::ProcessSelfSource::NativeProcessIdentity,
+            process_id: 987_654,
+            parent_process_id: 876_543,
+            effective_user_id: 765_432,
+            effective_group_id: 654_321,
+        };
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::process_self_finished(&request, &identity));
+        let encoded = serde_json::to_string(audit.records()).expect("serializable audit records");
+        assert!(encoded.contains("native_process_identity"));
+        assert!(!encoded.contains("987654"));
+        assert!(!encoded.contains("876543"));
+        assert!(!encoded.contains("765432"));
+        assert!(!encoded.contains("654321"));
     }
 }

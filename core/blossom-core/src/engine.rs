@@ -8,13 +8,16 @@ use crate::os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, UnavailableOsIdentityProvider,
 };
 use crate::policy::{PolicyDecision, PolicyEngine};
+use crate::process_self::{
+    ProcessSelf, ProcessSelfError, ProcessSelfProvider, UnavailableProcessSelfProvider,
+};
 use crate::request::{RequestError, ToolRequest};
 use crate::storage_summary::{
     StorageSummary, StorageSummaryError, StorageSummaryProvider, UnavailableStorageSummaryProvider,
 };
 use crate::uptime::{SystemUptime, UnavailableUptimeProvider, UptimeError, UptimeProvider};
 use crate::verification::{
-    Verification, verify_execution, verify_memory_summary, verify_os_identity,
+    Verification, verify_execution, verify_memory_summary, verify_os_identity, verify_process_self,
     verify_storage_summary, verify_uptime,
 };
 
@@ -25,6 +28,7 @@ pub struct BlossomEngine<
     U = UnavailableUptimeProvider,
     M = UnavailableMemorySummaryProvider,
     S = UnavailableStorageSummaryProvider,
+    P = UnavailableProcessSelfProvider,
 > {
     policy: PolicyEngine,
     approvals: ApprovalStore,
@@ -33,6 +37,7 @@ pub struct BlossomEngine<
     uptime: U,
     memory_summary: M,
     storage_summary: S,
+    process_self: P,
     audit: AuditLog,
 }
 
@@ -43,6 +48,7 @@ impl<E: Executor>
         UnavailableUptimeProvider,
         UnavailableMemorySummaryProvider,
         UnavailableStorageSummaryProvider,
+        UnavailableProcessSelfProvider,
     >
 {
     pub fn new(policy: PolicyEngine, approvals: ApprovalStore, executor: E) -> Self {
@@ -54,6 +60,7 @@ impl<E: Executor>
             uptime: UnavailableUptimeProvider,
             memory_summary: UnavailableMemorySummaryProvider,
             storage_summary: UnavailableStorageSummaryProvider,
+            process_self: UnavailableProcessSelfProvider,
             audit: AuditLog::default(),
         }
     }
@@ -76,6 +83,7 @@ impl<E: Executor, O: OsIdentityProvider>
             uptime: UnavailableUptimeProvider,
             memory_summary: UnavailableMemorySummaryProvider,
             storage_summary: UnavailableStorageSummaryProvider,
+            process_self: UnavailableProcessSelfProvider,
             audit: AuditLog::default(),
         }
     }
@@ -98,6 +106,7 @@ impl<E: Executor, U: UptimeProvider>
             uptime,
             memory_summary: UnavailableMemorySummaryProvider,
             storage_summary: UnavailableStorageSummaryProvider,
+            process_self: UnavailableProcessSelfProvider,
             audit: AuditLog::default(),
         }
     }
@@ -120,6 +129,7 @@ impl<E: Executor, M: MemorySummaryProvider>
             uptime: UnavailableUptimeProvider,
             memory_summary,
             storage_summary: UnavailableStorageSummaryProvider,
+            process_self: UnavailableProcessSelfProvider,
             audit: AuditLog::default(),
         }
     }
@@ -148,6 +158,37 @@ impl<E: Executor, S: StorageSummaryProvider>
             uptime: UnavailableUptimeProvider,
             memory_summary: UnavailableMemorySummaryProvider,
             storage_summary,
+            process_self: UnavailableProcessSelfProvider,
+            audit: AuditLog::default(),
+        }
+    }
+}
+
+impl<E: Executor, P: ProcessSelfProvider>
+    BlossomEngine<
+        E,
+        UnavailableOsIdentityProvider,
+        UnavailableUptimeProvider,
+        UnavailableMemorySummaryProvider,
+        UnavailableStorageSummaryProvider,
+        P,
+    >
+{
+    pub fn with_process_self(
+        policy: PolicyEngine,
+        approvals: ApprovalStore,
+        executor: E,
+        process_self: P,
+    ) -> Self {
+        Self {
+            policy,
+            approvals,
+            executor,
+            os_identity: UnavailableOsIdentityProvider,
+            uptime: UnavailableUptimeProvider,
+            memory_summary: UnavailableMemorySummaryProvider,
+            storage_summary: UnavailableStorageSummaryProvider,
+            process_self,
             audit: AuditLog::default(),
         }
     }
@@ -159,7 +200,8 @@ impl<
     U: UptimeProvider,
     M: MemorySummaryProvider,
     S: StorageSummaryProvider,
-> BlossomEngine<E, O, U, M, S>
+    P: ProcessSelfProvider,
+> BlossomEngine<E, O, U, M, S, P>
 {
     pub fn begin(&mut self, input: &str, now_ms: u64) -> Result<BeginOutcome, EngineError> {
         let request = match ToolRequest::parse_json(input) {
@@ -270,6 +312,7 @@ impl<
             ToolRequest::SystemUptime { .. } => self.execute_uptime(request),
             ToolRequest::SystemMemorySummary { .. } => self.execute_memory_summary(request),
             ToolRequest::SystemStorageSummary { .. } => self.execute_storage_summary(request),
+            ToolRequest::ProcessSelf { .. } => self.execute_process_self(request),
         }
     }
 
@@ -431,6 +474,39 @@ impl<
             output: ToolOutput::StorageSummary(summary),
         })
     }
+
+    fn execute_process_self(
+        &mut self,
+        request: ToolRequest,
+    ) -> Result<CompletionOutcome, EngineError> {
+        self.audit.append(AuditEvent::NativeReadStarted {
+            request_id: request.request_id().as_str().into(),
+            resource: "process.self".into(),
+        });
+        let identity = match self.process_self.read_process_self() {
+            Ok(identity) => identity,
+            Err(error) => {
+                self.audit.append(AuditEvent::ProcessSelfReadFailed {
+                    request_id: request.request_id().as_str().into(),
+                    resource: "process.self".into(),
+                    error,
+                });
+                return Err(EngineError::ProcessSelf(error));
+            }
+        };
+        self.audit
+            .append(AuditEvent::process_self_finished(&request, &identity));
+        let verification = verify_process_self(&identity);
+        self.audit.append(AuditEvent::VerificationFinished {
+            request_id: request.request_id().as_str().into(),
+            verification: verification.clone(),
+        });
+        Ok(CompletionOutcome {
+            request,
+            verification,
+            output: ToolOutput::ProcessSelf(identity),
+        })
+    }
 }
 
 pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
@@ -440,6 +516,7 @@ pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
         ToolRequest::SystemUptime { .. } => None,
         ToolRequest::SystemMemorySummary { .. } => None,
         ToolRequest::SystemStorageSummary { .. } => None,
+        ToolRequest::ProcessSelf { .. } => None,
     }
 }
 
@@ -476,6 +553,7 @@ pub enum ToolOutput {
     Uptime(SystemUptime),
     MemorySummary(MemorySummary),
     StorageSummary(StorageSummary),
+    ProcessSelf(ProcessSelf),
 }
 
 #[derive(Debug)]
@@ -487,6 +565,7 @@ pub enum EngineError {
     Uptime(UptimeError),
     MemorySummary(MemorySummaryError),
     StorageSummary(StorageSummaryError),
+    ProcessSelf(ProcessSelfError),
 }
 
 #[cfg(test)]
@@ -583,6 +662,31 @@ mod tests {
             self.result
                 .take()
                 .unwrap_or(Err(StorageSummaryError::StatFailed))
+        }
+    }
+
+    #[derive(Debug)]
+    struct ScriptedProcessSelf {
+        result: Option<Result<ProcessSelf, ProcessSelfError>>,
+        calls: usize,
+    }
+
+    impl ProcessSelfProvider for ScriptedProcessSelf {
+        fn read_process_self(&mut self) -> Result<ProcessSelf, ProcessSelfError> {
+            self.calls += 1;
+            self.result
+                .take()
+                .unwrap_or(Err(ProcessSelfError::InvalidProcessId))
+        }
+    }
+
+    fn process_self() -> ProcessSelf {
+        ProcessSelf {
+            source: crate::process_self::ProcessSelfSource::NativeProcessIdentity,
+            process_id: 42,
+            parent_process_id: 7,
+            effective_user_id: 1000,
+            effective_group_id: 1000,
         }
     }
 
@@ -1018,6 +1122,76 @@ mod tests {
         assert!(matches!(
             engine.audit().records().last().map(|record| &record.event),
             Some(AuditEvent::StorageSummaryReadFailed { .. })
+        ));
+    }
+
+    #[test]
+    fn process_self_allow_uses_native_provider_not_executor() {
+        let policy = PolicyEngine::new(vec![PolicyRule {
+            capability: Capability::ProcessReadSelf,
+            decision: PolicyDecision::Allow,
+        }]);
+        let provider = ScriptedProcessSelf {
+            result: Some(Ok(process_self())),
+            calls: 0,
+        };
+        let mut engine = BlossomEngine::with_process_self(
+            policy,
+            ApprovalStore::new(100),
+            ScriptedExecutor::successful(),
+            provider,
+        );
+        let outcome = engine
+            .begin(
+                r#"{"request_id":"req-self","tool":"process.self","arguments":{}}"#,
+                1_000,
+            )
+            .expect("native read should complete");
+        let completed = match outcome {
+            BeginOutcome::Completed(completed) => completed,
+            other => panic!("unexpected outcome: {other:?}"),
+        };
+        assert!(completed.verification.succeeded);
+        assert!(matches!(completed.output, ToolOutput::ProcessSelf(_)));
+        assert!(engine.executor.calls.is_empty());
+        assert_eq!(engine.process_self.calls, 1);
+        assert!(engine.audit().verify_chain());
+        assert!(
+            engine
+                .audit()
+                .records()
+                .iter()
+                .any(|record| matches!(record.event, AuditEvent::ProcessSelfReadFinished { .. }))
+        );
+    }
+
+    #[test]
+    fn process_self_failure_is_audited_without_executor_fallback() {
+        let policy = PolicyEngine::new(vec![PolicyRule {
+            capability: Capability::ProcessReadSelf,
+            decision: PolicyDecision::Allow,
+        }]);
+        let provider = ScriptedProcessSelf {
+            result: Some(Err(ProcessSelfError::InvalidProcessId)),
+            calls: 0,
+        };
+        let mut engine = BlossomEngine::with_process_self(
+            policy,
+            ApprovalStore::new(100),
+            ScriptedExecutor::successful(),
+            provider,
+        );
+        assert!(matches!(
+            engine.begin(
+                r#"{"request_id":"req-self","tool":"process.self","arguments":{}}"#,
+                1_000,
+            ),
+            Err(EngineError::ProcessSelf(ProcessSelfError::InvalidProcessId))
+        ));
+        assert!(engine.executor.calls.is_empty());
+        assert!(matches!(
+            engine.audit().records().last().map(|record| &record.event),
+            Some(AuditEvent::ProcessSelfReadFailed { .. })
         ));
     }
 

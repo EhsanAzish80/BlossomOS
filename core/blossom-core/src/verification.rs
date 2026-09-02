@@ -1,6 +1,7 @@
 use crate::executor::ExecutionResult;
 use crate::memory_summary::{MAX_PROC_MEMINFO_BYTES, MemorySummary, PROC_MEMINFO_PATH};
 use crate::os_identity::{MAX_OS_RELEASE_BYTES, MAX_OS_RELEASE_VALUE_BYTES, OsIdentity};
+use crate::process_self::{ProcessSelf, ProcessSelfSource};
 use crate::storage_summary::{ROOT_FILESYSTEM_PATH, StorageSummary, StorageSummarySource};
 use crate::uptime::{MAX_PROC_UPTIME_BYTES, PROC_UPTIME_PATH, SystemUptime};
 use serde::Serialize;
@@ -30,6 +31,25 @@ pub enum VerificationReason {
     ValidStorageSummary,
     InvalidStorageSummaryProvenance,
     InvalidStorageSummarySchema,
+    ValidProcessSelf,
+    InvalidProcessSelfProvenance,
+    InvalidProcessSelfSchema,
+}
+
+pub fn verify_process_self(identity: &ProcessSelf) -> Verification {
+    let provenance_valid = identity.source == ProcessSelfSource::NativeProcessIdentity;
+    let schema_valid = identity.process_id > 0;
+    let reason = if !provenance_valid {
+        VerificationReason::InvalidProcessSelfProvenance
+    } else if !schema_valid {
+        VerificationReason::InvalidProcessSelfSchema
+    } else {
+        VerificationReason::ValidProcessSelf
+    };
+    Verification {
+        succeeded: reason == VerificationReason::ValidProcessSelf,
+        reason,
+    }
 }
 
 pub fn verify_storage_summary(summary: &StorageSummary) -> Verification {
@@ -272,6 +292,23 @@ mod tests {
         assert_eq!(
             verify_storage_summary(&summary).reason,
             VerificationReason::InvalidStorageSummarySchema
+        );
+    }
+
+    #[test]
+    fn verifies_process_self_schema_and_provenance_without_io() {
+        let mut identity = ProcessSelf {
+            source: ProcessSelfSource::NativeProcessIdentity,
+            process_id: 42,
+            parent_process_id: 7,
+            effective_user_id: 1000,
+            effective_group_id: 1000,
+        };
+        assert!(verify_process_self(&identity).succeeded);
+        identity.process_id = 0;
+        assert_eq!(
+            verify_process_self(&identity).reason,
+            VerificationReason::InvalidProcessSelfSchema
         );
     }
 }

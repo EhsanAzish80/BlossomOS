@@ -42,13 +42,15 @@ Phase 1 also implements a separate Rust security vertical slice:
 
 This slice is a tested foundation, not a general command runner or finished OS.
 
-Phase 2 currently adds four native read capabilities:
+Phase 2 currently adds five native read capabilities:
 `system.read:os.identity`, `system.read:uptime`, and
-`system.read:memory.summary`, plus root-scoped `system.read:storage.summary`.
+`system.read:memory.summary`, root-scoped `system.read:storage.summary`, and
+`process.read:self`.
 They use fixed native Linux/POSIX sources without launching a process, expose
 narrow typed results, and record verified provenance without copying identity,
-uptime, memory, or storage values into the audit log. Later Phase 2 capabilities
-are not implemented.
+uptime, memory, storage, or process identifiers into the audit log. The fifth
+capability, `process.read:self`, is restricted to Blossom's own minimal native
+process identity. Later Phase 2 capabilities are not implemented.
 
 ### Planned, not implemented
 

@@ -33,6 +33,7 @@ pub enum ToolRequest {
     SystemUptime { request_id: RequestId },
     SystemMemorySummary { request_id: RequestId },
     SystemStorageSummary { request_id: RequestId },
+    ProcessSelf { request_id: RequestId },
 }
 
 impl ToolRequest {
@@ -83,6 +84,14 @@ impl ToolRequest {
                 })?;
                 Ok(Self::SystemStorageSummary { request_id })
             }
+            "process.self" => {
+                serde_json::from_value::<NoArguments>(envelope.arguments).map_err(|error| {
+                    RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    }
+                })?;
+                Ok(Self::ProcessSelf { request_id })
+            }
             _ => Err(RequestError::UnknownTool {
                 tool: envelope.tool,
             }),
@@ -95,7 +104,8 @@ impl ToolRequest {
             | Self::SystemOsIdentity { request_id }
             | Self::SystemUptime { request_id }
             | Self::SystemMemorySummary { request_id }
-            | Self::SystemStorageSummary { request_id } => request_id,
+            | Self::SystemStorageSummary { request_id }
+            | Self::ProcessSelf { request_id } => request_id,
         }
     }
 
@@ -106,6 +116,7 @@ impl ToolRequest {
             Self::SystemUptime { .. } => "system.uptime",
             Self::SystemMemorySummary { .. } => "system.memory.summary",
             Self::SystemStorageSummary { .. } => "system.storage.summary",
+            Self::ProcessSelf { .. } => "process.self",
         }
     }
 }
@@ -194,6 +205,15 @@ mod tests {
     }
 
     #[test]
+    fn parses_process_self_without_arguments() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-6","tool":"process.self","arguments":{}}"#,
+        )
+        .expect("process self request should parse");
+        assert_eq!(request.tool_name(), "process.self");
+    }
+
+    #[test]
     fn rejects_unknown_fields_and_tools() {
         assert!(matches!(
             ToolRequest::parse_json(
@@ -238,6 +258,12 @@ mod tests {
         assert!(matches!(
             ToolRequest::parse_json(
                 r#"{"request_id":"req-5","tool":"system.storage.summary","arguments":{"path":"/home"}}"#
+            ),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+        assert!(matches!(
+            ToolRequest::parse_json(
+                r#"{"request_id":"req-6","tool":"process.self","arguments":{"pid":1}}"#
             ),
             Err(RequestError::InvalidArguments { .. })
         ));

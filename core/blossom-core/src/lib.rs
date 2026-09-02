@@ -7,6 +7,7 @@ pub mod executor;
 pub mod memory_summary;
 pub mod os_identity;
 pub mod policy;
+pub mod process_self;
 pub mod request;
 pub mod storage_summary;
 pub mod uptime;
@@ -28,6 +29,10 @@ pub use os_identity::{
     UnavailableOsIdentityProvider, parse_os_release,
 };
 pub use policy::{Capability, PolicyDecision, PolicyEngine, PolicyRule};
+pub use process_self::{
+    NativeProcessSelfReader, ProcessSelf, ProcessSelfError, ProcessSelfProvider, ProcessSelfSource,
+    UnavailableProcessSelfProvider,
+};
 pub use request::{RequestError, RequestId, ToolRequest};
 pub use storage_summary::{
     ROOT_FILESYSTEM_PATH, RootStorageReader, StorageSummary, StorageSummaryError,
@@ -38,6 +43,6 @@ pub use uptime::{
     UnavailableUptimeProvider, UptimeError, UptimeProvider, parse_proc_uptime,
 };
 pub use verification::{
-    Verification, verify_execution, verify_memory_summary, verify_os_identity,
+    Verification, verify_execution, verify_memory_summary, verify_os_identity, verify_process_self,
     verify_storage_summary, verify_uptime,
 };
