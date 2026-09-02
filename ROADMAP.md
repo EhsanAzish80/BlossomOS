@@ -51,8 +51,15 @@ verification -> audit, including denial and failure paths.
 
 ## Phase 2: Capability and sandbox foundation
 
-- Add narrowly scoped file, application, process, and service-read tools.
-- Evaluate and select sandbox technologies by ADR.
+Status: in progress. ADR-0004 defines the accepted capability taxonomy,
+expansion order, privacy rules, and per-tool exit evidence. No Phase 2 tool is
+implemented yet.
+
+- [x] Define the capability taxonomy and expansion rules before adding tools.
+- [ ] Add narrowly scoped system, process, file, and service-read tools in the
+  order fixed by ADR-0004.
+- [ ] Evaluate and select confinement technologies per resource class by ADR or
+  an accepted extension of an existing profile.
 - Enforce environment, working-directory, filesystem, network, timeout, output,
   process, and resource controls.
 - Add property, adversarial, and integration tests for the security boundary.
