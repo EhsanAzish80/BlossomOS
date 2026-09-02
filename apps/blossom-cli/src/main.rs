@@ -1,13 +1,13 @@
 #![forbid(unsafe_code)]
 
 use blossom_cli::{
-    ApprovalChoice, Clock, Interaction, exact_preview, process_list_preview, run_fixed_diagnostic,
-    run_memory_summary, run_os_identity, run_process_list, run_process_self, run_storage_summary,
-    run_uptime,
+    ApprovalChoice, Clock, Interaction, exact_preview, file_read_preview, process_list_preview,
+    run_file_read, run_fixed_diagnostic, run_memory_summary, run_os_identity, run_process_list,
+    run_process_self, run_storage_summary, run_uptime,
 };
 use blossom_core::{
-    NativeProcessSelfReader, OsReleaseReader, ProcMeminfoReader, ProcProcessListReader,
-    ProcUptimeReader, RequestId, RootStorageReader, ToolRequest,
+    NativeProcessSelfReader, Openat2FileReader, OsReleaseReader, ProcMeminfoReader,
+    ProcProcessListReader, ProcUptimeReader, RequestId, RootStorageReader, ToolRequest,
     executor::bubblewrap::BubblewrapExecutor,
 };
 use std::io::{self, IsTerminal, Write};
@@ -82,6 +82,11 @@ fn main() {
     let storage_requested = arguments.as_slice() == ["storage-summary"];
     let process_self_requested = arguments.as_slice() == ["process-self"];
     let process_list_requested = arguments.as_slice() == ["process-list"];
+    let file_read_path = if arguments.len() == 2 && arguments[0] == "file-read" {
+        arguments[1].to_str()
+    } else {
+        None
+    };
     if !arguments.is_empty()
         && !os_identity_requested
         && !uptime_requested
@@ -89,9 +94,10 @@ fn main() {
         && !storage_requested
         && !process_self_requested
         && !process_list_requested
+        && file_read_path.is_none()
     {
         eprintln!(
-            "Usage: blossom-cli [os-identity|uptime|memory-summary|storage-summary|process-self|process-list]\nNo executable or argument input is supported."
+            "Usage: blossom-cli [os-identity|uptime|memory-summary|storage-summary|process-self|process-list|file-read ABSOLUTE_PATH]\nNo executable or generic command argument input is supported."
         );
         std::process::exit(64);
     }
@@ -186,6 +192,36 @@ fn main() {
         let outcome = run_process_list(
             BubblewrapExecutor::phase1_default(),
             ProcProcessListReader,
+            &mut interaction,
+            &mut clock,
+            request_id,
+        );
+        if let Some(result) = outcome.result {
+            println!("{result}");
+        }
+        print!("{}", outcome.activity);
+        std::process::exit(outcome.exit_code);
+    }
+
+    if let Some(path) = file_read_path {
+        let reader = match Openat2FileReader::select(path) {
+            Ok(reader) => reader,
+            Err(error) => {
+                eprintln!("File selection failed: {error}");
+                std::process::exit(1);
+            }
+        };
+        if !interaction.is_interactive() {
+            let request = ToolRequest::FilesReadContent {
+                request_id: request_id.clone(),
+                selection: blossom_core::FileContentProvider::selection(&reader).clone(),
+            };
+            println!("{}\n", file_read_preview(&request));
+            println!("Non-interactive input is denied by default.\n");
+        }
+        let outcome = run_file_read(
+            BubblewrapExecutor::phase1_default(),
+            reader,
             &mut interaction,
             &mut clock,
             request_id,

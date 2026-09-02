@@ -65,7 +65,8 @@ remain narrow native reads; later Phase 2 capabilities are not implemented.
   - [x] `process.read:self` via native calling-process identity APIs.
   - [x] `process.read:list` with once-only approval, same-effective-user scope,
     bounded `/proc/<pid>/status` reads, and redacted audit counts.
-  - [ ] One user-selected exact-file read.
+  - [x] One approval-gated user-selected exact UTF-8 file read using ADR-0005
+    containment and a 64-KiB bound.
   - [ ] One workspace-contained exact-path write.
   - [ ] One exact service-status read.
 - [ ] Evaluate and select confinement technologies per resource class by ADR or

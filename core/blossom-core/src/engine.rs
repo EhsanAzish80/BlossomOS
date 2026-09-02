@@ -1,6 +1,9 @@
 use crate::approval::{ApprovalError, ApprovalStore, ApprovalToken};
 use crate::audit::{AuditEvent, AuditLog};
 use crate::executor::{CommandSpec, Executor, ExecutorError};
+use crate::file_read::{
+    FileContent, FileContentProvider, FileReadError, UnavailableFileContentProvider,
+};
 use crate::memory_summary::{
     MemorySummary, MemorySummaryError, MemorySummaryProvider, UnavailableMemorySummaryProvider,
 };
@@ -20,8 +23,8 @@ use crate::storage_summary::{
 };
 use crate::uptime::{SystemUptime, UnavailableUptimeProvider, UptimeError, UptimeProvider};
 use crate::verification::{
-    Verification, verify_execution, verify_memory_summary, verify_os_identity, verify_process_list,
-    verify_process_self, verify_storage_summary, verify_uptime,
+    Verification, verify_execution, verify_file_content, verify_memory_summary, verify_os_identity,
+    verify_process_list, verify_process_self, verify_storage_summary, verify_uptime,
 };
 
 #[derive(Debug)]
@@ -33,6 +36,7 @@ pub struct BlossomEngine<
     S = UnavailableStorageSummaryProvider,
     P = UnavailableProcessSelfProvider,
     L = UnavailableProcessListProvider,
+    F = UnavailableFileContentProvider,
 > {
     policy: PolicyEngine,
     approvals: ApprovalStore,
@@ -43,6 +47,7 @@ pub struct BlossomEngine<
     storage_summary: S,
     process_self: P,
     process_list: L,
+    file_content: F,
     audit: AuditLog,
 }
 
@@ -55,6 +60,7 @@ impl<E: Executor>
         UnavailableStorageSummaryProvider,
         UnavailableProcessSelfProvider,
         UnavailableProcessListProvider,
+        UnavailableFileContentProvider,
     >
 {
     pub fn new(policy: PolicyEngine, approvals: ApprovalStore, executor: E) -> Self {
@@ -68,6 +74,7 @@ impl<E: Executor>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
+            file_content: UnavailableFileContentProvider::default(),
             audit: AuditLog::default(),
         }
     }
@@ -92,6 +99,7 @@ impl<E: Executor, O: OsIdentityProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
+            file_content: UnavailableFileContentProvider::default(),
             audit: AuditLog::default(),
         }
     }
@@ -116,6 +124,7 @@ impl<E: Executor, U: UptimeProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
+            file_content: UnavailableFileContentProvider::default(),
             audit: AuditLog::default(),
         }
     }
@@ -140,6 +149,7 @@ impl<E: Executor, M: MemorySummaryProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
+            file_content: UnavailableFileContentProvider::default(),
             audit: AuditLog::default(),
         }
     }
@@ -170,6 +180,7 @@ impl<E: Executor, S: StorageSummaryProvider>
             storage_summary,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
+            file_content: UnavailableFileContentProvider::default(),
             audit: AuditLog::default(),
         }
     }
@@ -184,6 +195,7 @@ impl<E: Executor, P: ProcessSelfProvider>
         UnavailableStorageSummaryProvider,
         P,
         UnavailableProcessListProvider,
+        UnavailableFileContentProvider,
     >
 {
     pub fn with_process_self(
@@ -202,6 +214,7 @@ impl<E: Executor, P: ProcessSelfProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self,
             process_list: UnavailableProcessListProvider,
+            file_content: UnavailableFileContentProvider::default(),
             audit: AuditLog::default(),
         }
     }
@@ -216,6 +229,7 @@ impl<E: Executor, L: ProcessListProvider>
         UnavailableStorageSummaryProvider,
         UnavailableProcessSelfProvider,
         L,
+        UnavailableFileContentProvider,
     >
 {
     pub fn with_process_list(
@@ -234,6 +248,41 @@ impl<E: Executor, L: ProcessListProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list,
+            file_content: UnavailableFileContentProvider::default(),
+            audit: AuditLog::default(),
+        }
+    }
+}
+
+impl<E: Executor, F: FileContentProvider>
+    BlossomEngine<
+        E,
+        UnavailableOsIdentityProvider,
+        UnavailableUptimeProvider,
+        UnavailableMemorySummaryProvider,
+        UnavailableStorageSummaryProvider,
+        UnavailableProcessSelfProvider,
+        UnavailableProcessListProvider,
+        F,
+    >
+{
+    pub fn with_file_content(
+        policy: PolicyEngine,
+        approvals: ApprovalStore,
+        executor: E,
+        file_content: F,
+    ) -> Self {
+        Self {
+            policy,
+            approvals,
+            executor,
+            os_identity: UnavailableOsIdentityProvider,
+            uptime: UnavailableUptimeProvider,
+            memory_summary: UnavailableMemorySummaryProvider,
+            storage_summary: UnavailableStorageSummaryProvider,
+            process_self: UnavailableProcessSelfProvider,
+            process_list: UnavailableProcessListProvider,
+            file_content,
             audit: AuditLog::default(),
         }
     }
@@ -247,7 +296,8 @@ impl<
     S: StorageSummaryProvider,
     P: ProcessSelfProvider,
     L: ProcessListProvider,
-> BlossomEngine<E, O, U, M, S, P, L>
+    F: FileContentProvider,
+> BlossomEngine<E, O, U, M, S, P, L, F>
 {
     pub fn begin(&mut self, input: &str, now_ms: u64) -> Result<BeginOutcome, EngineError> {
         let request = match ToolRequest::parse_json(input) {
@@ -360,6 +410,7 @@ impl<
             ToolRequest::SystemStorageSummary { .. } => self.execute_storage_summary(request),
             ToolRequest::ProcessSelf { .. } => self.execute_process_self(request),
             ToolRequest::ProcessList { .. } => self.execute_process_list(request),
+            ToolRequest::FilesReadContent { .. } => self.execute_file_content(request),
         }
     }
 
@@ -587,6 +638,44 @@ impl<
             output: ToolOutput::ProcessList(list),
         })
     }
+
+    fn execute_file_content(
+        &mut self,
+        request: ToolRequest,
+    ) -> Result<CompletionOutcome, EngineError> {
+        let selection = match &request {
+            ToolRequest::FilesReadContent { selection, .. } => selection.clone(),
+            _ => unreachable!("file content execution requires a file request"),
+        };
+        let path_sha256 = crate::audit::digest_bytes(selection.absolute_path.as_bytes());
+        self.audit.append(AuditEvent::NativeReadStarted {
+            request_id: request.request_id().as_str().into(),
+            resource: format!("file.content:sha256:{path_sha256}"),
+        });
+        let result = match self.file_content.read_selected_file(&selection) {
+            Ok(result) => result,
+            Err(error) => {
+                self.audit.append(AuditEvent::FileContentReadFailed {
+                    request_id: request.request_id().as_str().into(),
+                    path_sha256,
+                    error,
+                });
+                return Err(EngineError::FileContent(error));
+            }
+        };
+        self.audit
+            .append(AuditEvent::file_content_finished(&request, &result));
+        let verification = verify_file_content(&result);
+        self.audit.append(AuditEvent::VerificationFinished {
+            request_id: request.request_id().as_str().into(),
+            verification: verification.clone(),
+        });
+        Ok(CompletionOutcome {
+            request,
+            verification,
+            output: ToolOutput::FileContent(Box::new(result)),
+        })
+    }
 }
 
 pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
@@ -598,6 +687,7 @@ pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
         ToolRequest::SystemStorageSummary { .. } => None,
         ToolRequest::ProcessSelf { .. } => None,
         ToolRequest::ProcessList { .. } => None,
+        ToolRequest::FilesReadContent { .. } => None,
     }
 }
 
@@ -636,6 +726,7 @@ pub enum ToolOutput {
     StorageSummary(StorageSummary),
     ProcessSelf(ProcessSelf),
     ProcessList(ProcessList),
+    FileContent(Box<FileContent>),
 }
 
 #[derive(Debug)]
@@ -649,6 +740,7 @@ pub enum EngineError {
     StorageSummary(StorageSummaryError),
     ProcessSelf(ProcessSelfError),
     ProcessList(ProcessListError),
+    FileContent(FileReadError),
 }
 
 #[cfg(test)]

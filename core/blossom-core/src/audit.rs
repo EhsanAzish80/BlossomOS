@@ -1,5 +1,6 @@
 use crate::approval::ApprovalError;
 use crate::executor::{ExecutionResult, ExecutorError};
+use crate::file_read::{FileContent, FileReadError};
 use crate::memory_summary::{MemorySummary, MemorySummaryError};
 use crate::os_identity::{OsIdentity, OsIdentityError};
 use crate::policy::{Capability, PolicyDecision};
@@ -100,6 +101,14 @@ pub enum AuditEvent {
         skipped_entries: u32,
         truncated: bool,
     },
+    FileContentReadFinished {
+        request_id: String,
+        path_sha256: String,
+        device: u64,
+        inode: u64,
+        source_bytes: usize,
+        source_sha256: String,
+    },
     NativeReadFailed {
         request_id: String,
         resource: String,
@@ -129,6 +138,11 @@ pub enum AuditEvent {
         request_id: String,
         resource: String,
         error: ProcessListError,
+    },
+    FileContentReadFailed {
+        request_id: String,
+        path_sha256: String,
+        error: FileReadError,
     },
     VerificationFinished {
         request_id: String,
@@ -202,6 +216,17 @@ impl AuditEvent {
             returned_entries: list.processes.len(),
             skipped_entries: list.skipped_entries,
             truncated: list.truncated,
+        }
+    }
+
+    pub fn file_content_finished(request: &ToolRequest, result: &FileContent) -> Self {
+        Self::FileContentReadFinished {
+            request_id: request.request_id().as_str().into(),
+            path_sha256: digest(result.selection.absolute_path.as_bytes()),
+            device: result.selection.identity.device,
+            inode: result.selection.identity.inode,
+            source_bytes: result.source_bytes,
+            source_sha256: result.source_sha256.clone(),
         }
     }
 }
@@ -279,6 +304,10 @@ fn digest(bytes: &[u8]) -> String {
         write!(&mut encoded, "{byte:02x}").expect("writing to a String cannot fail");
     }
     encoded
+}
+
+pub(crate) fn digest_bytes(bytes: &[u8]) -> String {
+    digest(bytes)
 }
 
 #[cfg(test)]

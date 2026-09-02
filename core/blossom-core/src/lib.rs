@@ -4,6 +4,7 @@ pub mod approval;
 pub mod audit;
 pub mod engine;
 pub mod executor;
+pub mod file_read;
 pub mod memory_summary;
 pub mod os_identity;
 pub mod policy;
@@ -20,6 +21,11 @@ pub use engine::{
     BeginOutcome, BlossomEngine, CompletionOutcome, EngineError, ToolOutput, command_for,
 };
 pub use executor::{CommandSpec, ExecutionResult, Executor, ExecutorError};
+pub use file_read::{
+    FileContent, FileContentProvider, FileIdentity, FileReadError, FileSelection,
+    MAX_FILE_CONTENT_BYTES, MAX_SELECTED_PATH_BYTES, Openat2FileReader,
+    UnavailableFileContentProvider, validate_selected_path,
+};
 pub use memory_summary::{
     MAX_PROC_MEMINFO_BYTES, MAX_PROC_MEMINFO_LINES, MemorySummary, MemorySummaryError,
     MemorySummaryProvider, PROC_MEMINFO_PATH, ProcMeminfoReader, UnavailableMemorySummaryProvider,
@@ -50,6 +56,6 @@ pub use uptime::{
     UnavailableUptimeProvider, UptimeError, UptimeProvider, parse_proc_uptime,
 };
 pub use verification::{
-    Verification, verify_execution, verify_memory_summary, verify_os_identity, verify_process_list,
-    verify_process_self, verify_storage_summary, verify_uptime,
+    Verification, verify_execution, verify_file_content, verify_memory_summary, verify_os_identity,
+    verify_process_list, verify_process_self, verify_storage_summary, verify_uptime,
 };
