@@ -42,11 +42,12 @@ Phase 1 also implements a separate Rust security vertical slice:
 
 This slice is a tested foundation, not a general command runner or finished OS.
 
-Phase 2 currently adds two native read capabilities: `system.read:os.identity`
-and `system.read:uptime`. They parse fixed Linux sources without launching a
+Phase 2 currently adds three native read capabilities:
+`system.read:os.identity`, `system.read:uptime`, and
+`system.read:memory.summary`. They parse fixed Linux sources without launching a
 process, expose narrow typed results, and record verified provenance without
-copying identity values or uptime into the audit log. Later Phase 2 capabilities
-are not implemented.
+copying identity, uptime, or memory values into the audit log. Later Phase 2
+capabilities are not implemented.
 
 ### Planned, not implemented
 

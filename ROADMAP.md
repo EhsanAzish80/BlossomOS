@@ -60,7 +60,7 @@ remain narrow native reads; later Phase 2 capabilities are not implemented.
   order fixed by ADR-0004.
   - [x] `system.read:os.identity` via bounded native os-release parsing.
   - [x] `system.read:uptime` via a bounded native `/proc/uptime` read.
-  - [ ] `system.read:memory.summary`.
+  - [x] `system.read:memory.summary` via a bounded native `/proc/meminfo` read.
   - [ ] `system.read:storage.summary`.
   - [ ] `process.read:self`.
   - [ ] `process.read:list` with once-only approval.
