@@ -1,10 +1,13 @@
 # ADR-0006: Atomic create-only workspace file writes
 
-- Status: Accepted
+- Status: Superseded by ADR-0007
 - Date: 2026-09-02
 - Owners: Project maintainers
 
 ## Context
+
+> ADR-0007 supersedes the named-temporary-file publication mechanism below
+> after implementation review identified a source-name replacement race.
 
 ADR-0004 requires the first workspace write to bind authority to one approved
 workspace root and one exact relative destination. It must address traversal,
