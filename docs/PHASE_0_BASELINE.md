@@ -74,24 +74,29 @@ phase. It is not a claim that the target agent-native system exists.
 
 ### Branch and release policy
 
-- Status: incomplete.
+- Status: documented; GitHub enforcement incomplete.
 - `main` is the default branch and contributor guidance says not to rewrite shared
   history, but GitHub reported no branch protection on 2026-09-02.
-- No supported releases exist. Signing, versioning, support, and release-channel
-  policy have not been defined.
-- Owner/project action: approve a branch/review policy, configure the matching
-  GitHub ruleset or branch protection, and document the initial release policy.
+- `docs/BRANCH_RELEASE_POLICY.md` defines the initial branch, review, versioning,
+  release, checksum, and signing policy. No supported releases exist.
+- Owner action: configure a GitHub ruleset or branch protection matching the
+  documented policy and require the repository checks after they pass on `main`.
 
 ### CI, lint, tests, and security scanning
 
-- Status: incomplete.
-- No `.github/workflows` directory or GitHub Actions workflows exist.
-- No repository-wide formatter, linter, test runner, dependency manifest,
-  dependency update policy, or code security-scanning configuration was found.
-- Existing shell and Python files are prototype material; no automated result
-  currently qualifies them as tested or secure.
-- Project action: select Phase 1 implementation language/tooling by ADR, then
-  define the minimum Phase 0 quality gates that must run before Phase 1 merges.
+- Status: configured locally; initial default-branch runs not yet verified.
+- `Quality` runs dependency-free repository checks, characterization tests, and
+  ShellCheck at error severity.
+- `CodeQL` analyzes the prototype Python on pushes, pull requests, and weekly.
+- `Secret scan` runs Gitleaks against full history.
+- Dependabot checks immutable-pinned GitHub Actions weekly.
+- `docs/DEPENDENCY_POLICY.md` defines dependency review and lockfile rules.
+- ADR-0002 selects stable Rust for the Phase 1 security core; Rust format,
+  Clippy, and test gates become required when its workspace is introduced.
+- Local evidence on 2026-09-02: repository checks passed, three prototype smoke
+  tests passed, all tracked shell scripts passed syntax parsing, and workflow YAML
+  parsed successfully. ShellCheck, CodeQL, and Gitleaks require the first remote
+  workflow runs before they can be recorded as passing.
 
 ## Prototype safety and repository-hygiene findings
 
@@ -145,7 +150,6 @@ The exit gate is not satisfied until:
 1. GitHub Private Vulnerability Reporting is enabled and linked.
 2. Branch/review and initial release policies are approved and enforced where
    applicable.
-3. Baseline formatting, linting, tests, CI, dependency policy, and security
-   scanning requirements are defined and present before Phase 1 merges.
+3. The initial Quality, CodeQL, and Secret scan workflows pass on `main`.
 
 Phase 1 implementation must not begin before this status is deliberately updated.

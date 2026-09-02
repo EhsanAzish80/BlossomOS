@@ -55,6 +55,8 @@ claim about the current prototype.
 - `ROADMAP.md` defines phased delivery and exit gates.
 - `CONTRIBUTING.md` defines contribution and review expectations.
 - `SECURITY.md` describes the current security and reporting status.
+- `docs/DEPENDENCY_POLICY.md` defines dependency acceptance and update rules.
+- `docs/BRANCH_RELEASE_POLICY.md` defines branch, review, versioning, and signing.
 - `docs/decisions/` records accepted and proposed architecture decisions.
 
 Material architecture changes require an accepted ADR and matching updates to

@@ -21,8 +21,8 @@ compatibility, packaging, or contributor obligations.
 
 ## Initial decisions required
 
-- Open-source license and contributor terms.
-- Primary implementation language(s).
+- Open-source license and contributor terms: accepted in ADR-0001.
+- Phase 1 implementation language: accepted in ADR-0002.
 - Local IPC transport and schema format.
 - Sandbox and resource-control stack.
 - Privileged-helper authorization design.

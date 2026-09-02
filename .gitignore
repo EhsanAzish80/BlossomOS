@@ -1,0 +1,55 @@
+# Operating-system and editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Rust
+target/
+
+# Blossom build and distribution output
+build/work/
+build/iso/
+build/out/
+*.iso
+*.img
+*.qcow2
+*.vdi
+*.vmdk
+*.ova
+SHA256SUMS
+MD5SUMS
+
+# Local model artifacts
+models/
+*.gguf
+*.safetensors
+*.onnx
+
+# Logs, coverage, and temporary files
+*.log
+coverage/
+.coverage
+tmp/
+temp/

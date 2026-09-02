@@ -18,9 +18,12 @@ Status: in progress.
   generated artifacts, large binaries, and machine-specific paths.
 - [ ] Enable GitHub Private Vulnerability Reporting and then update
   `SECURITY.md` with the active reporting link.
-- [ ] Finalize and enforce branch/review policy for `main`.
-- [ ] Define baseline formatting, linting, tests, CI, dependency policy, and
-  security scanning. None currently exists in the repository.
+- [x] Document branch, review, release, and signing policy.
+- [ ] Enforce the documented policy for `main` with a GitHub ruleset or branch
+  protection.
+- [x] Define baseline repository checks, shell linting, prototype smoke tests,
+  CI, dependency policy, secret scanning, and Python CodeQL analysis.
+- [ ] Verify the initial GitHub Actions runs succeed on the default branch.
 
 Evidence and unresolved items are recorded in `docs/PHASE_0_BASELINE.md`.
 
