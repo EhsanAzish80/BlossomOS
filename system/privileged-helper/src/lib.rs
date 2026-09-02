@@ -7,6 +7,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
+#[cfg(unix)]
+mod file_journal;
+#[cfg(unix)]
+pub use file_journal::FileJournal;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthorizationDecision {

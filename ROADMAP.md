@@ -107,7 +107,10 @@ implemented, but it is not yet a root service and exposes no system-bus method.
   - [x] Implement the portable helper security state machine with independent
     authorization/manager adapters, replay-safe journal transitions, truthful
     interruption outcomes, verification, and redacted transition events.
-  - [ ] Implement and package the helper, polkit check, idempotency journal,
+  - [x] Add a bounded, durable file-journal backend with root ownership and mode
+    checks, no-follow opens, synced transitions, atomic replacement, and
+    fail-closed corruption/recovery behavior.
+  - [ ] Wire and package the helper, polkit check, root-owned runtime journal,
     systemd operation, interactive client, double audit, and Linux evidence.
 - Complete threat review, negative tests, replay protection, and audit coverage.
 

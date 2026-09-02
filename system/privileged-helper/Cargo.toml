@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 blossom-core = { path = "../../core/blossom-core" }
+libc.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
