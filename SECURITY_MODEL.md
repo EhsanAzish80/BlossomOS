@@ -55,6 +55,11 @@ Capabilities are deny-by-default. Wildcards require an ADR and a threat review.
 Tools declare their capabilities statically; runtime arguments may only narrow
 scope.
 
+ADR-0004 makes typed capability values authoritative for Phase 2, requires exact
+resource scopes, fixes the initial expansion order, and prohibits callers from
+configuring execution or sandbox profiles. Every added tool receives an
+independent privacy and cross-tool composition review.
+
 Policy decisions are `allow`, `deny`, or `ask`. Approval grants may be once-only,
 time-bounded session grants, or explicit persistent rules. A model cannot create,
 expand, or persist a grant.
