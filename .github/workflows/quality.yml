@@ -38,3 +38,12 @@ jobs:
         run: |
           git ls-files -z '*.sh' scripts/blossom |
             xargs -0 --no-run-if-empty shellcheck --severity=error
+
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+
+      - name: Lint Rust
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test Rust
+        run: cargo test --all-targets
