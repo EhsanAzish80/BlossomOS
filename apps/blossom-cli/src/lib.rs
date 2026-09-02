@@ -1,5 +1,12 @@
 #![forbid(unsafe_code)]
 
+use blossom_core::privileged::{
+    BLUETOOTH_METHOD, BLUETOOTH_UNIT, BluetoothRestartOutcome, BluetoothRestartRequest,
+    BluetoothRestartResult, PRIVILEGED_PROTOCOL_VERSION, SYSTEMD_JOB_MODE,
+    verify_bluetooth_restart_result,
+};
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+use blossom_core::privileged::{PRIVILEGED_BUS_NAME, PRIVILEGED_INTERFACE, PRIVILEGED_OBJECT_PATH};
 use blossom_core::{
     ApprovalError, ApprovalStore, AuditEvent, AuditLog, BeginOutcome, BlossomEngine, Capability,
     EngineError, Executor, FileContent, FileContentProvider, MemorySummary, MemorySummaryProvider,
@@ -34,6 +41,177 @@ pub struct RunOutcome {
     pub exit_code: i32,
     pub result: Option<String>,
     pub activity: String,
+}
+
+pub trait BluetoothRestartTransport {
+    fn execute(
+        &mut self,
+        request: &BluetoothRestartRequest,
+    ) -> Result<BluetoothRestartResult, String>;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SystemBluetoothRestartTransport;
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+impl BluetoothRestartTransport for SystemBluetoothRestartTransport {
+    fn execute(
+        &mut self,
+        request: &BluetoothRestartRequest,
+    ) -> Result<BluetoothRestartResult, String> {
+        let connection = zbus::blocking::connection::Builder::system()
+            .map_err(|_| "system bus unavailable")?
+            .method_timeout(std::time::Duration::from_secs(25))
+            .build()
+            .map_err(|_| "system bus unavailable")?;
+        let proxy = zbus::blocking::Proxy::new(
+            &connection,
+            PRIVILEGED_BUS_NAME,
+            PRIVILEGED_OBJECT_PATH,
+            PRIVILEGED_INTERFACE,
+        )
+        .map_err(|_| "privileged helper unavailable")?;
+        let bytes: Vec<u8> = proxy
+            .call(
+                BLUETOOTH_METHOD,
+                &(
+                    request.version,
+                    request.correlation_id.as_str(),
+                    request.idempotency_key.as_str(),
+                    request.interactive,
+                ),
+            )
+            .map_err(|_| "privileged helper call failed")?;
+        if bytes.len() > 4096 {
+            return Err("privileged result exceeded bound".into());
+        }
+        serde_json::from_slice(&bytes).map_err(|_| "privileged result was malformed".into())
+    }
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+impl BluetoothRestartTransport for SystemBluetoothRestartTransport {
+    fn execute(&mut self, _: &BluetoothRestartRequest) -> Result<BluetoothRestartResult, String> {
+        Err("privileged Bluetooth recovery requires GNU/Linux".into())
+    }
+}
+
+pub fn bluetooth_restart_preview(request: &BluetoothRestartRequest) -> String {
+    format!(
+        "Privileged request: {}\nCorrelation ID: {}\nCapability: services.restart:{}\nExact operation: TryRestartUnit(\"{}\", \"{}\")\nBehavior: restart only if the service is already running\nExpected impact: Bluetooth devices and audio may disconnect and reconnect\nNot included: shell, subprocess, network, file write, package action, enable, disable, start inactive service, stop-only, signal, or arbitrary service\nComplete-operation deadline: 20 seconds",
+        BLUETOOTH_METHOD, request.correlation_id, BLUETOOTH_UNIT, BLUETOOTH_UNIT, SYSTEMD_JOB_MODE,
+    )
+}
+
+pub fn run_bluetooth_restart<T, I, C>(
+    transport: &mut T,
+    interaction: &mut I,
+    clock: &mut C,
+    correlation_id: String,
+    idempotency_key: String,
+) -> RunOutcome
+where
+    T: BluetoothRestartTransport,
+    I: Interaction,
+    C: Clock,
+{
+    let request = BluetoothRestartRequest {
+        version: PRIVILEGED_PROTOCOL_VERSION,
+        correlation_id,
+        idempotency_key,
+        interactive: true,
+    };
+    if request.validate().is_err() {
+        return privileged_outcome(1, None, &request, "invalid request", "not_started", false);
+    }
+    let preview = bluetooth_restart_preview(&request);
+    let requested_at = clock.now_ms();
+    if !interaction.is_interactive() {
+        return privileged_outcome(
+            2,
+            None,
+            &request,
+            "denied_non_interactive",
+            "not_started",
+            false,
+        );
+    }
+    let choice = interaction.choose(&preview);
+    let decided_at = clock.now_ms();
+    if decided_at.saturating_sub(requested_at) > APPROVAL_TTL_MS {
+        return privileged_outcome(3, None, &request, "approval_expired", "not_started", false);
+    }
+    match choice {
+        ApprovalChoice::Deny => {
+            return privileged_outcome(2, None, &request, "denied", "not_started", false);
+        }
+        ApprovalChoice::Cancel => {
+            return privileged_outcome(2, None, &request, "cancelled", "not_started", false);
+        }
+        ApprovalChoice::ApproveOnce => {}
+    }
+    let result = match transport.execute(&request) {
+        Ok(result) => result,
+        Err(error) => {
+            return privileged_outcome(1, Some(error), &request, "approved_once", "failed", false);
+        }
+    };
+    let verified = verify_bluetooth_restart_result(&request, &result).is_ok();
+    if !verified {
+        return privileged_outcome(
+            1,
+            Some("privileged result verification failed".into()),
+            &request,
+            "approved_once",
+            "completed_unverified",
+            false,
+        );
+    }
+    let (exit_code, rendered) = match &result.outcome {
+        BluetoothRestartOutcome::RestartedActive { .. } => (
+            0,
+            "Bluetooth service restarted and a new active invocation was verified".into(),
+        ),
+        BluetoothRestartOutcome::NotRunning { .. } => (
+            0,
+            "Bluetooth service was not running; no restart was submitted".into(),
+        ),
+        BluetoothRestartOutcome::Failed { error, .. } => {
+            (1, format!("Bluetooth restart did not complete: {error:?}"))
+        }
+    };
+    privileged_outcome(
+        exit_code,
+        Some(rendered),
+        &request,
+        "approved_once",
+        "completed",
+        true,
+    )
+}
+
+fn privileged_outcome(
+    exit_code: i32,
+    result: Option<String>,
+    request: &BluetoothRestartRequest,
+    decision: &str,
+    execution: &str,
+    verified: bool,
+) -> RunOutcome {
+    let activity = format!(
+        "Activity\n  request: {}\n  capability: services.restart:{}\n  policy: ask\n  decision: {}\n  execution: {}\n  verification: {}\n  helper audit correlation: {}\n",
+        request.correlation_id,
+        BLUETOOTH_UNIT,
+        decision,
+        execution,
+        if verified { "verified" } else { "not_verified" },
+        request.correlation_id,
+    );
+    RunOutcome {
+        exit_code,
+        result,
+        activity,
+    }
 }
 
 pub fn run_fixed_diagnostic<E, I, C>(

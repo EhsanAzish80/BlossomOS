@@ -1,9 +1,10 @@
 #![forbid(unsafe_code)]
 
 use blossom_cli::{
-    ApprovalChoice, Clock, Interaction, exact_preview, file_read_preview, process_list_preview,
-    run_file_read, run_fixed_diagnostic, run_memory_summary, run_os_identity, run_process_list,
-    run_process_self, run_service_status, run_storage_summary, run_uptime, run_workspace_create,
+    ApprovalChoice, Clock, Interaction, SystemBluetoothRestartTransport, exact_preview,
+    file_read_preview, process_list_preview, run_bluetooth_restart, run_file_read,
+    run_fixed_diagnostic, run_memory_summary, run_os_identity, run_process_list, run_process_self,
+    run_service_status, run_storage_summary, run_uptime, run_workspace_create,
     service_status_preview, workspace_create_preview,
 };
 use blossom_core::{
@@ -83,6 +84,7 @@ fn main() {
     let storage_requested = arguments.as_slice() == ["storage-summary"];
     let process_self_requested = arguments.as_slice() == ["process-self"];
     let process_list_requested = arguments.as_slice() == ["process-list"];
+    let bluetooth_restart_requested = arguments.as_slice() == ["bluetooth-try-restart"];
     let service_status_unit = if arguments.len() == 2 && arguments[0] == "service-status" {
         arguments[1].to_str()
     } else {
@@ -112,12 +114,13 @@ fn main() {
         && !storage_requested
         && !process_self_requested
         && !process_list_requested
+        && !bluetooth_restart_requested
         && file_read_path.is_none()
         && workspace_create_input.is_none()
         && service_status_unit.is_none()
     {
         eprintln!(
-            "Usage: blossom-cli [os-identity|uptime|memory-summary|storage-summary|process-self|process-list|file-read ABSOLUTE_PATH|workspace-create ABSOLUTE_ROOT RELATIVE_DESTINATION CONTENT|service-status EXACT_SERVICE_UNIT]\nNo executable or generic command argument input is supported."
+            "Usage: blossom-cli [os-identity|uptime|memory-summary|storage-summary|process-self|process-list|file-read ABSOLUTE_PATH|workspace-create ABSOLUTE_ROOT RELATIVE_DESTINATION CONTENT|service-status EXACT_SERVICE_UNIT|bluetooth-try-restart]\nNo executable or generic command argument input is supported."
         );
         std::process::exit(64);
     }
@@ -130,6 +133,42 @@ fn main() {
         .expect("generated request identifier is valid");
     let mut interaction = TerminalInteraction;
     let mut clock = SystemClock;
+
+    if bluetooth_restart_requested {
+        let mut random = [0u8; 16];
+        if getrandom::fill(&mut random).is_err() {
+            eprintln!("Unable to generate a privileged idempotency key.");
+            std::process::exit(1);
+        }
+        let idempotency_key = random
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let correlation_id = format!("priv-{now}-{}", std::process::id());
+        let mut transport = SystemBluetoothRestartTransport;
+        if !interaction.is_interactive() {
+            let request = blossom_core::privileged::BluetoothRestartRequest {
+                version: blossom_core::privileged::PRIVILEGED_PROTOCOL_VERSION,
+                correlation_id: correlation_id.clone(),
+                idempotency_key: idempotency_key.clone(),
+                interactive: true,
+            };
+            println!("{}\n", blossom_cli::bluetooth_restart_preview(&request));
+            println!("Non-interactive input is denied by default.\n");
+        }
+        let outcome = run_bluetooth_restart(
+            &mut transport,
+            &mut interaction,
+            &mut clock,
+            correlation_id,
+            idempotency_key,
+        );
+        if let Some(result) = outcome.result {
+            println!("{result}");
+        }
+        print!("{}", outcome.activity);
+        std::process::exit(outcome.exit_code);
+    }
 
     if os_identity_requested {
         let outcome = run_os_identity(

@@ -111,3 +111,19 @@ sets, AF_UNIX-only IPC, no IP networking, a strict read-only host view except
 its boot runtime, and standard namespace/kernel/device/process hardening. A CI
 validator pins these identifiers and rejects polkit rules or generic execution
 surfaces. The files are not installed by tests and no release package exists.
+
+## Interactive client
+
+`blossom-cli bluetooth-try-restart` is the only client entry point. It accepts
+no unit, method, mode, executable, argument, path, timeout, or bus address. It
+generates a fresh 128-bit idempotency key with the operating system random
+source, displays the exact fixed operation and expected Bluetooth disruption,
+and offers only `Approve once` or `Deny`. Non-TTY use, denial, cancellation, and
+expired approval contact no helper. The approval identifier remains internal
+and is never printed or sent as authority.
+
+After approval, the client calls only the fixed system-bus method, bounds and
+deserializes the result, independently runs the shared verifier, and renders
+request, capability, policy, decision, execution, verification, and helper-audit
+correlation activity. Controlled transport tests prove zero calls for every
+preapproval failure and reject a false success with an unchanged invocation ID.
