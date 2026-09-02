@@ -6,30 +6,33 @@ use crate::os_identity::{
 };
 use crate::policy::{PolicyDecision, PolicyEngine};
 use crate::request::{RequestError, ToolRequest};
-use crate::verification::{Verification, verify_execution, verify_os_identity};
+use crate::uptime::{SystemUptime, UnavailableUptimeProvider, UptimeError, UptimeProvider};
+use crate::verification::{Verification, verify_execution, verify_os_identity, verify_uptime};
 
 #[derive(Debug)]
-pub struct BlossomEngine<E, O = UnavailableOsIdentityProvider> {
+pub struct BlossomEngine<E, O = UnavailableOsIdentityProvider, U = UnavailableUptimeProvider> {
     policy: PolicyEngine,
     approvals: ApprovalStore,
     executor: E,
     os_identity: O,
+    uptime: U,
     audit: AuditLog,
 }
 
-impl<E: Executor> BlossomEngine<E, UnavailableOsIdentityProvider> {
+impl<E: Executor> BlossomEngine<E, UnavailableOsIdentityProvider, UnavailableUptimeProvider> {
     pub fn new(policy: PolicyEngine, approvals: ApprovalStore, executor: E) -> Self {
         Self {
             policy,
             approvals,
             executor,
             os_identity: UnavailableOsIdentityProvider,
+            uptime: UnavailableUptimeProvider,
             audit: AuditLog::default(),
         }
     }
 }
 
-impl<E: Executor, O: OsIdentityProvider> BlossomEngine<E, O> {
+impl<E: Executor, O: OsIdentityProvider> BlossomEngine<E, O, UnavailableUptimeProvider> {
     pub fn with_os_identity(
         policy: PolicyEngine,
         approvals: ApprovalStore,
@@ -41,10 +44,31 @@ impl<E: Executor, O: OsIdentityProvider> BlossomEngine<E, O> {
             approvals,
             executor,
             os_identity,
+            uptime: UnavailableUptimeProvider,
             audit: AuditLog::default(),
         }
     }
+}
 
+impl<E: Executor, U: UptimeProvider> BlossomEngine<E, UnavailableOsIdentityProvider, U> {
+    pub fn with_uptime(
+        policy: PolicyEngine,
+        approvals: ApprovalStore,
+        executor: E,
+        uptime: U,
+    ) -> Self {
+        Self {
+            policy,
+            approvals,
+            executor,
+            os_identity: UnavailableOsIdentityProvider,
+            uptime,
+            audit: AuditLog::default(),
+        }
+    }
+}
+
+impl<E: Executor, O: OsIdentityProvider, U: UptimeProvider> BlossomEngine<E, O, U> {
     pub fn begin(&mut self, input: &str, now_ms: u64) -> Result<BeginOutcome, EngineError> {
         let request = match ToolRequest::parse_json(input) {
             Ok(request) => request,
@@ -151,6 +175,7 @@ impl<E: Executor, O: OsIdentityProvider> BlossomEngine<E, O> {
         match request {
             ToolRequest::SystemUname { .. } => self.execute_command(request),
             ToolRequest::SystemOsIdentity { .. } => self.execute_os_identity(request),
+            ToolRequest::SystemUptime { .. } => self.execute_uptime(request),
         }
     }
 
@@ -216,12 +241,43 @@ impl<E: Executor, O: OsIdentityProvider> BlossomEngine<E, O> {
             output: ToolOutput::OsIdentity(Box::new(identity)),
         })
     }
+
+    fn execute_uptime(&mut self, request: ToolRequest) -> Result<CompletionOutcome, EngineError> {
+        self.audit.append(AuditEvent::NativeReadStarted {
+            request_id: request.request_id().as_str().into(),
+            resource: "uptime".into(),
+        });
+        let uptime = match self.uptime.read_uptime() {
+            Ok(uptime) => uptime,
+            Err(error) => {
+                self.audit.append(AuditEvent::UptimeReadFailed {
+                    request_id: request.request_id().as_str().into(),
+                    resource: "uptime".into(),
+                    error,
+                });
+                return Err(EngineError::Uptime(error));
+            }
+        };
+        self.audit
+            .append(AuditEvent::uptime_finished(&request, &uptime));
+        let verification = verify_uptime(&uptime);
+        self.audit.append(AuditEvent::VerificationFinished {
+            request_id: request.request_id().as_str().into(),
+            verification: verification.clone(),
+        });
+        Ok(CompletionOutcome {
+            request,
+            verification,
+            output: ToolOutput::Uptime(uptime),
+        })
+    }
 }
 
 pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
     match request {
         ToolRequest::SystemUname { .. } => Some(CommandSpec::system_uname()),
         ToolRequest::SystemOsIdentity { .. } => None,
+        ToolRequest::SystemUptime { .. } => None,
     }
 }
 
@@ -255,6 +311,7 @@ pub struct CompletionOutcome {
 pub enum ToolOutput {
     SystemUname,
     OsIdentity(Box<OsIdentity>),
+    Uptime(SystemUptime),
 }
 
 #[derive(Debug)]
@@ -263,6 +320,7 @@ pub enum EngineError {
     Approval(ApprovalError),
     Executor(ExecutorError),
     OsIdentity(OsIdentityError),
+    Uptime(UptimeError),
 }
 
 #[cfg(test)]
@@ -316,6 +374,29 @@ mod tests {
             self.result
                 .take()
                 .unwrap_or(Err(OsIdentityError::ReadFailed))
+        }
+    }
+
+    #[derive(Debug)]
+    struct ScriptedUptime {
+        result: Option<Result<SystemUptime, UptimeError>>,
+        calls: usize,
+    }
+
+    impl UptimeProvider for ScriptedUptime {
+        fn read_uptime(&mut self) -> Result<SystemUptime, UptimeError> {
+            self.calls += 1;
+            self.result.take().unwrap_or(Err(UptimeError::ReadFailed))
+        }
+    }
+
+    fn uptime() -> SystemUptime {
+        SystemUptime {
+            seconds: 42,
+            nanoseconds: 250_000_000,
+            source_path: "/proc/uptime".into(),
+            source_sha256: "b".repeat(64),
+            source_bytes: 16,
         }
     }
 
@@ -511,6 +592,76 @@ mod tests {
         assert!(matches!(
             engine.audit().records().last().map(|record| &record.event),
             Some(AuditEvent::NativeReadFailed { .. })
+        ));
+    }
+
+    #[test]
+    fn uptime_allow_uses_native_provider_not_executor() {
+        let policy = PolicyEngine::new(vec![PolicyRule {
+            capability: Capability::SystemReadUptime,
+            decision: PolicyDecision::Allow,
+        }]);
+        let provider = ScriptedUptime {
+            result: Some(Ok(uptime())),
+            calls: 0,
+        };
+        let mut engine = BlossomEngine::with_uptime(
+            policy,
+            ApprovalStore::new(100),
+            ScriptedExecutor::successful(),
+            provider,
+        );
+        let outcome = engine
+            .begin(
+                r#"{"request_id":"req-up","tool":"system.uptime","arguments":{}}"#,
+                1_000,
+            )
+            .expect("native read should complete");
+        let completed = match outcome {
+            BeginOutcome::Completed(completed) => completed,
+            other => panic!("unexpected outcome: {other:?}"),
+        };
+        assert!(completed.verification.succeeded);
+        assert!(matches!(completed.output, ToolOutput::Uptime(_)));
+        assert!(engine.executor.calls.is_empty());
+        assert_eq!(engine.uptime.calls, 1);
+        assert!(engine.audit().verify_chain());
+        assert!(
+            engine
+                .audit()
+                .records()
+                .iter()
+                .any(|record| matches!(record.event, AuditEvent::UptimeReadFinished { .. }))
+        );
+    }
+
+    #[test]
+    fn uptime_failure_is_audited_without_executor_fallback() {
+        let policy = PolicyEngine::new(vec![PolicyRule {
+            capability: Capability::SystemReadUptime,
+            decision: PolicyDecision::Allow,
+        }]);
+        let provider = ScriptedUptime {
+            result: Some(Err(UptimeError::Missing)),
+            calls: 0,
+        };
+        let mut engine = BlossomEngine::with_uptime(
+            policy,
+            ApprovalStore::new(100),
+            ScriptedExecutor::successful(),
+            provider,
+        );
+        assert!(matches!(
+            engine.begin(
+                r#"{"request_id":"req-up","tool":"system.uptime","arguments":{}}"#,
+                1_000,
+            ),
+            Err(EngineError::Uptime(UptimeError::Missing))
+        ));
+        assert!(engine.executor.calls.is_empty());
+        assert!(matches!(
+            engine.audit().records().last().map(|record| &record.event),
+            Some(AuditEvent::UptimeReadFailed { .. })
         ));
     }
 

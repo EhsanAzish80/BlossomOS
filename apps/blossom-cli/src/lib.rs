@@ -3,7 +3,7 @@
 use blossom_core::{
     ApprovalError, ApprovalStore, AuditEvent, AuditLog, BeginOutcome, BlossomEngine, Capability,
     EngineError, Executor, OsIdentity, OsIdentityProvider, PolicyDecision, PolicyEngine,
-    PolicyRule, RequestId, ToolOutput, ToolRequest, command_for,
+    PolicyRule, RequestId, SystemUptime, ToolOutput, ToolRequest, UptimeProvider, command_for,
 };
 use std::fmt::Write as _;
 
@@ -120,6 +120,43 @@ where
     outcome_with_result(0, result, &engine)
 }
 
+pub fn run_uptime<E, U, C>(
+    executor: E,
+    uptime: U,
+    clock: &mut C,
+    request_id: RequestId,
+) -> RunOutcome
+where
+    E: Executor,
+    U: UptimeProvider,
+    C: Clock,
+{
+    let policy = PolicyEngine::new(vec![PolicyRule {
+        capability: Capability::SystemReadUptime,
+        decision: PolicyDecision::Allow,
+    }]);
+    let mut engine = BlossomEngine::with_uptime(
+        policy,
+        ApprovalStore::new(APPROVAL_TTL_MS),
+        executor,
+        uptime,
+    );
+    let request_json = format!(
+        r#"{{"request_id":"{}","tool":"system.uptime","arguments":{{}}}}"#,
+        request_id.as_str()
+    );
+    let result = match engine.begin(&request_json, clock.now_ms()) {
+        Ok(BeginOutcome::Completed(completed)) => match completed.output {
+            ToolOutput::Uptime(uptime) if completed.verification.succeeded => {
+                Some(render_uptime(&uptime))
+            }
+            _ => return outcome_with_result(1, None, &engine),
+        },
+        _ => return outcome_with_result(1, None, &engine),
+    };
+    outcome_with_result(0, result, &engine)
+}
+
 pub fn exact_preview(request: &ToolRequest) -> String {
     let command = command_for(request).expect("approval preview is command-backed");
     let command_line = std::iter::once(command.program.display().to_string())
@@ -153,17 +190,17 @@ pub fn render_activity(audit: &AuditLog) -> String {
     output
 }
 
-fn outcome<E: Executor, O: OsIdentityProvider>(
+fn outcome<E: Executor, O: OsIdentityProvider, U: UptimeProvider>(
     exit_code: i32,
-    engine: &BlossomEngine<E, O>,
+    engine: &BlossomEngine<E, O, U>,
 ) -> RunOutcome {
     outcome_with_result(exit_code, None, engine)
 }
 
-fn outcome_with_result<E: Executor, O: OsIdentityProvider>(
+fn outcome_with_result<E: Executor, O: OsIdentityProvider, U: UptimeProvider>(
     exit_code: i32,
     result: Option<String>,
-    engine: &BlossomEngine<E, O>,
+    engine: &BlossomEngine<E, O, U>,
 ) -> RunOutcome {
     RunOutcome {
         exit_code,
@@ -192,6 +229,18 @@ fn render_os_identity(identity: &OsIdentity) -> String {
     writeln!(&mut output, "  SHA-256: {}", identity.source_sha256)
         .expect("writing to a String cannot fail");
     output
+}
+
+fn render_uptime(uptime: &SystemUptime) -> String {
+    let days = uptime.seconds / 86_400;
+    let hours = (uptime.seconds % 86_400) / 3_600;
+    let minutes = (uptime.seconds % 3_600) / 60;
+    let seconds = uptime.seconds % 60;
+    let milliseconds = uptime.nanoseconds / 1_000_000;
+    format!(
+        "System uptime\n  Duration: {days} days {hours:02}:{minutes:02}:{seconds:02}.{milliseconds:03}\n  Source: {}\n  SHA-256: {}\n",
+        uptime.source_path, uptime.source_sha256
+    )
 }
 
 fn describe_event(event: &AuditEvent) -> String {
@@ -252,7 +301,20 @@ fn describe_event(event: &AuditEvent) -> String {
         } => format!(
             "request {request_id} read {source_bytes} bytes from {source_path}, sha256={source_sha256}"
         ),
+        AuditEvent::UptimeReadFinished {
+            request_id,
+            source_path,
+            source_sha256,
+            source_bytes,
+        } => format!(
+            "request {request_id} read {source_bytes} bytes from {source_path}, sha256={source_sha256}"
+        ),
         AuditEvent::NativeReadFailed {
+            request_id,
+            resource,
+            error,
+        } => format!("request {request_id} native read of {resource} failed ({error})"),
+        AuditEvent::UptimeReadFailed {
             request_id,
             resource,
             error,

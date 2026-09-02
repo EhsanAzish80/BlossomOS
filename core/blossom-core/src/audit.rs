@@ -3,6 +3,7 @@ use crate::executor::{ExecutionResult, ExecutorError};
 use crate::os_identity::{OsIdentity, OsIdentityError};
 use crate::policy::{Capability, PolicyDecision};
 use crate::request::ToolRequest;
+use crate::uptime::{SystemUptime, UptimeError};
 use crate::verification::Verification;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -67,10 +68,21 @@ pub enum AuditEvent {
         source_sha256: String,
         source_bytes: usize,
     },
+    UptimeReadFinished {
+        request_id: String,
+        source_path: String,
+        source_sha256: String,
+        source_bytes: usize,
+    },
     NativeReadFailed {
         request_id: String,
         resource: String,
         error: OsIdentityError,
+    },
+    UptimeReadFailed {
+        request_id: String,
+        resource: String,
+        error: UptimeError,
     },
     VerificationFinished {
         request_id: String,
@@ -101,6 +113,15 @@ impl AuditEvent {
             source_path: identity.source_path.clone(),
             source_sha256: identity.source_sha256.clone(),
             source_bytes: identity.source_bytes,
+        }
+    }
+
+    pub fn uptime_finished(request: &ToolRequest, uptime: &SystemUptime) -> Self {
+        Self::UptimeReadFinished {
+            request_id: request.request_id().as_str().into(),
+            source_path: uptime.source_path.clone(),
+            source_sha256: uptime.source_sha256.clone(),
+            source_bytes: uptime.source_bytes,
         }
     }
 }
@@ -235,5 +256,26 @@ mod tests {
         assert!(encoded.contains(&"a".repeat(64)));
         assert!(!encoded.contains("private-id-value"));
         assert!(!encoded.contains("private-name-value"));
+    }
+
+    #[test]
+    fn uptime_audit_records_provenance_not_duration_or_idle_values() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-up","tool":"system.uptime","arguments":{}}"#,
+        )
+        .expect("valid uptime request");
+        let uptime = SystemUptime {
+            seconds: 12_345,
+            nanoseconds: 670_000_000,
+            source_path: "/proc/uptime".into(),
+            source_sha256: "b".repeat(64),
+            source_bytes: 20,
+        };
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::uptime_finished(&request, &uptime));
+        let encoded = serde_json::to_string(audit.records()).expect("serializable audit records");
+        assert!(encoded.contains("/proc/uptime"));
+        assert!(!encoded.contains("12345"));
+        assert!(!encoded.contains("670000000"));
     }
 }

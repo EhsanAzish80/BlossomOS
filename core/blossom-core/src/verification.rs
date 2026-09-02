@@ -1,5 +1,6 @@
 use crate::executor::ExecutionResult;
 use crate::os_identity::{MAX_OS_RELEASE_BYTES, MAX_OS_RELEASE_VALUE_BYTES, OsIdentity};
+use crate::uptime::{MAX_PROC_UPTIME_BYTES, PROC_UPTIME_PATH, SystemUptime};
 use serde::Serialize;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -18,6 +19,31 @@ pub enum VerificationReason {
     ValidOsIdentity,
     InvalidOsIdentityProvenance,
     InvalidOsIdentitySchema,
+    ValidUptime,
+    InvalidUptimeProvenance,
+    InvalidUptimeSchema,
+}
+
+pub fn verify_uptime(uptime: &SystemUptime) -> Verification {
+    let provenance_valid = uptime.source_path == PROC_UPTIME_PATH
+        && uptime.source_bytes <= MAX_PROC_UPTIME_BYTES
+        && uptime.source_sha256.len() == 64
+        && uptime
+            .source_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase());
+    let schema_valid = uptime.nanoseconds < 1_000_000_000;
+    let reason = if !provenance_valid {
+        VerificationReason::InvalidUptimeProvenance
+    } else if !schema_valid {
+        VerificationReason::InvalidUptimeSchema
+    } else {
+        VerificationReason::ValidUptime
+    };
+    Verification {
+        succeeded: reason == VerificationReason::ValidUptime,
+        reason,
+    }
 }
 
 pub fn verify_os_identity(identity: &OsIdentity) -> Verification {
@@ -127,6 +153,29 @@ mod tests {
         assert_eq!(
             verify_os_identity(&identity).reason,
             VerificationReason::InvalidOsIdentitySchema
+        );
+    }
+
+    #[test]
+    fn verifies_uptime_schema_and_provenance_without_io() {
+        let mut uptime = SystemUptime {
+            seconds: 42,
+            nanoseconds: 250_000_000,
+            source_path: PROC_UPTIME_PATH.into(),
+            source_sha256: "a".repeat(64),
+            source_bytes: 16,
+        };
+        assert!(verify_uptime(&uptime).succeeded);
+        uptime.source_path = "/tmp/uptime".into();
+        assert_eq!(
+            verify_uptime(&uptime).reason,
+            VerificationReason::InvalidUptimeProvenance
+        );
+        uptime.source_path = PROC_UPTIME_PATH.into();
+        uptime.nanoseconds = 1_000_000_000;
+        assert_eq!(
+            verify_uptime(&uptime).reason,
+            VerificationReason::InvalidUptimeSchema
         );
     }
 }

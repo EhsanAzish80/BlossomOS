@@ -2,9 +2,11 @@
 
 use blossom_cli::{
     ApprovalChoice, Clock, Interaction, exact_preview, run_fixed_diagnostic, run_os_identity,
+    run_uptime,
 };
 use blossom_core::{
-    OsReleaseReader, RequestId, ToolRequest, executor::bubblewrap::BubblewrapExecutor,
+    OsReleaseReader, ProcUptimeReader, RequestId, ToolRequest,
+    executor::bubblewrap::BubblewrapExecutor,
 };
 use std::io::{self, IsTerminal, Write};
 use std::sync::mpsc;
@@ -73,9 +75,10 @@ impl Interaction for TerminalInteraction {
 fn main() {
     let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
     let os_identity_requested = arguments.as_slice() == ["os-identity"];
-    if !arguments.is_empty() && !os_identity_requested {
+    let uptime_requested = arguments.as_slice() == ["uptime"];
+    if !arguments.is_empty() && !os_identity_requested && !uptime_requested {
         eprintln!(
-            "Usage: blossom-cli [os-identity]\nNo executable or argument input is supported."
+            "Usage: blossom-cli [os-identity|uptime]\nNo executable or argument input is supported."
         );
         std::process::exit(64);
     }
@@ -93,6 +96,20 @@ fn main() {
         let outcome = run_os_identity(
             BubblewrapExecutor::phase1_default(),
             OsReleaseReader::default(),
+            &mut clock,
+            request_id,
+        );
+        if let Some(result) = outcome.result {
+            println!("{result}");
+        }
+        print!("{}", outcome.activity);
+        std::process::exit(outcome.exit_code);
+    }
+
+    if uptime_requested {
+        let outcome = run_uptime(
+            BubblewrapExecutor::phase1_default(),
+            ProcUptimeReader::default(),
             &mut clock,
             request_id,
         );

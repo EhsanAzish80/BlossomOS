@@ -5,6 +5,7 @@ use serde::Serialize;
 pub enum Capability {
     SystemReadKernelIdentity,
     SystemReadOsIdentity,
+    SystemReadUptime,
 }
 
 impl Capability {
@@ -12,6 +13,7 @@ impl Capability {
         match self {
             Self::SystemReadKernelIdentity => "system.read:kernel.identity",
             Self::SystemReadOsIdentity => "system.read:os.identity",
+            Self::SystemReadUptime => "system.read:uptime",
         }
     }
 }
@@ -43,6 +45,7 @@ impl PolicyEngine {
         match request {
             ToolRequest::SystemUname { .. } => Capability::SystemReadKernelIdentity,
             ToolRequest::SystemOsIdentity { .. } => Capability::SystemReadOsIdentity,
+            ToolRequest::SystemUptime { .. } => Capability::SystemReadUptime,
         }
     }
 
@@ -78,6 +81,13 @@ mod tests {
         };
         assert_eq!(
             PolicyEngine::default().evaluate(&os_identity),
+            PolicyDecision::Deny
+        );
+        let uptime = ToolRequest::SystemUptime {
+            request_id: RequestId::parse("req-uptime".into()).expect("valid test id"),
+        };
+        assert_eq!(
+            PolicyEngine::default().evaluate(&uptime),
             PolicyDecision::Deny
         );
     }
