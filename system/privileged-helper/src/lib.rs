@@ -819,6 +819,49 @@ mod tests {
         fail_at: usize,
     }
 
+    #[derive(Clone, Copy)]
+    enum JournalFailurePoint {
+        Claim,
+        MarkSubmitted,
+        Complete,
+    }
+
+    struct FailJournalAt {
+        inner: MemoryJournal,
+        point: JournalFailurePoint,
+    }
+
+    impl IdempotencyJournal for FailJournalAt {
+        fn claim(&mut self, key: &JournalKey, digest: &str) -> Result<ClaimOutcome, JournalError> {
+            if matches!(self.point, JournalFailurePoint::Claim) {
+                Err(JournalError::Unavailable)
+            } else {
+                self.inner.claim(key, digest)
+            }
+        }
+
+        fn mark_submitted(&mut self, key: &JournalKey, digest: &str) -> Result<(), JournalError> {
+            if matches!(self.point, JournalFailurePoint::MarkSubmitted) {
+                Err(JournalError::Unavailable)
+            } else {
+                self.inner.mark_submitted(key, digest)
+            }
+        }
+
+        fn complete(
+            &mut self,
+            key: &JournalKey,
+            digest: &str,
+            result: &BluetoothRestartResult,
+        ) -> Result<(), JournalError> {
+            if matches!(self.point, JournalFailurePoint::Complete) {
+                Err(JournalError::Unavailable)
+            } else {
+                self.inner.complete(key, digest, result)
+            }
+        }
+    }
+
     impl HelperAudit for FailAuditAt {
         fn record(&mut self, _: HelperAuditEvent) -> Result<(), AuditError> {
             self.call += 1;
@@ -1052,6 +1095,43 @@ mod tests {
             }
         ));
         assert_eq!(helper.into_parts().1.calls, 0);
+    }
+
+    #[test]
+    fn journal_sync_failures_fail_closed_at_every_transition() {
+        for point in [
+            JournalFailurePoint::Claim,
+            JournalFailurePoint::MarkSubmitted,
+        ] {
+            let journal = FailJournalAt {
+                inner: MemoryJournal::default(),
+                point,
+            };
+            let mut helper =
+                PrivilegedHelper::new(Allow, manager(), journal, MemoryAudit::default());
+            assert!(matches!(
+                helper.handle(caller(), request()).outcome,
+                BluetoothRestartOutcome::Failed {
+                    error: BluetoothRestartFailure::JournalUnavailable,
+                    job_submitted: false
+                }
+            ));
+            assert_eq!(helper.into_parts().1.calls, 0);
+        }
+
+        let journal = FailJournalAt {
+            inner: MemoryJournal::default(),
+            point: JournalFailurePoint::Complete,
+        };
+        let mut helper = PrivilegedHelper::new(Allow, manager(), journal, MemoryAudit::default());
+        assert!(matches!(
+            helper.handle(caller(), request()).outcome,
+            BluetoothRestartOutcome::Failed {
+                error: BluetoothRestartFailure::OutcomeIndeterminate,
+                job_submitted: true
+            }
+        ));
+        assert_eq!(helper.into_parts().1.calls, 1);
     }
 
     #[test]
