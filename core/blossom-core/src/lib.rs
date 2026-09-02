@@ -14,6 +14,7 @@ pub mod request;
 pub mod storage_summary;
 pub mod uptime;
 pub mod verification;
+pub mod workspace_create;
 
 pub use approval::{ApprovalError, ApprovalStore, ApprovalToken};
 pub use audit::{AuditEvent, AuditLog, AuditRecord};
@@ -58,4 +59,11 @@ pub use uptime::{
 pub use verification::{
     Verification, verify_execution, verify_file_content, verify_memory_summary, verify_os_identity,
     verify_process_list, verify_process_self, verify_storage_summary, verify_uptime,
+    verify_workspace_file_created,
+};
+pub use workspace_create::{
+    AtomicWorkspaceFileCreator, DirectoryIdentity, UnavailableWorkspaceCreateProvider,
+    WORKSPACE_FILE_MODE, WorkspaceCreateError, WorkspaceCreateProvider, WorkspaceCreateSelection,
+    WorkspaceCreateState, WorkspaceFileCreated, validate_relative_destination,
+    validate_workspace_selection,
 };

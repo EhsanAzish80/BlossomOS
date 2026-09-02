@@ -67,14 +67,16 @@ remain narrow native reads; later Phase 2 capabilities are not implemented.
     bounded `/proc/<pid>/status` reads, and redacted audit counts.
   - [x] One approval-gated user-selected exact UTF-8 file read using ADR-0005
     containment and a 64-KiB bound.
-  - [ ] One workspace-contained exact-path write.
+  - [x] One approval-gated workspace-contained atomic file creation using
+    retained descriptors, fixed `0600`, and no-replace publication.
   - [ ] One exact service-status read.
 - [ ] Evaluate and select confinement technologies per resource class by ADR or
   an accepted extension of an existing profile.
   - [x] Exact-file reads: Linux `openat2` no-symlink resolution plus a retained
     descriptor and identity revalidation (ADR-0005).
   - [x] Workspace file creation: retained directory descriptors, no mount or
-    symlink traversal, and atomic no-replace publication (ADR-0006).
+    symlink traversal, and unnamed-inode atomic no-replace publication
+    (ADR-0007, superseding ADR-0006).
 - Enforce environment, working-directory, filesystem, network, timeout, output,
   process, and resource controls.
 - Add property, adversarial, and integration tests for the security boundary.

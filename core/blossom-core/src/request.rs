@@ -1,4 +1,5 @@
 use crate::file_read::{FileSelection, validate_selected_path};
+use crate::workspace_create::{WorkspaceCreateSelection, validate_workspace_selection};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
@@ -53,6 +54,10 @@ pub enum ToolRequest {
     FilesReadContent {
         request_id: RequestId,
         selection: FileSelection,
+    },
+    FilesWriteCreate {
+        request_id: RequestId,
+        selection: WorkspaceCreateSelection,
     },
 }
 
@@ -140,6 +145,22 @@ impl ToolRequest {
                     selection: arguments.selection,
                 })
             }
+            "files.write.create" => {
+                let arguments =
+                    serde_json::from_value::<WorkspaceCreateArguments>(envelope.arguments)
+                        .map_err(|error| RequestError::InvalidArguments {
+                            message: error.to_string(),
+                        })?;
+                validate_workspace_selection(&arguments.selection).map_err(|error| {
+                    RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    }
+                })?;
+                Ok(Self::FilesWriteCreate {
+                    request_id,
+                    selection: arguments.selection,
+                })
+            }
             _ => Err(RequestError::UnknownTool {
                 tool: envelope.tool,
             }),
@@ -156,6 +177,7 @@ impl ToolRequest {
             | Self::ProcessSelf { request_id }
             | Self::ProcessList { request_id } => request_id,
             Self::FilesReadContent { request_id, .. } => request_id,
+            Self::FilesWriteCreate { request_id, .. } => request_id,
         }
     }
 
@@ -169,6 +191,7 @@ impl ToolRequest {
             Self::ProcessSelf { .. } => "process.self",
             Self::ProcessList { .. } => "process.list",
             Self::FilesReadContent { .. } => "files.read.content",
+            Self::FilesWriteCreate { .. } => "files.write.create",
         }
     }
 }
@@ -189,6 +212,12 @@ struct NoArguments {}
 #[serde(deny_unknown_fields)]
 struct FileReadArguments {
     selection: FileSelection,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WorkspaceCreateArguments {
+    selection: WorkspaceCreateSelection,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -245,6 +274,46 @@ mod tests {
                 &file_request_json("/home/user/note.txt")
                     .replace("\"inode\":2", "\"inode\":2,\"mounts\":[]")
             ),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+    }
+
+    #[test]
+    fn parses_workspace_create_and_rejects_mode_or_digest_expansion() {
+        use crate::workspace_create::{
+            DirectoryIdentity, WORKSPACE_FILE_MODE, WorkspaceCreateSelection, digest,
+        };
+        let selection = WorkspaceCreateSelection {
+            workspace_root: "/home/user/workspace".into(),
+            root_identity: DirectoryIdentity {
+                device: 1,
+                inode: 2,
+            },
+            parent_identity: DirectoryIdentity {
+                device: 1,
+                inode: 3,
+            },
+            relative_destination: "docs/new.txt".into(),
+            content: "hello".into(),
+            content_sha256: digest(b"hello"),
+            mode: WORKSPACE_FILE_MODE,
+        };
+        let value = serde_json::json!({
+            "request_id": "req-create", "tool": "files.write.create", "arguments": { "selection": selection }
+        });
+        let request = ToolRequest::parse_json(&value.to_string()).expect("workspace create");
+        assert_eq!(request.tool_name(), "files.write.create");
+        let mut wrong_mode = value.clone();
+        wrong_mode["arguments"]["selection"]["mode"] = serde_json::json!(0o644);
+        assert!(matches!(
+            ToolRequest::parse_json(&wrong_mode.to_string()),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+        let mut wrong_digest = value;
+        wrong_digest["arguments"]["selection"]["content_sha256"] =
+            serde_json::json!("0".repeat(64));
+        assert!(matches!(
+            ToolRequest::parse_json(&wrong_digest.to_string()),
             Err(RequestError::InvalidArguments { .. })
         ));
     }

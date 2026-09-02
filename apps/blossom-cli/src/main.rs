@@ -3,12 +3,13 @@
 use blossom_cli::{
     ApprovalChoice, Clock, Interaction, exact_preview, file_read_preview, process_list_preview,
     run_file_read, run_fixed_diagnostic, run_memory_summary, run_os_identity, run_process_list,
-    run_process_self, run_storage_summary, run_uptime,
+    run_process_self, run_storage_summary, run_uptime, run_workspace_create,
+    workspace_create_preview,
 };
 use blossom_core::{
-    NativeProcessSelfReader, Openat2FileReader, OsReleaseReader, ProcMeminfoReader,
-    ProcProcessListReader, ProcUptimeReader, RequestId, RootStorageReader, ToolRequest,
-    executor::bubblewrap::BubblewrapExecutor,
+    AtomicWorkspaceFileCreator, NativeProcessSelfReader, Openat2FileReader, OsReleaseReader,
+    ProcMeminfoReader, ProcProcessListReader, ProcUptimeReader, RequestId, RootStorageReader,
+    ToolRequest, executor::bubblewrap::BubblewrapExecutor,
 };
 use std::io::{self, IsTerminal, Write};
 use std::sync::mpsc;
@@ -87,6 +88,18 @@ fn main() {
     } else {
         None
     };
+    let workspace_create_input = if arguments.len() == 4 && arguments[0] == "workspace-create" {
+        match (
+            arguments[1].to_str(),
+            arguments[2].to_str(),
+            arguments[3].to_str(),
+        ) {
+            (Some(root), Some(destination), Some(content)) => Some((root, destination, content)),
+            _ => None,
+        }
+    } else {
+        None
+    };
     if !arguments.is_empty()
         && !os_identity_requested
         && !uptime_requested
@@ -95,9 +108,10 @@ fn main() {
         && !process_self_requested
         && !process_list_requested
         && file_read_path.is_none()
+        && workspace_create_input.is_none()
     {
         eprintln!(
-            "Usage: blossom-cli [os-identity|uptime|memory-summary|storage-summary|process-self|process-list|file-read ABSOLUTE_PATH]\nNo executable or generic command argument input is supported."
+            "Usage: blossom-cli [os-identity|uptime|memory-summary|storage-summary|process-self|process-list|file-read ABSOLUTE_PATH|workspace-create ABSOLUTE_ROOT RELATIVE_DESTINATION CONTENT]\nNo executable or generic command argument input is supported."
         );
         std::process::exit(64);
     }
@@ -222,6 +236,36 @@ fn main() {
         let outcome = run_file_read(
             BubblewrapExecutor::phase1_default(),
             reader,
+            &mut interaction,
+            &mut clock,
+            request_id,
+        );
+        if let Some(result) = outcome.result {
+            println!("{result}");
+        }
+        print!("{}", outcome.activity);
+        std::process::exit(outcome.exit_code);
+    }
+
+    if let Some((root, destination, content)) = workspace_create_input {
+        let creator = match AtomicWorkspaceFileCreator::select(root, destination, content) {
+            Ok(creator) => creator,
+            Err(error) => {
+                eprintln!("Workspace selection failed: {error}");
+                std::process::exit(1);
+            }
+        };
+        if !interaction.is_interactive() {
+            let request = ToolRequest::FilesWriteCreate {
+                request_id: request_id.clone(),
+                selection: blossom_core::WorkspaceCreateProvider::selection(&creator).clone(),
+            };
+            println!("{}\n", workspace_create_preview(&request));
+            println!("Non-interactive input is denied by default.\n");
+        }
+        let outcome = run_workspace_create(
+            BubblewrapExecutor::phase1_default(),
+            creator,
             &mut interaction,
             &mut clock,
             request_id,
