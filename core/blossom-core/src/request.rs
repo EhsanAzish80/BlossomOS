@@ -30,6 +30,7 @@ impl RequestId {
 pub enum ToolRequest {
     SystemUname { request_id: RequestId },
     SystemOsIdentity { request_id: RequestId },
+    SystemUptime { request_id: RequestId },
 }
 
 impl ToolRequest {
@@ -56,6 +57,14 @@ impl ToolRequest {
                 })?;
                 Ok(Self::SystemOsIdentity { request_id })
             }
+            "system.uptime" => {
+                serde_json::from_value::<NoArguments>(envelope.arguments).map_err(|error| {
+                    RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    }
+                })?;
+                Ok(Self::SystemUptime { request_id })
+            }
             _ => Err(RequestError::UnknownTool {
                 tool: envelope.tool,
             }),
@@ -64,7 +73,9 @@ impl ToolRequest {
 
     pub fn request_id(&self) -> &RequestId {
         match self {
-            Self::SystemUname { request_id } | Self::SystemOsIdentity { request_id } => request_id,
+            Self::SystemUname { request_id }
+            | Self::SystemOsIdentity { request_id }
+            | Self::SystemUptime { request_id } => request_id,
         }
     }
 
@@ -72,6 +83,7 @@ impl ToolRequest {
         match self {
             Self::SystemUname { .. } => "system.uname",
             Self::SystemOsIdentity { .. } => "system.os.identity",
+            Self::SystemUptime { .. } => "system.uptime",
         }
     }
 }
@@ -133,12 +145,27 @@ mod tests {
     }
 
     #[test]
+    fn parses_uptime_without_arguments() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-3","tool":"system.uptime","arguments":{}}"#,
+        )
+        .expect("uptime request should parse");
+        assert_eq!(request.tool_name(), "system.uptime");
+    }
+
+    #[test]
     fn rejects_unknown_fields_and_tools() {
         assert!(matches!(
             ToolRequest::parse_json(
                 r#"{"request_id":"req-1","tool":"system.uname","arguments":{},"extra":true}"#
             ),
             Err(RequestError::MalformedJson { .. })
+        ));
+        assert!(matches!(
+            ToolRequest::parse_json(
+                r#"{"request_id":"req-3","tool":"system.uptime","arguments":{"path":"/tmp/fake"}}"#
+            ),
+            Err(RequestError::InvalidArguments { .. })
         ));
         assert!(matches!(
             ToolRequest::parse_json(

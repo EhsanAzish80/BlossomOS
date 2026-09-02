@@ -52,14 +52,14 @@ verification -> audit, including denial and failure paths.
 ## Phase 2: Capability and sandbox foundation
 
 Status: in progress. ADR-0004 defines the accepted capability taxonomy,
-expansion order, privacy rules, and per-tool exit evidence. No Phase 2 tool is
-implemented yet.
+expansion order, privacy rules, and per-tool exit evidence. The completed tools
+remain narrow native reads; later Phase 2 capabilities are not implemented.
 
 - [x] Define the capability taxonomy and expansion rules before adding tools.
 - [ ] Add narrowly scoped system, process, file, and service-read tools in the
   order fixed by ADR-0004.
   - [x] `system.read:os.identity` via bounded native os-release parsing.
-  - [ ] `system.read:uptime`.
+  - [x] `system.read:uptime` via a bounded native `/proc/uptime` read.
   - [ ] `system.read:memory.summary`.
   - [ ] `system.read:storage.summary`.
   - [ ] `process.read:self`.

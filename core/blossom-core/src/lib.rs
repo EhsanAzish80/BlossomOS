@@ -7,6 +7,7 @@ pub mod executor;
 pub mod os_identity;
 pub mod policy;
 pub mod request;
+pub mod uptime;
 pub mod verification;
 
 pub use approval::{ApprovalError, ApprovalStore, ApprovalToken};
@@ -21,4 +22,8 @@ pub use os_identity::{
 };
 pub use policy::{Capability, PolicyDecision, PolicyEngine, PolicyRule};
 pub use request::{RequestError, RequestId, ToolRequest};
-pub use verification::{Verification, verify_execution, verify_os_identity};
+pub use uptime::{
+    MAX_PROC_UPTIME_BYTES, PROC_UPTIME_PATH, ProcUptimeReader, SystemUptime,
+    UnavailableUptimeProvider, UptimeError, UptimeProvider, parse_proc_uptime,
+};
+pub use verification::{Verification, verify_execution, verify_os_identity, verify_uptime};
