@@ -58,6 +58,15 @@ implemented yet.
 - [x] Define the capability taxonomy and expansion rules before adding tools.
 - [ ] Add narrowly scoped system, process, file, and service-read tools in the
   order fixed by ADR-0004.
+  - [x] `system.read:os.identity` via bounded native os-release parsing.
+  - [ ] `system.read:uptime`.
+  - [ ] `system.read:memory.summary`.
+  - [ ] `system.read:storage.summary`.
+  - [ ] `process.read:self`.
+  - [ ] `process.read:list` with once-only approval.
+  - [ ] One user-selected exact-file read.
+  - [ ] One workspace-contained exact-path write.
+  - [ ] One exact service-status read.
 - [ ] Evaluate and select confinement technologies per resource class by ADR or
   an accepted extension of an existing profile.
 - Enforce environment, working-directory, filesystem, network, timeout, output,

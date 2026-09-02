@@ -4,12 +4,14 @@ use serde::Serialize;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum Capability {
     SystemReadKernelIdentity,
+    SystemReadOsIdentity,
 }
 
 impl Capability {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::SystemReadKernelIdentity => "system.read:kernel.identity",
+            Self::SystemReadOsIdentity => "system.read:os.identity",
         }
     }
 }
@@ -40,6 +42,7 @@ impl PolicyEngine {
     pub fn required_capability(request: &ToolRequest) -> Capability {
         match request {
             ToolRequest::SystemUname { .. } => Capability::SystemReadKernelIdentity,
+            ToolRequest::SystemOsIdentity { .. } => Capability::SystemReadOsIdentity,
         }
     }
 
@@ -68,6 +71,13 @@ mod tests {
     fn denies_by_default() {
         assert_eq!(
             PolicyEngine::default().evaluate(&request()),
+            PolicyDecision::Deny
+        );
+        let os_identity = ToolRequest::SystemOsIdentity {
+            request_id: RequestId::parse("req-os".into()).expect("valid test id"),
+        };
+        assert_eq!(
+            PolicyEngine::default().evaluate(&os_identity),
             PolicyDecision::Deny
         );
     }

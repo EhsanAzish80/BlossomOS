@@ -1,7 +1,11 @@
 #![forbid(unsafe_code)]
 
-use blossom_cli::{ApprovalChoice, Clock, Interaction, exact_preview, run_fixed_diagnostic};
-use blossom_core::{RequestId, ToolRequest, executor::bubblewrap::BubblewrapExecutor};
+use blossom_cli::{
+    ApprovalChoice, Clock, Interaction, exact_preview, run_fixed_diagnostic, run_os_identity,
+};
+use blossom_core::{
+    OsReleaseReader, RequestId, ToolRequest, executor::bubblewrap::BubblewrapExecutor,
+};
 use std::io::{self, IsTerminal, Write};
 use std::sync::mpsc;
 use std::thread;
@@ -67,8 +71,12 @@ impl Interaction for TerminalInteraction {
 }
 
 fn main() {
-    if std::env::args_os().len() != 1 {
-        eprintln!("Usage: blossom-cli\nNo command or argument input is supported in Phase 1.");
+    let arguments = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let os_identity_requested = arguments.as_slice() == ["os-identity"];
+    if !arguments.is_empty() && !os_identity_requested {
+        eprintln!(
+            "Usage: blossom-cli [os-identity]\nNo executable or argument input is supported."
+        );
         std::process::exit(64);
     }
 
@@ -80,6 +88,20 @@ fn main() {
         .expect("generated request identifier is valid");
     let mut interaction = TerminalInteraction;
     let mut clock = SystemClock;
+
+    if os_identity_requested {
+        let outcome = run_os_identity(
+            BubblewrapExecutor::phase1_default(),
+            OsReleaseReader::default(),
+            &mut clock,
+            request_id,
+        );
+        if let Some(result) = outcome.result {
+            println!("{result}");
+        }
+        print!("{}", outcome.activity);
+        std::process::exit(outcome.exit_code);
+    }
 
     if !interaction.is_interactive() {
         let request = ToolRequest::SystemUname {
