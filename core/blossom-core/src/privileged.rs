@@ -110,6 +110,7 @@ pub enum BluetoothRestartFailure {
     OutcomeIndeterminate,
     AuthorizationUnavailable,
     JournalUnavailable,
+    InterruptedBeforeSubmission,
     ProtocolViolation,
 }
 
@@ -188,6 +189,7 @@ pub fn verify_bluetooth_restart_result(
                     | BluetoothRestartFailure::UnitUnavailable
                     | BluetoothRestartFailure::AuthorizationUnavailable
                     | BluetoothRestartFailure::JournalUnavailable
+                    | BluetoothRestartFailure::InterruptedBeforeSubmission
                     | BluetoothRestartFailure::ProtocolViolation
             ) && *job_submitted
             {

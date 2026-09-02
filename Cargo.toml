@@ -1,5 +1,5 @@
 [workspace]
-members = ["core/blossom-core", "apps/blossom-cli"]
+members = ["core/blossom-core", "apps/blossom-cli", "system/privileged-helper"]
 resolver = "3"
 
 [workspace.package]

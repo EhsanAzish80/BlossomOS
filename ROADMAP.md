@@ -96,13 +96,17 @@ its applicable containment tests. See `docs/PHASE_2_BASELINE.md`.
 
 Status: active. ADR-0009 selects the system D-Bus, polkit, idempotency, audit,
 and hardening boundary. ADR-0010 fixes the first operation to a try-restart of
-the already-running `bluetooth.service`. No privileged code is implemented yet.
+the already-running `bluetooth.service`. The portable helper state machine is
+implemented, but it is not yet a root service and exposes no system-bus method.
 
 - [x] Design a minimal typed helper and polkit policy boundary.
 - [ ] Add the fixed low-complexity Bluetooth try-restart operation with approval
   and verification.
   - [x] Define the closed shared request/result protocol, normalized digest, and
     independent result verifier without registering or exposing the tool.
+  - [x] Implement the portable helper security state machine with independent
+    authorization/manager adapters, replay-safe journal transitions, truthful
+    interruption outcomes, verification, and redacted transition events.
   - [ ] Implement and package the helper, polkit check, idempotency journal,
     systemd operation, interactive client, double audit, and Linux evidence.
 - Complete threat review, negative tests, replay protection, and audit coverage.
