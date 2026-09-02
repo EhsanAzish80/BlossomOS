@@ -121,6 +121,9 @@ implemented, but it is not yet a root service and exposes no system-bus method.
     capture and the concrete polkit, journal, audit, and systemd components.
   - [x] Add the reviewed package boundary: hardened systemd unit, exact D-Bus
     activation/policy files, one polkit action, and automated drift validation.
+  - [x] Add the interactive CLI path with exact fixed-operation preview,
+    once-only approval, secure random idempotency, non-TTY denial, independent
+    result verification, and correlated readable activity.
   - [ ] Wire and package the helper, polkit check, root-owned runtime journal,
     systemd operation, interactive client, double audit, and Linux evidence.
 - Complete threat review, negative tests, replay protection, and audit coverage.
