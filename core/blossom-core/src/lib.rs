@@ -7,6 +7,7 @@ pub mod executor;
 pub mod memory_summary;
 pub mod os_identity;
 pub mod policy;
+pub mod process_list;
 pub mod process_self;
 pub mod request;
 pub mod storage_summary;
@@ -29,6 +30,12 @@ pub use os_identity::{
     UnavailableOsIdentityProvider, parse_os_release,
 };
 pub use policy::{Capability, PolicyDecision, PolicyEngine, PolicyRule};
+pub use process_list::{
+    MAX_PROCESS_DIRECTORY_ENTRIES, MAX_PROCESS_NAME_BYTES, MAX_PROCESS_RESULTS,
+    MAX_PROCESS_STATUS_BYTES, MAX_PROCESS_STATUS_LINES, PROC_ROOT, ProcProcessListReader,
+    ProcessList, ProcessListEntry, ProcessListError, ProcessListProvider, ProcessListSource,
+    ProcessState, UnavailableProcessListProvider, parse_process_status,
+};
 pub use process_self::{
     NativeProcessSelfReader, ProcessSelf, ProcessSelfError, ProcessSelfProvider, ProcessSelfSource,
     UnavailableProcessSelfProvider,
@@ -43,6 +50,6 @@ pub use uptime::{
     UnavailableUptimeProvider, UptimeError, UptimeProvider, parse_proc_uptime,
 };
 pub use verification::{
-    Verification, verify_execution, verify_memory_summary, verify_os_identity, verify_process_self,
-    verify_storage_summary, verify_uptime,
+    Verification, verify_execution, verify_memory_summary, verify_os_identity, verify_process_list,
+    verify_process_self, verify_storage_summary, verify_uptime,
 };

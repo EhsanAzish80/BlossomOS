@@ -1,12 +1,14 @@
 #![forbid(unsafe_code)]
 
 use blossom_cli::{
-    ApprovalChoice, Clock, Interaction, exact_preview, run_fixed_diagnostic, run_memory_summary,
-    run_os_identity, run_process_self, run_storage_summary, run_uptime,
+    ApprovalChoice, Clock, Interaction, exact_preview, process_list_preview, run_fixed_diagnostic,
+    run_memory_summary, run_os_identity, run_process_list, run_process_self, run_storage_summary,
+    run_uptime,
 };
 use blossom_core::{
-    NativeProcessSelfReader, OsReleaseReader, ProcMeminfoReader, ProcUptimeReader, RequestId,
-    RootStorageReader, ToolRequest, executor::bubblewrap::BubblewrapExecutor,
+    NativeProcessSelfReader, OsReleaseReader, ProcMeminfoReader, ProcProcessListReader,
+    ProcUptimeReader, RequestId, RootStorageReader, ToolRequest,
+    executor::bubblewrap::BubblewrapExecutor,
 };
 use std::io::{self, IsTerminal, Write};
 use std::sync::mpsc;
@@ -79,15 +81,17 @@ fn main() {
     let memory_requested = arguments.as_slice() == ["memory-summary"];
     let storage_requested = arguments.as_slice() == ["storage-summary"];
     let process_self_requested = arguments.as_slice() == ["process-self"];
+    let process_list_requested = arguments.as_slice() == ["process-list"];
     if !arguments.is_empty()
         && !os_identity_requested
         && !uptime_requested
         && !memory_requested
         && !storage_requested
         && !process_self_requested
+        && !process_list_requested
     {
         eprintln!(
-            "Usage: blossom-cli [os-identity|uptime|memory-summary|storage-summary|process-self]\nNo executable or argument input is supported."
+            "Usage: blossom-cli [os-identity|uptime|memory-summary|storage-summary|process-self|process-list]\nNo executable or argument input is supported."
         );
         std::process::exit(64);
     }
@@ -161,6 +165,28 @@ fn main() {
         let outcome = run_process_self(
             BubblewrapExecutor::phase1_default(),
             NativeProcessSelfReader,
+            &mut clock,
+            request_id,
+        );
+        if let Some(result) = outcome.result {
+            println!("{result}");
+        }
+        print!("{}", outcome.activity);
+        std::process::exit(outcome.exit_code);
+    }
+
+    if process_list_requested {
+        let request = ToolRequest::ProcessList {
+            request_id: request_id.clone(),
+        };
+        if !interaction.is_interactive() {
+            println!("{}\n", process_list_preview(&request));
+            println!("Non-interactive input is denied by default.\n");
+        }
+        let outcome = run_process_list(
+            BubblewrapExecutor::phase1_default(),
+            ProcProcessListReader,
+            &mut interaction,
             &mut clock,
             request_id,
         );
