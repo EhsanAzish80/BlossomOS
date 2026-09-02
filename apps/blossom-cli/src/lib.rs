@@ -2,10 +2,10 @@
 
 use blossom_core::{
     ApprovalError, ApprovalStore, AuditEvent, AuditLog, BeginOutcome, BlossomEngine, Capability,
-    EngineError, Executor, MemorySummary, MemorySummaryProvider, OsIdentity, OsIdentityProvider,
-    PolicyDecision, PolicyEngine, PolicyRule, ProcessList, ProcessListProvider, ProcessSelf,
-    ProcessSelfProvider, RequestId, StorageSummary, StorageSummaryProvider, SystemUptime,
-    ToolOutput, ToolRequest, UptimeProvider, command_for,
+    EngineError, Executor, FileContent, FileContentProvider, MemorySummary, MemorySummaryProvider,
+    OsIdentity, OsIdentityProvider, PolicyDecision, PolicyEngine, PolicyRule, ProcessList,
+    ProcessListProvider, ProcessSelf, ProcessSelfProvider, RequestId, StorageSummary,
+    StorageSummaryProvider, SystemUptime, ToolOutput, ToolRequest, UptimeProvider, command_for,
 };
 use std::fmt::Write as _;
 
@@ -342,6 +342,83 @@ pub fn process_list_preview(request: &ToolRequest) -> String {
     )
 }
 
+pub fn run_file_read<E, F, I, C>(
+    executor: E,
+    file_content: F,
+    interaction: &mut I,
+    clock: &mut C,
+    request_id: RequestId,
+) -> RunOutcome
+where
+    E: Executor,
+    F: FileContentProvider,
+    I: Interaction,
+    C: Clock,
+{
+    let selection = file_content.selection().clone();
+    let policy = PolicyEngine::new(vec![PolicyRule {
+        capability: Capability::FilesReadContent,
+        decision: PolicyDecision::Ask,
+    }]);
+    let mut engine = BlossomEngine::with_file_content(
+        policy,
+        ApprovalStore::new(APPROVAL_TTL_MS),
+        executor,
+        file_content,
+    );
+    let request_json = serde_json::json!({
+        "request_id": request_id.as_str(), "tool": "files.read.content",
+        "arguments": { "selection": selection }
+    })
+    .to_string();
+    let (request, token) = match engine.begin(&request_json, clock.now_ms()) {
+        Ok(BeginOutcome::ApprovalRequired { request, token }) => (request, token),
+        _ => return outcome(1, &engine),
+    };
+    let preview = file_read_preview(&request);
+    let choice = if interaction.is_interactive() {
+        interaction.choose(&preview)
+    } else {
+        ApprovalChoice::Deny
+    };
+    let decided_at = clock.now_ms();
+    match choice {
+        ApprovalChoice::ApproveOnce => match engine.approve(token, request, decided_at) {
+            Ok(completed) => match completed.output {
+                ToolOutput::FileContent(result) if completed.verification.succeeded => {
+                    outcome_with_result(0, Some(render_file_content(&result)), &engine)
+                }
+                _ => outcome(1, &engine),
+            },
+            Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+        ApprovalChoice::Deny => match engine.deny_approval(token, request, decided_at) {
+            Ok(()) => outcome(2, &engine),
+            Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+        ApprovalChoice::Cancel => match engine.cancel_approval(token, request, decided_at) {
+            Ok(()) => outcome(2, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+    }
+}
+
+pub fn file_read_preview(request: &ToolRequest) -> String {
+    let ToolRequest::FilesReadContent { selection, .. } = request else {
+        return "Invalid file-read request".into();
+    };
+    format!(
+        "Request: {}\nReason: read one user-selected text file\nPolicy decision: ask\nApproval: once only\nCapability: files.read:content\nExact path: {}\nSelected identity: device={}, inode={}, size={} bytes\nMaximum content: 65536 bytes\nResolution: Linux openat2, no symlinks or magic links\nRead source: retained selected descriptor\nCommand: none (native Linux read)\nDirectories, globbing, relative paths, writes, network, and privilege: denied",
+        request.request_id().as_str(),
+        selection.absolute_path,
+        selection.identity.device,
+        selection.identity.inode,
+        selection.identity.size,
+    )
+}
+
 pub fn exact_preview(request: &ToolRequest) -> String {
     let command = command_for(request).expect("approval preview is command-backed");
     let command_line = std::iter::once(command.program.display().to_string())
@@ -383,9 +460,10 @@ fn outcome<
     S: StorageSummaryProvider,
     P: ProcessSelfProvider,
     L: ProcessListProvider,
+    F: FileContentProvider,
 >(
     exit_code: i32,
-    engine: &BlossomEngine<E, O, U, M, S, P, L>,
+    engine: &BlossomEngine<E, O, U, M, S, P, L, F>,
 ) -> RunOutcome {
     outcome_with_result(exit_code, None, engine)
 }
@@ -398,10 +476,11 @@ fn outcome_with_result<
     S: StorageSummaryProvider,
     P: ProcessSelfProvider,
     L: ProcessListProvider,
+    F: FileContentProvider,
 >(
     exit_code: i32,
     result: Option<String>,
-    engine: &BlossomEngine<E, O, U, M, S, P, L>,
+    engine: &BlossomEngine<E, O, U, M, S, P, L, F>,
 ) -> RunOutcome {
     RunOutcome {
         exit_code,
@@ -498,6 +577,14 @@ fn render_process_list(list: &ProcessList) -> String {
     output
 }
 
+fn render_file_content(result: &FileContent) -> String {
+    let escaped = serde_json::to_string(&result.content).expect("UTF-8 content is serializable");
+    format!(
+        "Selected text file\n  Path: {}\n  Bytes: {}\n  SHA-256: {}\n  Content (JSON escaped): {}\n",
+        result.selection.absolute_path, result.source_bytes, result.source_sha256, escaped
+    )
+}
+
 fn describe_event(event: &AuditEvent) -> String {
     match event {
         AuditEvent::RequestRejected { category } => format!("request rejected ({category})"),
@@ -591,6 +678,18 @@ fn describe_event(event: &AuditEvent) -> String {
                 "request {request_id} read {returned_entries} same-user process records via {source}; skipped={skipped_entries}, truncated={truncated}"
             )
         }
+        AuditEvent::FileContentReadFinished {
+            request_id,
+            path_sha256,
+            device,
+            inode,
+            source_bytes,
+            source_sha256,
+        } => {
+            format!(
+                "request {request_id} read {source_bytes} bytes from selected file path_sha256={path_sha256}, device={device}, inode={inode}, content_sha256={source_sha256}"
+            )
+        }
         AuditEvent::NativeReadFailed {
             request_id,
             resource,
@@ -622,6 +721,15 @@ fn describe_event(event: &AuditEvent) -> String {
             error,
         } => {
             format!("request {request_id} native read of {resource} failed ({error})")
+        }
+        AuditEvent::FileContentReadFailed {
+            request_id,
+            path_sha256,
+            error,
+        } => {
+            format!(
+                "request {request_id} selected file read failed for path_sha256={path_sha256} ({error})"
+            )
         }
         AuditEvent::VerificationFinished {
             request_id,

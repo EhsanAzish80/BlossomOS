@@ -124,4 +124,40 @@ mod tests {
             Err(ApprovalError::Expired)
         );
     }
+
+    #[test]
+    fn file_approval_binds_every_selected_identity_field() {
+        use crate::file_read::{FileIdentity, FileSelection};
+        let selected = ToolRequest::FilesReadContent {
+            request_id: RequestId::parse("file-approval".into()).expect("id"),
+            selection: FileSelection {
+                absolute_path: "/home/user/note.txt".into(),
+                identity: FileIdentity {
+                    device: 1,
+                    inode: 2,
+                    size: 3,
+                    modified_seconds: 4,
+                    modified_nanoseconds: 5,
+                    changed_seconds: 6,
+                    changed_nanoseconds: 7,
+                },
+            },
+        };
+        let mut changed = selected.clone();
+        let ToolRequest::FilesReadContent { selection, .. } = &mut changed else {
+            unreachable!()
+        };
+        selection.identity.inode = 99;
+        let mut store = ApprovalStore::new(100);
+        let token = store.issue(selected.clone(), 1_000);
+        assert_eq!(
+            store.consume(token, &changed, 1_001),
+            Err(ApprovalError::BindingMismatch)
+        );
+        assert_eq!(store.consume(token, &selected, 1_001), Ok(()));
+        assert_eq!(
+            store.consume(token, &selected, 1_002),
+            Err(ApprovalError::Replay)
+        );
+    }
 }

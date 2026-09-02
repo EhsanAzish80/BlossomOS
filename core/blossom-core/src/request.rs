@@ -1,3 +1,4 @@
+use crate::file_read::{FileSelection, validate_selected_path};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
@@ -28,13 +29,31 @@ impl RequestId {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub enum ToolRequest {
-    SystemUname { request_id: RequestId },
-    SystemOsIdentity { request_id: RequestId },
-    SystemUptime { request_id: RequestId },
-    SystemMemorySummary { request_id: RequestId },
-    SystemStorageSummary { request_id: RequestId },
-    ProcessSelf { request_id: RequestId },
-    ProcessList { request_id: RequestId },
+    SystemUname {
+        request_id: RequestId,
+    },
+    SystemOsIdentity {
+        request_id: RequestId,
+    },
+    SystemUptime {
+        request_id: RequestId,
+    },
+    SystemMemorySummary {
+        request_id: RequestId,
+    },
+    SystemStorageSummary {
+        request_id: RequestId,
+    },
+    ProcessSelf {
+        request_id: RequestId,
+    },
+    ProcessList {
+        request_id: RequestId,
+    },
+    FilesReadContent {
+        request_id: RequestId,
+        selection: FileSelection,
+    },
 }
 
 impl ToolRequest {
@@ -101,6 +120,26 @@ impl ToolRequest {
                 })?;
                 Ok(Self::ProcessList { request_id })
             }
+            "files.read.content" => {
+                let arguments = serde_json::from_value::<FileReadArguments>(envelope.arguments)
+                    .map_err(|error| RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    })?;
+                validate_selected_path(&arguments.selection.absolute_path).map_err(|error| {
+                    RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    }
+                })?;
+                if !arguments.selection.identity.is_valid() {
+                    return Err(RequestError::InvalidArguments {
+                        message: "invalid selected file identity".into(),
+                    });
+                }
+                Ok(Self::FilesReadContent {
+                    request_id,
+                    selection: arguments.selection,
+                })
+            }
             _ => Err(RequestError::UnknownTool {
                 tool: envelope.tool,
             }),
@@ -116,6 +155,7 @@ impl ToolRequest {
             | Self::SystemStorageSummary { request_id }
             | Self::ProcessSelf { request_id }
             | Self::ProcessList { request_id } => request_id,
+            Self::FilesReadContent { request_id, .. } => request_id,
         }
     }
 
@@ -128,6 +168,7 @@ impl ToolRequest {
             Self::SystemStorageSummary { .. } => "system.storage.summary",
             Self::ProcessSelf { .. } => "process.self",
             Self::ProcessList { .. } => "process.list",
+            Self::FilesReadContent { .. } => "files.read.content",
         }
     }
 }
@@ -143,6 +184,12 @@ struct RequestEnvelope {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct NoArguments {}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileReadArguments {
+    selection: FileSelection,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RequestError {
@@ -168,6 +215,39 @@ impl std::error::Error for RequestError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn file_request_json(path: &str) -> String {
+        serde_json::json!({
+            "request_id": "req-file", "tool": "files.read.content",
+            "arguments": { "selection": { "absolute_path": path, "identity": {
+                "device": 1, "inode": 2, "size": 3, "modified_seconds": 4,
+                "modified_nanoseconds": 5, "changed_seconds": 6, "changed_nanoseconds": 7
+            }}}
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn parses_exact_file_selection_and_rejects_scope_expansion() {
+        let request = ToolRequest::parse_json(&file_request_json("/home/user/note.txt"))
+            .expect("exact selection");
+        let ToolRequest::FilesReadContent { selection, .. } = request else {
+            panic!("file request")
+        };
+        assert_eq!(selection.absolute_path, "/home/user/note.txt");
+        assert_eq!(selection.identity.inode, 2);
+        assert!(matches!(
+            ToolRequest::parse_json(&file_request_json("relative")),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+        assert!(matches!(
+            ToolRequest::parse_json(
+                &file_request_json("/home/user/note.txt")
+                    .replace("\"inode\":2", "\"inode\":2,\"mounts\":[]")
+            ),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+    }
 
     #[test]
     fn parses_the_registered_tool() {

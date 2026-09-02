@@ -42,7 +42,7 @@ Phase 1 also implements a separate Rust security vertical slice:
 
 This slice is a tested foundation, not a general command runner or finished OS.
 
-Phase 2 currently adds six native read capabilities:
+Phase 2 currently adds seven native read capabilities:
 `system.read:os.identity`, `system.read:uptime`, and
 `system.read:memory.summary`, root-scoped `system.read:storage.summary`, and
 `process.read:self`, plus approval-gated `process.read:list`.
@@ -52,8 +52,14 @@ uptime, memory, storage, or process identifiers into the audit log.
 `process.read:self` is restricted to Blossom's own minimal native identity;
 `process.read:list` returns at most 256 same-effective-user PIDs, short kernel
 names, and coarse states after explicit once-only approval. It never reads
-command lines, environments, open files, sockets, or process memory. Later
-Phase 2 capabilities are not implemented.
+command lines, environments, open files, sockets, or process memory.
+
+The seventh capability, `files.read:content`, requires an absolute user-selected
+path and once-only approval. On Linux it uses `openat2` to reject symlinked path
+components, retains the selected descriptor across approval, revalidates file
+identity, and reads at most 64 KiB of UTF-8 text. It provides no relative paths,
+directory listing, globbing, binary-file transport, or write access.
+Remaining Phase 2 capabilities are not implemented.
 
 ### Planned, not implemented
 

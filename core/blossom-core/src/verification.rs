@@ -1,4 +1,5 @@
 use crate::executor::ExecutionResult;
+use crate::file_read::{FileContent, MAX_FILE_CONTENT_BYTES, validate_selected_path};
 use crate::memory_summary::{MAX_PROC_MEMINFO_BYTES, MemorySummary, PROC_MEMINFO_PATH};
 use crate::os_identity::{MAX_OS_RELEASE_BYTES, MAX_OS_RELEASE_VALUE_BYTES, OsIdentity};
 use crate::process_list::{
@@ -40,6 +41,35 @@ pub enum VerificationReason {
     ValidProcessList,
     InvalidProcessListProvenance,
     InvalidProcessListSchema,
+    ValidFileContent,
+    InvalidFileContentProvenance,
+    InvalidFileContentSchema,
+}
+
+pub fn verify_file_content(result: &FileContent) -> Verification {
+    use sha2::{Digest, Sha256};
+    let bytes = result.content.as_bytes();
+    let expected_digest = Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let provenance_valid = validate_selected_path(&result.selection.absolute_path).is_ok()
+        && result.selection.identity.is_valid()
+        && result.selection.identity.size == result.source_bytes as u64
+        && result.source_sha256 == expected_digest;
+    let schema_valid =
+        result.source_bytes == bytes.len() && result.source_bytes <= MAX_FILE_CONTENT_BYTES;
+    let reason = if !provenance_valid {
+        VerificationReason::InvalidFileContentProvenance
+    } else if !schema_valid {
+        VerificationReason::InvalidFileContentSchema
+    } else {
+        VerificationReason::ValidFileContent
+    };
+    Verification {
+        succeeded: reason == VerificationReason::ValidFileContent,
+        reason,
+    }
 }
 
 pub fn verify_process_list(list: &ProcessList) -> Verification {
@@ -205,6 +235,40 @@ pub fn verify_execution(result: &ExecutionResult) -> Verification {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verifies_file_content_and_exact_provenance_without_reopening() {
+        use crate::file_read::{FileIdentity, FileSelection};
+        use sha2::{Digest, Sha256};
+        let content = "hello".to_string();
+        let digest = Sha256::digest(content.as_bytes())
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect();
+        let mut result = FileContent {
+            selection: FileSelection {
+                absolute_path: "/home/user/note.txt".into(),
+                identity: FileIdentity {
+                    device: 1,
+                    inode: 2,
+                    size: 5,
+                    modified_seconds: 3,
+                    modified_nanoseconds: 4,
+                    changed_seconds: 5,
+                    changed_nanoseconds: 6,
+                },
+            },
+            content,
+            source_bytes: 5,
+            source_sha256: digest,
+        };
+        assert!(verify_file_content(&result).succeeded);
+        result.selection.absolute_path = "/home/user/../secret".into();
+        assert_eq!(
+            verify_file_content(&result).reason,
+            VerificationReason::InvalidFileContentProvenance
+        );
+    }
 
     #[test]
     fn verifies_process_list_schema_and_provenance_without_io() {
