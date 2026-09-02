@@ -1,0 +1,26 @@
+#!/bin/bash
+# BlossomOS Quick Launcher - Just boot and go!
+
+cd "$(dirname "$0")/../build/out"
+
+echo "🌸 Starting BlossomOS..."
+echo ""
+echo "Login: blossom / blossom"
+echo "Root: root / (your password)"
+echo ""
+echo "VM window will open shortly..."
+
+qemu-system-x86_64 \
+    -name "BlossomOS" \
+    -m 4G \
+    -smp 2 \
+    -drive file=blossomos-disk.qcow2,format=qcow2 \
+    -boot c \
+    -vga std \
+    -display cocoa \
+    -netdev user,id=net0,hostfwd=tcp::2222-:22 \
+    -device e1000,netdev=net0 \
+    > /dev/null 2>&1 &
+
+echo "✅ BlossomOS started!"
+echo "Check for the QEMU window"
