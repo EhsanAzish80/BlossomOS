@@ -6,6 +6,10 @@ license.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "blossom-privileged-helper"
+path = "src/main.rs"
+
 [dependencies]
 blossom-core = { path = "../../core/blossom-core" }
 libc.workspace = true

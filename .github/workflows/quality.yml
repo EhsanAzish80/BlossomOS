@@ -34,6 +34,13 @@ jobs:
       - name: Run repository checks
         run: python3 scripts/ci/check_repository.py
 
+      - name: Validate privileged helper packaging boundary
+        run: |
+          python3 scripts/ci/check_privileged_packaging.py
+          sudo install -d -m 0755 /usr/lib/blossom-os
+          sudo install -m 0755 /bin/true /usr/lib/blossom-os/blossom-privileged-helper
+          systemd-analyze verify system/privileged-helper/packaging/blossom-privileged-helper.service
+
       - name: Run prototype smoke tests
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
 

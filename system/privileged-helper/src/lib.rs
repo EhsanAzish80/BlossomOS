@@ -19,6 +19,10 @@ pub use systemd_bluetooth::SystemdBluetoothManager;
 mod polkit_authorizer;
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 pub use polkit_authorizer::PolkitAuthorizer;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod system_service;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+pub use system_service::{PrivilegedRequestHandler, PrivilegedService};
 #[cfg(unix)]
 mod file_audit;
 #[cfg(unix)]
@@ -678,9 +682,6 @@ impl<A: Authorizer, M: BluetoothManager, J: IdempotencyJournal, L: HelperAudit>
         digest: &str,
         result: BluetoothRestartResult,
     ) -> BluetoothRestartResult {
-        if self.journal.complete(key, digest, &result).is_err() {
-            return journal_failure_from_result(&result);
-        }
         let category = match result.outcome {
             BluetoothRestartOutcome::RestartedActive { .. } => "restarted_active",
             BluetoothRestartOutcome::NotRunning { .. } => "not_running",
@@ -694,6 +695,9 @@ impl<A: Authorizer, M: BluetoothManager, J: IdempotencyJournal, L: HelperAudit>
             })
             .is_err()
         {
+            return journal_failure_from_result(&result);
+        }
+        if self.journal.complete(key, digest, &result).is_err() {
             return journal_failure_from_result(&result);
         }
         result
@@ -1090,6 +1094,34 @@ mod tests {
         let result = helper.handle(caller(), request());
         assert!(matches!(
             result.outcome,
+            BluetoothRestartOutcome::Failed {
+                error: BluetoothRestartFailure::OutcomeIndeterminate,
+                job_submitted: true
+            }
+        ));
+        assert_eq!(helper.into_parts().1.calls, 1);
+    }
+
+    #[test]
+    fn terminal_audit_failure_cannot_leave_a_replayable_success() {
+        let audit = FailAuditAt {
+            call: 0,
+            // request, authorization, claim, observation, submitted, job,
+            // verification, terminal result
+            fail_at: 8,
+        };
+        let mut helper = PrivilegedHelper::new(Allow, manager(), MemoryJournal::default(), audit);
+        let first = helper.handle(caller(), request());
+        assert!(matches!(
+            first.outcome,
+            BluetoothRestartOutcome::Failed {
+                error: BluetoothRestartFailure::OutcomeIndeterminate,
+                job_submitted: true
+            }
+        ));
+        let replay = helper.handle(caller(), request());
+        assert!(matches!(
+            replay.outcome,
             BluetoothRestartOutcome::Failed {
                 error: BluetoothRestartFailure::OutcomeIndeterminate,
                 job_submitted: true
