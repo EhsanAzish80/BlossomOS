@@ -26,6 +26,7 @@ compatibility, packaging, or contributor obligations.
 - Phase 1 Linux sandbox adapter: accepted in ADR-0003.
 - Phase 2 capability taxonomy and expansion rules: accepted in ADR-0004.
 - Exact-file read containment: accepted in ADR-0005.
+- Atomic create-only workspace file writes: accepted in ADR-0006.
 - Local IPC transport and schema format.
 - Sandbox and resource-control stack.
 - Privileged-helper authorization design.

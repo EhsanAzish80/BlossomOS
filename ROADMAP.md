@@ -73,6 +73,8 @@ remain narrow native reads; later Phase 2 capabilities are not implemented.
   an accepted extension of an existing profile.
   - [x] Exact-file reads: Linux `openat2` no-symlink resolution plus a retained
     descriptor and identity revalidation (ADR-0005).
+  - [x] Workspace file creation: retained directory descriptors, no mount or
+    symlink traversal, and atomic no-replace publication (ADR-0006).
 - Enforce environment, working-directory, filesystem, network, timeout, output,
   process, and resource controls.
 - Add property, adversarial, and integration tests for the security boundary.
