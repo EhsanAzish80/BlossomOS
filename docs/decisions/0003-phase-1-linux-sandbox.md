@@ -22,7 +22,8 @@ The adapter:
 
 - supports only the fixed `/usr/bin/uname -s` diagnostic;
 - invokes argv directly and never invokes a shell;
-- unshares all supported namespaces, including network;
+- unshares all supported namespaces, including an explicit user namespace and
+  network;
 - exposes `/usr` read-only and creates only minimal `/proc`, `/dev`, and temporary
   `/tmp` views;
 - clears the environment and re-adds only validated entries;

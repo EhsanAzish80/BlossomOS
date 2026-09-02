@@ -56,6 +56,7 @@ pub fn bubblewrap_arguments(command: &CommandSpec) -> Result<Vec<OsString>, Exec
         "--die-with-parent",
         "--new-session",
         "--unshare-all",
+        "--unshare-user",
         "--disable-userns",
         "--cap-drop",
         "ALL",
@@ -237,6 +238,7 @@ mod tests {
             .map(|argument| argument.to_string_lossy())
             .collect::<Vec<_>>();
         assert!(arguments.contains(&"--unshare-all".into()));
+        assert!(arguments.contains(&"--unshare-user".into()));
         assert!(arguments.contains(&"--disable-userns".into()));
         assert!(arguments.contains(&"--clearenv".into()));
         assert!(arguments.contains(&"--ro-bind".into()));
