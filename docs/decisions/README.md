@@ -25,6 +25,7 @@ compatibility, packaging, or contributor obligations.
 - Phase 1 implementation language: accepted in ADR-0002.
 - Phase 1 Linux sandbox adapter: accepted in ADR-0003.
 - Phase 2 capability taxonomy and expansion rules: accepted in ADR-0004.
+- Exact-file read containment: accepted in ADR-0005.
 - Local IPC transport and schema format.
 - Sandbox and resource-control stack.
 - Privileged-helper authorization design.
