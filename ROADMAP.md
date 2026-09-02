@@ -94,13 +94,14 @@ its applicable containment tests. See `docs/PHASE_2_BASELINE.md`.
 
 ## Phase 3: Privileged operations
 
-Status: active. ADR-0009 selects the system D-Bus, polkit, idempotency, audit,
+Status: completion review. ADR-0009 selects the system D-Bus, polkit, idempotency, audit,
 and hardening boundary. ADR-0010 fixes the first operation to a try-restart of
-the already-running `bluetooth.service`. The portable helper state machine is
-implemented, but it is not yet a root service and exposes no system-bus method.
+the already-running `bluetooth.service`. The single system-bus method, fixed
+native adapters, durable state, packaging boundary, and interactive client are
+implemented. They remain pre-alpha and are not installed by this repository.
 
 - [x] Design a minimal typed helper and polkit policy boundary.
-- [ ] Add the fixed low-complexity Bluetooth try-restart operation with approval
+- [x] Add the fixed low-complexity Bluetooth try-restart operation with approval
   and verification.
   - [x] Define the closed shared request/result protocol, normalized digest, and
     independent result verifier without registering or exposing the tool.
@@ -124,11 +125,13 @@ implemented, but it is not yet a root service and exposes no system-bus method.
   - [x] Add the interactive CLI path with exact fixed-operation preview,
     once-only approval, secure random idempotency, non-TTY denial, independent
     result verification, and correlated readable activity.
-  - [ ] Wire and package the helper, polkit check, root-owned runtime journal,
+  - [x] Wire and package the helper, polkit check, root-owned runtime journal,
     systemd operation, interactive client, double audit, and Linux evidence.
-- Complete threat review, negative tests, replay protection, and audit coverage.
+- [x] Complete threat review, negative tests, replay protection, and audit coverage.
 
-Exit: independent review confirms there is no generic root command path.
+Exit candidate: `docs/PHASE_3_BASELINE.md` records the requirement-by-requirement
+evidence and independent no-generic-root-path review. Phase 3 becomes complete
+only after that checkpoint passes protected CI and is merged to `main`.
 
 ## Phase 4: Replaceable local AI runtime
 
