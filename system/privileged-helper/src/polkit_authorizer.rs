@@ -169,11 +169,21 @@ mod tests {
         }
     }
 
+    #[derive(Clone, Copy, Default)]
+    enum Behavior {
+        #[default]
+        Allow,
+        Deny,
+        Challenge,
+        Delay,
+    }
+
     #[derive(Default)]
     struct Seen {
         valid: bool,
         calls: usize,
         expected_name: String,
+        behavior: Behavior,
     }
 
     struct Authority(Arc<Mutex<Seen>>);
@@ -181,7 +191,7 @@ mod tests {
     #[zbus::interface(name = "org.freedesktop.PolicyKit1.Authority")]
     impl Authority {
         #[zbus(name = "CheckAuthorization")]
-        fn check_authorization(
+        async fn check_authorization(
             &self,
             subject: (String, HashMap<String, OwnedValue>),
             action: String,
@@ -194,18 +204,29 @@ mod tests {
                 .get("name")
                 .and_then(|value| value.try_clone().ok())
                 .and_then(|value| String::try_from(value).ok());
-            let mut seen = self.0.lock().unwrap();
-            let valid = subject.0 == "system-bus-name"
-                && name.as_deref() == Some(seen.expected_name.as_str())
-                && action == BLUETOOTH_POLKIT_ACTION
-                && details.get("blossom.operation").map(String::as_str) == Some(BLUETOOTH_METHOD)
-                && details.get("blossom.unit").map(String::as_str) == Some(BLUETOOTH_UNIT)
-                && details.get("blossom.correlation").map(String::as_str) == Some("request-1")
-                && flags == ALLOW_USER_INTERACTION
-                && cancellation_id.is_empty();
-            seen.calls += 1;
-            seen.valid = valid;
-            (valid, false, HashMap::new())
+            let (valid, behavior) = {
+                let mut seen = self.0.lock().unwrap();
+                let valid = subject.0 == "system-bus-name"
+                    && name.as_deref() == Some(seen.expected_name.as_str())
+                    && action == BLUETOOTH_POLKIT_ACTION
+                    && details.get("blossom.operation").map(String::as_str)
+                        == Some(BLUETOOTH_METHOD)
+                    && details.get("blossom.unit").map(String::as_str) == Some(BLUETOOTH_UNIT)
+                    && details.get("blossom.correlation").map(String::as_str) == Some("request-1")
+                    && flags == ALLOW_USER_INTERACTION
+                    && cancellation_id.is_empty();
+                seen.calls += 1;
+                seen.valid = valid;
+                (valid, seen.behavior)
+            };
+            if matches!(behavior, Behavior::Delay) {
+                async_io::Timer::after(Duration::from_millis(100)).await;
+            }
+            match behavior {
+                Behavior::Allow | Behavior::Delay => (valid, false, HashMap::new()),
+                Behavior::Deny => (false, false, HashMap::new()),
+                Behavior::Challenge => (false, true, HashMap::new()),
+            }
         }
     }
 
@@ -275,6 +296,49 @@ mod tests {
         assert_eq!(
             authorizer.authorize(&caller(&sender), &request(true)),
             AuthorizationDecision::Unavailable
+        );
+    }
+
+    fn authorize_with_behavior(behavior: Behavior, timeout: Duration) -> AuthorizationDecision {
+        let (_bus, address) = test_bus();
+        let client = zbus::blocking::connection::Builder::address(address.as_str())
+            .unwrap()
+            .build()
+            .unwrap();
+        let sender = client.inner().unique_name().unwrap().to_string();
+        let seen = Arc::new(Mutex::new(Seen {
+            expected_name: sender.clone(),
+            behavior,
+            ..Seen::default()
+        }));
+        let _service = zbus::blocking::connection::Builder::address(address.as_str())
+            .unwrap()
+            .name(POLKIT_DESTINATION)
+            .unwrap()
+            .serve_at(POLKIT_PATH, Authority(seen))
+            .unwrap()
+            .build()
+            .unwrap();
+        PolkitAuthorizer { address, timeout }.authorize(&caller(&sender), &request(true))
+    }
+
+    #[test]
+    fn denial_and_challenge_never_authorize() {
+        assert_eq!(
+            authorize_with_behavior(Behavior::Deny, Duration::from_secs(2)),
+            AuthorizationDecision::Denied
+        );
+        assert_eq!(
+            authorize_with_behavior(Behavior::Challenge, Duration::from_secs(2)),
+            AuthorizationDecision::Denied
+        );
+    }
+
+    #[test]
+    fn an_unfinished_authorization_expires_closed() {
+        assert_eq!(
+            authorize_with_behavior(Behavior::Delay, Duration::from_millis(10)),
+            AuthorizationDecision::Expired
         );
     }
 

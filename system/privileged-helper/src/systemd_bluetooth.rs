@@ -220,6 +220,10 @@ mod tests {
         invocation: u8,
         get_unit_calls: usize,
         restart_calls: usize,
+        unavailable: bool,
+        malformed_invocation: bool,
+        wrong_job_first: bool,
+        wrong_job_only: bool,
     }
 
     struct Manager(Arc<Mutex<State>>);
@@ -228,6 +232,7 @@ mod tests {
     #[zbus(prefix = "org.freedesktop.systemd1")]
     enum MockError {
         Unexpected(String),
+        NoSuchUnit(String),
         #[zbus(error)]
         ZBus(zbus::Error),
     }
@@ -239,7 +244,11 @@ mod tests {
             if name != BLUETOOTH_UNIT {
                 return Err(MockError::Unexpected(name.into()));
             }
-            self.0.lock().unwrap().get_unit_calls += 1;
+            let mut state = self.0.lock().unwrap();
+            state.get_unit_calls += 1;
+            if state.unavailable {
+                return Err(MockError::NoSuchUnit(name.into()));
+            }
             OwnedObjectPath::try_from(UNIT_PATH)
                 .map_err(zbus::Error::from)
                 .map_err(MockError::ZBus)
@@ -263,9 +272,28 @@ mod tests {
             let job = OwnedObjectPath::try_from(JOB_PATH)
                 .map_err(zbus::Error::from)
                 .map_err(MockError::ZBus)?;
-            Self::job_removed(&emitter, 7, job.clone(), unit, "done")
+            let (wrong_job_first, wrong_job_only) = {
+                let state = self.0.lock().unwrap();
+                (state.wrong_job_first, state.wrong_job_only)
+            };
+            if wrong_job_first || wrong_job_only {
+                Self::job_removed(
+                    &emitter,
+                    8,
+                    OwnedObjectPath::try_from("/org/freedesktop/systemd1/job/8")
+                        .map_err(zbus::Error::from)
+                        .map_err(MockError::ZBus)?,
+                    unit,
+                    "done",
+                )
                 .await
                 .map_err(MockError::ZBus)?;
+            }
+            if !wrong_job_only {
+                Self::job_removed(&emitter, 7, job.clone(), unit, "done")
+                    .await
+                    .map_err(MockError::ZBus)?;
+            }
             Ok(job)
         }
 
@@ -300,7 +328,9 @@ mod tests {
 
         #[zbus(property, name = "InvocationID")]
         fn invocation_id(&self) -> Vec<u8> {
-            vec![self.0.lock().unwrap().invocation; 16]
+            let state = self.0.lock().unwrap();
+            let length = if state.malformed_invocation { 15 } else { 16 };
+            vec![state.invocation; length]
         }
     }
 
@@ -359,5 +389,72 @@ mod tests {
             result,
             Err(ManagerError::Disconnected | ManagerError::Timeout)
         ));
+    }
+
+    fn adapter_with_state(
+        state: State,
+        timeout: Duration,
+    ) -> (TestBus, zbus::blocking::Connection, SystemdBluetoothManager) {
+        let (bus, address) = test_bus();
+        let state = Arc::new(Mutex::new(state));
+        let service = zbus::blocking::connection::Builder::address(address.as_str())
+            .unwrap()
+            .name(SYSTEMD_DESTINATION)
+            .unwrap()
+            .serve_at(SYSTEMD_MANAGER_PATH, Manager(state.clone()))
+            .unwrap()
+            .serve_at(UNIT_PATH, Unit(state))
+            .unwrap()
+            .build()
+            .unwrap();
+        (bus, service, SystemdBluetoothManager { address, timeout })
+    }
+
+    #[test]
+    fn ignores_wrong_job_signal_before_the_matching_completion() {
+        let (_bus, _service, mut adapter) = adapter_with_state(
+            State {
+                invocation: 1,
+                wrong_job_first: true,
+                ..State::default()
+            },
+            Duration::from_secs(2),
+        );
+        assert_eq!(adapter.try_restart().unwrap().job_result, "done");
+    }
+
+    #[test]
+    fn wrong_job_only_expires_without_accepting_unrelated_completion() {
+        let (_bus, _service, mut adapter) = adapter_with_state(
+            State {
+                invocation: 1,
+                wrong_job_only: true,
+                ..State::default()
+            },
+            Duration::from_millis(50),
+        );
+        assert_eq!(adapter.try_restart(), Err(ManagerError::Timeout));
+    }
+
+    #[test]
+    fn unavailable_unit_and_malformed_state_fail_closed() {
+        let (_bus, _service, mut unavailable) = adapter_with_state(
+            State {
+                unavailable: true,
+                ..State::default()
+            },
+            Duration::from_secs(2),
+        );
+        assert_eq!(unavailable.observe(), Err(ManagerError::UnitUnavailable));
+
+        let (_bus, _service, mut malformed) = adapter_with_state(
+            State {
+                invocation: 1,
+                malformed_invocation: true,
+                ..State::default()
+            },
+            Duration::from_secs(2),
+        );
+        assert_eq!(malformed.observe(), Err(ManagerError::ProtocolViolation));
     }
 }

@@ -307,6 +307,31 @@ mod tests {
     }
 
     #[test]
+    fn wire_schema_fixtures_are_byte_for_byte_stable() {
+        let request_json = serde_json::to_string(&request()).unwrap();
+        assert_eq!(
+            request_json,
+            r#"{"version":1,"correlation_id":"privileged-1","idempotency_key":"00000000000000000000000000000000","interactive":true}"#
+        );
+
+        let failed = BluetoothRestartResult {
+            version: PRIVILEGED_PROTOCOL_VERSION,
+            correlation_id: "privileged-1".into(),
+            authenticated_uid: 1000,
+            request_sha256: "1".repeat(64),
+            replayed: false,
+            outcome: BluetoothRestartOutcome::Failed {
+                error: BluetoothRestartFailure::Denied,
+                job_submitted: false,
+            },
+        };
+        assert_eq!(
+            serde_json::to_string(&failed).unwrap(),
+            r#"{"version":1,"correlation_id":"privileged-1","authenticated_uid":1000,"request_sha256":"1111111111111111111111111111111111111111111111111111111111111111","replayed":false,"outcome":{"status":"failed","error":"denied","job_submitted":false}}"#
+        );
+    }
+
+    #[test]
     fn digest_binds_uid_ids_interactivity_and_every_fixed_operation_constant() {
         let original = request();
         let digest = original.normalized_digest(1000).unwrap();
