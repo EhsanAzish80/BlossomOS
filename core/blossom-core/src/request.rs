@@ -1,0 +1,141 @@
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::fmt;
+
+const MAX_REQUEST_ID_BYTES: usize = 64;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+pub struct RequestId(String);
+
+impl RequestId {
+    pub fn parse(value: String) -> Result<Self, RequestError> {
+        let valid = !value.is_empty()
+            && value.len() <= MAX_REQUEST_ID_BYTES
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'));
+        if valid {
+            Ok(Self(value))
+        } else {
+            Err(RequestError::InvalidRequestId)
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+pub enum ToolRequest {
+    SystemUname { request_id: RequestId },
+}
+
+impl ToolRequest {
+    pub fn parse_json(input: &str) -> Result<Self, RequestError> {
+        let envelope: RequestEnvelope =
+            serde_json::from_str(input).map_err(|error| RequestError::MalformedJson {
+                message: error.to_string(),
+            })?;
+        let request_id = RequestId::parse(envelope.request_id)?;
+        match envelope.tool.as_str() {
+            "system.uname" => {
+                serde_json::from_value::<NoArguments>(envelope.arguments).map_err(|error| {
+                    RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    }
+                })?;
+                Ok(Self::SystemUname { request_id })
+            }
+            _ => Err(RequestError::UnknownTool {
+                tool: envelope.tool,
+            }),
+        }
+    }
+
+    pub fn request_id(&self) -> &RequestId {
+        match self {
+            Self::SystemUname { request_id } => request_id,
+        }
+    }
+
+    pub fn tool_name(&self) -> &'static str {
+        match self {
+            Self::SystemUname { .. } => "system.uname",
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RequestEnvelope {
+    request_id: String,
+    tool: String,
+    arguments: Value,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NoArguments {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RequestError {
+    MalformedJson { message: String },
+    InvalidRequestId,
+    UnknownTool { tool: String },
+    InvalidArguments { message: String },
+}
+
+impl fmt::Display for RequestError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MalformedJson { .. } => formatter.write_str("malformed request JSON"),
+            Self::InvalidRequestId => formatter.write_str("invalid request identifier"),
+            Self::UnknownTool { tool } => write!(formatter, "unknown tool: {tool}"),
+            Self::InvalidArguments { .. } => formatter.write_str("invalid tool arguments"),
+        }
+    }
+}
+
+impl std::error::Error for RequestError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_the_registered_tool() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-1","tool":"system.uname","arguments":{}}"#,
+        )
+        .expect("registered request should parse");
+        assert_eq!(request.tool_name(), "system.uname");
+        assert_eq!(request.request_id().as_str(), "req-1");
+    }
+
+    #[test]
+    fn rejects_unknown_fields_and_tools() {
+        assert!(matches!(
+            ToolRequest::parse_json(
+                r#"{"request_id":"req-1","tool":"system.uname","arguments":{},"extra":true}"#
+            ),
+            Err(RequestError::MalformedJson { .. })
+        ));
+        assert!(matches!(
+            ToolRequest::parse_json(
+                r#"{"request_id":"req-1","tool":"shell.execute","arguments":{}}"#
+            ),
+            Err(RequestError::UnknownTool { .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_arguments_for_argument_free_tool() {
+        assert!(matches!(
+            ToolRequest::parse_json(
+                r#"{"request_id":"req-1","tool":"system.uname","arguments":{"flag":"-a"}}"#
+            ),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+    }
+}
