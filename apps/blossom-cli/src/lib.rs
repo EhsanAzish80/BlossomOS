@@ -3,8 +3,9 @@
 use blossom_core::{
     ApprovalError, ApprovalStore, AuditEvent, AuditLog, BeginOutcome, BlossomEngine, Capability,
     EngineError, Executor, MemorySummary, MemorySummaryProvider, OsIdentity, OsIdentityProvider,
-    PolicyDecision, PolicyEngine, PolicyRule, RequestId, StorageSummary, StorageSummaryProvider,
-    SystemUptime, ToolOutput, ToolRequest, UptimeProvider, command_for,
+    PolicyDecision, PolicyEngine, PolicyRule, ProcessSelf, ProcessSelfProvider, RequestId,
+    StorageSummary, StorageSummaryProvider, SystemUptime, ToolOutput, ToolRequest, UptimeProvider,
+    command_for,
 };
 use std::fmt::Write as _;
 
@@ -232,6 +233,43 @@ where
     outcome_with_result(0, result, &engine)
 }
 
+pub fn run_process_self<E, P, C>(
+    executor: E,
+    process_self: P,
+    clock: &mut C,
+    request_id: RequestId,
+) -> RunOutcome
+where
+    E: Executor,
+    P: ProcessSelfProvider,
+    C: Clock,
+{
+    let policy = PolicyEngine::new(vec![PolicyRule {
+        capability: Capability::ProcessReadSelf,
+        decision: PolicyDecision::Allow,
+    }]);
+    let mut engine = BlossomEngine::with_process_self(
+        policy,
+        ApprovalStore::new(APPROVAL_TTL_MS),
+        executor,
+        process_self,
+    );
+    let request_json = format!(
+        r#"{{"request_id":"{}","tool":"process.self","arguments":{{}}}}"#,
+        request_id.as_str()
+    );
+    let result = match engine.begin(&request_json, clock.now_ms()) {
+        Ok(BeginOutcome::Completed(completed)) => match completed.output {
+            ToolOutput::ProcessSelf(identity) if completed.verification.succeeded => {
+                Some(render_process_self(&identity))
+            }
+            _ => return outcome_with_result(1, None, &engine),
+        },
+        _ => return outcome_with_result(1, None, &engine),
+    };
+    outcome_with_result(0, result, &engine)
+}
+
 pub fn exact_preview(request: &ToolRequest) -> String {
     let command = command_for(request).expect("approval preview is command-backed");
     let command_line = std::iter::once(command.program.display().to_string())
@@ -271,9 +309,10 @@ fn outcome<
     U: UptimeProvider,
     M: MemorySummaryProvider,
     S: StorageSummaryProvider,
+    P: ProcessSelfProvider,
 >(
     exit_code: i32,
-    engine: &BlossomEngine<E, O, U, M, S>,
+    engine: &BlossomEngine<E, O, U, M, S, P>,
 ) -> RunOutcome {
     outcome_with_result(exit_code, None, engine)
 }
@@ -284,10 +323,11 @@ fn outcome_with_result<
     U: UptimeProvider,
     M: MemorySummaryProvider,
     S: StorageSummaryProvider,
+    P: ProcessSelfProvider,
 >(
     exit_code: i32,
     result: Option<String>,
-    engine: &BlossomEngine<E, O, U, M, S>,
+    engine: &BlossomEngine<E, O, U, M, S, P>,
 ) -> RunOutcome {
     RunOutcome {
         exit_code,
@@ -350,6 +390,16 @@ fn render_storage_summary(summary: &StorageSummary) -> String {
         gib(summary.total_bytes),
         gib(summary.available_bytes),
         summary.resource_path
+    )
+}
+
+fn render_process_self(identity: &ProcessSelf) -> String {
+    format!(
+        "Blossom process identity\n  PID: {}\n  Parent PID: {}\n  Effective user ID: {}\n  Effective group ID: {}\n  Source: native process identity APIs\n",
+        identity.process_id,
+        identity.parent_process_id,
+        identity.effective_user_id,
+        identity.effective_group_id
     )
 }
 
@@ -432,6 +482,9 @@ fn describe_event(event: &AuditEvent) -> String {
             resource_path,
             source,
         } => format!("request {request_id} read {resource_path} storage summary via {source}"),
+        AuditEvent::ProcessSelfReadFinished { request_id, source } => {
+            format!("request {request_id} read its own process identity via {source}")
+        }
         AuditEvent::NativeReadFailed {
             request_id,
             resource,
@@ -448,6 +501,11 @@ fn describe_event(event: &AuditEvent) -> String {
             error,
         } => format!("request {request_id} native read of {resource} failed ({error})"),
         AuditEvent::StorageSummaryReadFailed {
+            request_id,
+            resource,
+            error,
+        } => format!("request {request_id} native read of {resource} failed ({error})"),
+        AuditEvent::ProcessSelfReadFailed {
             request_id,
             resource,
             error,
