@@ -70,6 +70,8 @@ remain narrow native reads; later Phase 2 capabilities are not implemented.
   - [ ] One exact service-status read.
 - [ ] Evaluate and select confinement technologies per resource class by ADR or
   an accepted extension of an existing profile.
+  - [x] Exact-file reads: Linux `openat2` no-symlink resolution plus a retained
+    descriptor and identity revalidation (ADR-0005).
 - Enforce environment, working-directory, filesystem, network, timeout, output,
   process, and resource controls.
 - Add property, adversarial, and integration tests for the security boundary.
