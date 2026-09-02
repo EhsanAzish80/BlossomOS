@@ -1,6 +1,9 @@
 use crate::executor::ExecutionResult;
 use crate::memory_summary::{MAX_PROC_MEMINFO_BYTES, MemorySummary, PROC_MEMINFO_PATH};
 use crate::os_identity::{MAX_OS_RELEASE_BYTES, MAX_OS_RELEASE_VALUE_BYTES, OsIdentity};
+use crate::process_list::{
+    MAX_PROCESS_NAME_BYTES, MAX_PROCESS_RESULTS, ProcessList, ProcessListSource,
+};
 use crate::process_self::{ProcessSelf, ProcessSelfSource};
 use crate::storage_summary::{ROOT_FILESYSTEM_PATH, StorageSummary, StorageSummarySource};
 use crate::uptime::{MAX_PROC_UPTIME_BYTES, PROC_UPTIME_PATH, SystemUptime};
@@ -34,6 +37,35 @@ pub enum VerificationReason {
     ValidProcessSelf,
     InvalidProcessSelfProvenance,
     InvalidProcessSelfSchema,
+    ValidProcessList,
+    InvalidProcessListProvenance,
+    InvalidProcessListSchema,
+}
+
+pub fn verify_process_list(list: &ProcessList) -> Verification {
+    let provenance_valid = list.source == ProcessListSource::ProcStatusSameEffectiveUser;
+    let schema_valid = list.processes.len() <= MAX_PROCESS_RESULTS
+        && list.processes.iter().all(|entry| {
+            entry.process_id > 0
+                && !entry.name.is_empty()
+                && entry.name.len() <= MAX_PROCESS_NAME_BYTES
+                && !entry.name.chars().any(char::is_control)
+        })
+        && list
+            .processes
+            .windows(2)
+            .all(|pair| pair[0].process_id < pair[1].process_id);
+    let reason = if !provenance_valid {
+        VerificationReason::InvalidProcessListProvenance
+    } else if !schema_valid {
+        VerificationReason::InvalidProcessListSchema
+    } else {
+        VerificationReason::ValidProcessList
+    };
+    Verification {
+        succeeded: reason == VerificationReason::ValidProcessList,
+        reason,
+    }
 }
 
 pub fn verify_process_self(identity: &ProcessSelf) -> Verification {
@@ -173,6 +205,30 @@ pub fn verify_execution(result: &ExecutionResult) -> Verification {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn verifies_process_list_schema_and_provenance_without_io() {
+        let mut list = ProcessList {
+            source: ProcessListSource::ProcStatusSameEffectiveUser,
+            processes: vec![crate::process_list::ProcessListEntry {
+                process_id: 42,
+                name: "blossom".into(),
+                state: crate::process_list::ProcessState::Sleeping,
+            }],
+            skipped_entries: 0,
+            truncated: false,
+        };
+        assert!(verify_process_list(&list).succeeded);
+        list.processes.push(crate::process_list::ProcessListEntry {
+            process_id: 41,
+            name: "out-of-order".into(),
+            state: crate::process_list::ProcessState::Running,
+        });
+        assert_eq!(
+            verify_process_list(&list).reason,
+            VerificationReason::InvalidProcessListSchema
+        );
+    }
 
     #[test]
     fn requires_successful_nonempty_bounded_output() {

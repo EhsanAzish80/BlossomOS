@@ -3,6 +3,7 @@ use crate::executor::{ExecutionResult, ExecutorError};
 use crate::memory_summary::{MemorySummary, MemorySummaryError};
 use crate::os_identity::{OsIdentity, OsIdentityError};
 use crate::policy::{Capability, PolicyDecision};
+use crate::process_list::{ProcessList, ProcessListError};
 use crate::process_self::{ProcessSelf, ProcessSelfError};
 use crate::request::ToolRequest;
 use crate::storage_summary::{StorageSummary, StorageSummaryError};
@@ -92,6 +93,13 @@ pub enum AuditEvent {
         request_id: String,
         source: String,
     },
+    ProcessListReadFinished {
+        request_id: String,
+        source: String,
+        returned_entries: usize,
+        skipped_entries: u32,
+        truncated: bool,
+    },
     NativeReadFailed {
         request_id: String,
         resource: String,
@@ -116,6 +124,11 @@ pub enum AuditEvent {
         request_id: String,
         resource: String,
         error: ProcessSelfError,
+    },
+    ProcessListReadFailed {
+        request_id: String,
+        resource: String,
+        error: ProcessListError,
     },
     VerificationFinished {
         request_id: String,
@@ -179,6 +192,16 @@ impl AuditEvent {
         Self::ProcessSelfReadFinished {
             request_id: request.request_id().as_str().into(),
             source: "native_process_identity".into(),
+        }
+    }
+
+    pub fn process_list_finished(request: &ToolRequest, list: &ProcessList) -> Self {
+        Self::ProcessListReadFinished {
+            request_id: request.request_id().as_str().into(),
+            source: "proc_status_same_effective_user".into(),
+            returned_entries: list.processes.len(),
+            skipped_entries: list.skipped_entries,
+            truncated: list.truncated,
         }
     }
 }

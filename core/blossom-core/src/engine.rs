@@ -8,6 +8,9 @@ use crate::os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, UnavailableOsIdentityProvider,
 };
 use crate::policy::{PolicyDecision, PolicyEngine};
+use crate::process_list::{
+    ProcessList, ProcessListError, ProcessListProvider, UnavailableProcessListProvider,
+};
 use crate::process_self::{
     ProcessSelf, ProcessSelfError, ProcessSelfProvider, UnavailableProcessSelfProvider,
 };
@@ -17,8 +20,8 @@ use crate::storage_summary::{
 };
 use crate::uptime::{SystemUptime, UnavailableUptimeProvider, UptimeError, UptimeProvider};
 use crate::verification::{
-    Verification, verify_execution, verify_memory_summary, verify_os_identity, verify_process_self,
-    verify_storage_summary, verify_uptime,
+    Verification, verify_execution, verify_memory_summary, verify_os_identity, verify_process_list,
+    verify_process_self, verify_storage_summary, verify_uptime,
 };
 
 #[derive(Debug)]
@@ -29,6 +32,7 @@ pub struct BlossomEngine<
     M = UnavailableMemorySummaryProvider,
     S = UnavailableStorageSummaryProvider,
     P = UnavailableProcessSelfProvider,
+    L = UnavailableProcessListProvider,
 > {
     policy: PolicyEngine,
     approvals: ApprovalStore,
@@ -38,6 +42,7 @@ pub struct BlossomEngine<
     memory_summary: M,
     storage_summary: S,
     process_self: P,
+    process_list: L,
     audit: AuditLog,
 }
 
@@ -49,6 +54,7 @@ impl<E: Executor>
         UnavailableMemorySummaryProvider,
         UnavailableStorageSummaryProvider,
         UnavailableProcessSelfProvider,
+        UnavailableProcessListProvider,
     >
 {
     pub fn new(policy: PolicyEngine, approvals: ApprovalStore, executor: E) -> Self {
@@ -61,6 +67,7 @@ impl<E: Executor>
             memory_summary: UnavailableMemorySummaryProvider,
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
+            process_list: UnavailableProcessListProvider,
             audit: AuditLog::default(),
         }
     }
@@ -84,6 +91,7 @@ impl<E: Executor, O: OsIdentityProvider>
             memory_summary: UnavailableMemorySummaryProvider,
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
+            process_list: UnavailableProcessListProvider,
             audit: AuditLog::default(),
         }
     }
@@ -107,6 +115,7 @@ impl<E: Executor, U: UptimeProvider>
             memory_summary: UnavailableMemorySummaryProvider,
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
+            process_list: UnavailableProcessListProvider,
             audit: AuditLog::default(),
         }
     }
@@ -130,6 +139,7 @@ impl<E: Executor, M: MemorySummaryProvider>
             memory_summary,
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
+            process_list: UnavailableProcessListProvider,
             audit: AuditLog::default(),
         }
     }
@@ -159,6 +169,7 @@ impl<E: Executor, S: StorageSummaryProvider>
             memory_summary: UnavailableMemorySummaryProvider,
             storage_summary,
             process_self: UnavailableProcessSelfProvider,
+            process_list: UnavailableProcessListProvider,
             audit: AuditLog::default(),
         }
     }
@@ -172,6 +183,7 @@ impl<E: Executor, P: ProcessSelfProvider>
         UnavailableMemorySummaryProvider,
         UnavailableStorageSummaryProvider,
         P,
+        UnavailableProcessListProvider,
     >
 {
     pub fn with_process_self(
@@ -189,6 +201,39 @@ impl<E: Executor, P: ProcessSelfProvider>
             memory_summary: UnavailableMemorySummaryProvider,
             storage_summary: UnavailableStorageSummaryProvider,
             process_self,
+            process_list: UnavailableProcessListProvider,
+            audit: AuditLog::default(),
+        }
+    }
+}
+
+impl<E: Executor, L: ProcessListProvider>
+    BlossomEngine<
+        E,
+        UnavailableOsIdentityProvider,
+        UnavailableUptimeProvider,
+        UnavailableMemorySummaryProvider,
+        UnavailableStorageSummaryProvider,
+        UnavailableProcessSelfProvider,
+        L,
+    >
+{
+    pub fn with_process_list(
+        policy: PolicyEngine,
+        approvals: ApprovalStore,
+        executor: E,
+        process_list: L,
+    ) -> Self {
+        Self {
+            policy,
+            approvals,
+            executor,
+            os_identity: UnavailableOsIdentityProvider,
+            uptime: UnavailableUptimeProvider,
+            memory_summary: UnavailableMemorySummaryProvider,
+            storage_summary: UnavailableStorageSummaryProvider,
+            process_self: UnavailableProcessSelfProvider,
+            process_list,
             audit: AuditLog::default(),
         }
     }
@@ -201,7 +246,8 @@ impl<
     M: MemorySummaryProvider,
     S: StorageSummaryProvider,
     P: ProcessSelfProvider,
-> BlossomEngine<E, O, U, M, S, P>
+    L: ProcessListProvider,
+> BlossomEngine<E, O, U, M, S, P, L>
 {
     pub fn begin(&mut self, input: &str, now_ms: u64) -> Result<BeginOutcome, EngineError> {
         let request = match ToolRequest::parse_json(input) {
@@ -313,6 +359,7 @@ impl<
             ToolRequest::SystemMemorySummary { .. } => self.execute_memory_summary(request),
             ToolRequest::SystemStorageSummary { .. } => self.execute_storage_summary(request),
             ToolRequest::ProcessSelf { .. } => self.execute_process_self(request),
+            ToolRequest::ProcessList { .. } => self.execute_process_list(request),
         }
     }
 
@@ -507,6 +554,39 @@ impl<
             output: ToolOutput::ProcessSelf(identity),
         })
     }
+
+    fn execute_process_list(
+        &mut self,
+        request: ToolRequest,
+    ) -> Result<CompletionOutcome, EngineError> {
+        self.audit.append(AuditEvent::NativeReadStarted {
+            request_id: request.request_id().as_str().into(),
+            resource: "process.list:same-effective-user".into(),
+        });
+        let list = match self.process_list.read_process_list() {
+            Ok(list) => list,
+            Err(error) => {
+                self.audit.append(AuditEvent::ProcessListReadFailed {
+                    request_id: request.request_id().as_str().into(),
+                    resource: "process.list:same-effective-user".into(),
+                    error,
+                });
+                return Err(EngineError::ProcessList(error));
+            }
+        };
+        self.audit
+            .append(AuditEvent::process_list_finished(&request, &list));
+        let verification = verify_process_list(&list);
+        self.audit.append(AuditEvent::VerificationFinished {
+            request_id: request.request_id().as_str().into(),
+            verification: verification.clone(),
+        });
+        Ok(CompletionOutcome {
+            request,
+            verification,
+            output: ToolOutput::ProcessList(list),
+        })
+    }
 }
 
 pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
@@ -517,6 +597,7 @@ pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
         ToolRequest::SystemMemorySummary { .. } => None,
         ToolRequest::SystemStorageSummary { .. } => None,
         ToolRequest::ProcessSelf { .. } => None,
+        ToolRequest::ProcessList { .. } => None,
     }
 }
 
@@ -554,6 +635,7 @@ pub enum ToolOutput {
     MemorySummary(MemorySummary),
     StorageSummary(StorageSummary),
     ProcessSelf(ProcessSelf),
+    ProcessList(ProcessList),
 }
 
 #[derive(Debug)]
@@ -566,6 +648,7 @@ pub enum EngineError {
     MemorySummary(MemorySummaryError),
     StorageSummary(StorageSummaryError),
     ProcessSelf(ProcessSelfError),
+    ProcessList(ProcessListError),
 }
 
 #[cfg(test)]

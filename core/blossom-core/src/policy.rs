@@ -9,6 +9,7 @@ pub enum Capability {
     SystemReadMemorySummary,
     SystemReadStorageSummary,
     ProcessReadSelf,
+    ProcessReadList,
 }
 
 impl Capability {
@@ -20,6 +21,7 @@ impl Capability {
             Self::SystemReadMemorySummary => "system.read:memory.summary",
             Self::SystemReadStorageSummary => "system.read:storage.summary",
             Self::ProcessReadSelf => "process.read:self",
+            Self::ProcessReadList => "process.read:list",
         }
     }
 }
@@ -55,6 +57,7 @@ impl PolicyEngine {
             ToolRequest::SystemMemorySummary { .. } => Capability::SystemReadMemorySummary,
             ToolRequest::SystemStorageSummary { .. } => Capability::SystemReadStorageSummary,
             ToolRequest::ProcessSelf { .. } => Capability::ProcessReadSelf,
+            ToolRequest::ProcessList { .. } => Capability::ProcessReadList,
         }
     }
 

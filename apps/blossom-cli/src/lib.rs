@@ -3,9 +3,9 @@
 use blossom_core::{
     ApprovalError, ApprovalStore, AuditEvent, AuditLog, BeginOutcome, BlossomEngine, Capability,
     EngineError, Executor, MemorySummary, MemorySummaryProvider, OsIdentity, OsIdentityProvider,
-    PolicyDecision, PolicyEngine, PolicyRule, ProcessSelf, ProcessSelfProvider, RequestId,
-    StorageSummary, StorageSummaryProvider, SystemUptime, ToolOutput, ToolRequest, UptimeProvider,
-    command_for,
+    PolicyDecision, PolicyEngine, PolicyRule, ProcessList, ProcessListProvider, ProcessSelf,
+    ProcessSelfProvider, RequestId, StorageSummary, StorageSummaryProvider, SystemUptime,
+    ToolOutput, ToolRequest, UptimeProvider, command_for,
 };
 use std::fmt::Write as _;
 
@@ -270,6 +270,78 @@ where
     outcome_with_result(0, result, &engine)
 }
 
+pub fn run_process_list<E, L, I, C>(
+    executor: E,
+    process_list: L,
+    interaction: &mut I,
+    clock: &mut C,
+    request_id: RequestId,
+) -> RunOutcome
+where
+    E: Executor,
+    L: ProcessListProvider,
+    I: Interaction,
+    C: Clock,
+{
+    let policy = PolicyEngine::new(vec![PolicyRule {
+        capability: Capability::ProcessReadList,
+        decision: PolicyDecision::Ask,
+    }]);
+    let mut engine = BlossomEngine::with_process_list(
+        policy,
+        ApprovalStore::new(APPROVAL_TTL_MS),
+        executor,
+        process_list,
+    );
+    let request = ToolRequest::ProcessList { request_id };
+    let request_json = format!(
+        r#"{{"request_id":"{}","tool":"process.list","arguments":{{}}}}"#,
+        request.request_id().as_str()
+    );
+    let (request, token) = match engine.begin(&request_json, clock.now_ms()) {
+        Ok(BeginOutcome::ApprovalRequired { request, token }) => (request, token),
+        Ok(BeginOutcome::Denied) => return outcome(2, &engine),
+        _ => return outcome(1, &engine),
+    };
+    let preview = process_list_preview(&request);
+    let choice = if interaction.is_interactive() {
+        interaction.choose(&preview)
+    } else {
+        ApprovalChoice::Deny
+    };
+    let decided_at = clock.now_ms();
+    match choice {
+        ApprovalChoice::ApproveOnce => match engine.approve(token, request, decided_at) {
+            Ok(completed) => match completed.output {
+                ToolOutput::ProcessList(list) if completed.verification.succeeded => {
+                    outcome_with_result(0, Some(render_process_list(&list)), &engine)
+                }
+                _ => outcome(1, &engine),
+            },
+            Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+        ApprovalChoice::Deny => match engine.deny_approval(token, request, decided_at) {
+            Ok(()) => outcome(2, &engine),
+            Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+        ApprovalChoice::Cancel => match engine.cancel_approval(token, request, decided_at) {
+            Ok(()) => outcome(2, &engine),
+            Err(_) => outcome(1, &engine),
+        },
+    }
+}
+
+pub fn process_list_preview(request: &ToolRequest) -> String {
+    let capability = PolicyEngine::required_capability(request);
+    format!(
+        "Request: {}\nReason: inspect same-user process activity\nPolicy decision: ask\nApproval: once only\nCapability: {}\nScope: processes with Blossom's effective user ID\nFields: PID, short kernel name, coarse state\nMaximum results: 256\nSource: /proc/<pid>/status through a pinned PID directory descriptor\nCommand: none (native Linux read)\nCommand line, environment, open files, sockets, and memory: not read\nPrivilege: unprivileged user\nNetwork: not used",
+        request.request_id().as_str(),
+        capability.as_str()
+    )
+}
+
 pub fn exact_preview(request: &ToolRequest) -> String {
     let command = command_for(request).expect("approval preview is command-backed");
     let command_line = std::iter::once(command.program.display().to_string())
@@ -310,9 +382,10 @@ fn outcome<
     M: MemorySummaryProvider,
     S: StorageSummaryProvider,
     P: ProcessSelfProvider,
+    L: ProcessListProvider,
 >(
     exit_code: i32,
-    engine: &BlossomEngine<E, O, U, M, S, P>,
+    engine: &BlossomEngine<E, O, U, M, S, P, L>,
 ) -> RunOutcome {
     outcome_with_result(exit_code, None, engine)
 }
@@ -324,10 +397,11 @@ fn outcome_with_result<
     M: MemorySummaryProvider,
     S: StorageSummaryProvider,
     P: ProcessSelfProvider,
+    L: ProcessListProvider,
 >(
     exit_code: i32,
     result: Option<String>,
-    engine: &BlossomEngine<E, O, U, M, S, P>,
+    engine: &BlossomEngine<E, O, U, M, S, P, L>,
 ) -> RunOutcome {
     RunOutcome {
         exit_code,
@@ -401,6 +475,27 @@ fn render_process_self(identity: &ProcessSelf) -> String {
         identity.effective_user_id,
         identity.effective_group_id
     )
+}
+
+fn render_process_list(list: &ProcessList) -> String {
+    let mut output = String::from("Same-user processes\n");
+    for entry in &list.processes {
+        writeln!(
+            &mut output,
+            "  {}  {}  {:?}",
+            entry.process_id, entry.name, entry.state
+        )
+        .expect("writing to a String cannot fail");
+    }
+    writeln!(&mut output, "  Returned: {}", list.processes.len()).expect("string write");
+    writeln!(
+        &mut output,
+        "  Skipped during bounded read: {}",
+        list.skipped_entries
+    )
+    .expect("string write");
+    writeln!(&mut output, "  Truncated: {}", list.truncated).expect("string write");
+    output
 }
 
 fn describe_event(event: &AuditEvent) -> String {
@@ -485,6 +580,17 @@ fn describe_event(event: &AuditEvent) -> String {
         AuditEvent::ProcessSelfReadFinished { request_id, source } => {
             format!("request {request_id} read its own process identity via {source}")
         }
+        AuditEvent::ProcessListReadFinished {
+            request_id,
+            source,
+            returned_entries,
+            skipped_entries,
+            truncated,
+        } => {
+            format!(
+                "request {request_id} read {returned_entries} same-user process records via {source}; skipped={skipped_entries}, truncated={truncated}"
+            )
+        }
         AuditEvent::NativeReadFailed {
             request_id,
             resource,
@@ -510,6 +616,13 @@ fn describe_event(event: &AuditEvent) -> String {
             resource,
             error,
         } => format!("request {request_id} native read of {resource} failed ({error})"),
+        AuditEvent::ProcessListReadFailed {
+            request_id,
+            resource,
+            error,
+        } => {
+            format!("request {request_id} native read of {resource} failed ({error})")
+        }
         AuditEvent::VerificationFinished {
             request_id,
             verification,

@@ -34,6 +34,7 @@ pub enum ToolRequest {
     SystemMemorySummary { request_id: RequestId },
     SystemStorageSummary { request_id: RequestId },
     ProcessSelf { request_id: RequestId },
+    ProcessList { request_id: RequestId },
 }
 
 impl ToolRequest {
@@ -92,6 +93,14 @@ impl ToolRequest {
                 })?;
                 Ok(Self::ProcessSelf { request_id })
             }
+            "process.list" => {
+                serde_json::from_value::<NoArguments>(envelope.arguments).map_err(|error| {
+                    RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    }
+                })?;
+                Ok(Self::ProcessList { request_id })
+            }
             _ => Err(RequestError::UnknownTool {
                 tool: envelope.tool,
             }),
@@ -105,7 +114,8 @@ impl ToolRequest {
             | Self::SystemUptime { request_id }
             | Self::SystemMemorySummary { request_id }
             | Self::SystemStorageSummary { request_id }
-            | Self::ProcessSelf { request_id } => request_id,
+            | Self::ProcessSelf { request_id }
+            | Self::ProcessList { request_id } => request_id,
         }
     }
 
@@ -117,6 +127,7 @@ impl ToolRequest {
             Self::SystemMemorySummary { .. } => "system.memory.summary",
             Self::SystemStorageSummary { .. } => "system.storage.summary",
             Self::ProcessSelf { .. } => "process.self",
+            Self::ProcessList { .. } => "process.list",
         }
     }
 }
@@ -211,6 +222,15 @@ mod tests {
         )
         .expect("process self request should parse");
         assert_eq!(request.tool_name(), "process.self");
+    }
+
+    #[test]
+    fn parses_process_list_without_arguments() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-7","tool":"process.list","arguments":{}}"#,
+        )
+        .expect("process list request should parse");
+        assert_eq!(request.tool_name(), "process.list");
     }
 
     #[test]
