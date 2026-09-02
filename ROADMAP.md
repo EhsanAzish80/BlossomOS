@@ -52,8 +52,9 @@ verification -> audit, including denial and failure paths.
 ## Phase 2: Capability and sandbox foundation
 
 Status: in progress. ADR-0004 defines the accepted capability taxonomy,
-expansion order, privacy rules, and per-tool exit evidence. The completed tools
-remain narrow native reads; later Phase 2 capabilities are not implemented.
+expansion order, privacy rules, and per-tool exit evidence. The final capability
+implementation is under protected review; Phase 2 remains open pending its exit
+audit.
 
 - [x] Define the capability taxonomy and expansion rules before adding tools.
 - [ ] Add narrowly scoped system, process, file, and service-read tools in the
@@ -69,7 +70,8 @@ remain narrow native reads; later Phase 2 capabilities are not implemented.
     containment and a 64-KiB bound.
   - [x] One approval-gated workspace-contained atomic file creation using
     retained descriptors, fixed `0600`, and no-replace publication.
-  - [ ] One exact service-status read.
+  - [x] One approval-gated exact systemd service-status observation using fixed
+    native D-Bus calls and a redacted audit scope (ADR-0008).
 - [ ] Evaluate and select confinement technologies per resource class by ADR or
   an accepted extension of an existing profile.
   - [x] Exact-file reads: Linux `openat2` no-symlink resolution plus a retained
@@ -79,7 +81,7 @@ remain narrow native reads; later Phase 2 capabilities are not implemented.
     (ADR-0007, superseding ADR-0006).
   - [x] Exact service-status reads: fixed systemd system-bus calls for one
     approval-bound `.service` unit, with no listing, loading, mutation, generic
-    D-Bus, or subprocess fallback (ADR-0008; implementation pending).
+    D-Bus, or subprocess fallback (ADR-0008).
 - Enforce environment, working-directory, filesystem, network, timeout, output,
   process, and resource controls.
 - Add property, adversarial, and integration tests for the security boundary.

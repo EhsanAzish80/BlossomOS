@@ -1,4 +1,5 @@
 use crate::file_read::{FileSelection, validate_selected_path};
+use crate::service_status::{ServiceSelection, validate_service_unit};
 use crate::workspace_create::{WorkspaceCreateSelection, validate_workspace_selection};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -58,6 +59,10 @@ pub enum ToolRequest {
     FilesWriteCreate {
         request_id: RequestId,
         selection: WorkspaceCreateSelection,
+    },
+    ServicesReadStatus {
+        request_id: RequestId,
+        selection: ServiceSelection,
     },
 }
 
@@ -161,6 +166,23 @@ impl ToolRequest {
                     selection: arguments.selection,
                 })
             }
+            "services.read.status" => {
+                let arguments = serde_json::from_value::<ServiceStatusArguments>(
+                    envelope.arguments,
+                )
+                .map_err(|error| RequestError::InvalidArguments {
+                    message: error.to_string(),
+                })?;
+                validate_service_unit(&arguments.selection.unit).map_err(|error| {
+                    RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    }
+                })?;
+                Ok(Self::ServicesReadStatus {
+                    request_id,
+                    selection: arguments.selection,
+                })
+            }
             _ => Err(RequestError::UnknownTool {
                 tool: envelope.tool,
             }),
@@ -178,6 +200,7 @@ impl ToolRequest {
             | Self::ProcessList { request_id } => request_id,
             Self::FilesReadContent { request_id, .. } => request_id,
             Self::FilesWriteCreate { request_id, .. } => request_id,
+            Self::ServicesReadStatus { request_id, .. } => request_id,
         }
     }
 
@@ -192,6 +215,7 @@ impl ToolRequest {
             Self::ProcessList { .. } => "process.list",
             Self::FilesReadContent { .. } => "files.read.content",
             Self::FilesWriteCreate { .. } => "files.write.create",
+            Self::ServicesReadStatus { .. } => "services.read.status",
         }
     }
 }
@@ -218,6 +242,12 @@ struct FileReadArguments {
 #[serde(deny_unknown_fields)]
 struct WorkspaceCreateArguments {
     selection: WorkspaceCreateSelection,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ServiceStatusArguments {
+    selection: ServiceSelection,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -314,6 +344,33 @@ mod tests {
             serde_json::json!("0".repeat(64));
         assert!(matches!(
             ToolRequest::parse_json(&wrong_digest.to_string()),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+    }
+
+    #[test]
+    fn parses_exact_service_status_and_rejects_scope_expansion() {
+        let valid = serde_json::json!({
+            "request_id": "req-service", "tool": "services.read.status",
+            "arguments": { "selection": { "unit": "sshd.service" } }
+        });
+        let request = ToolRequest::parse_json(&valid.to_string()).expect("exact service");
+        let ToolRequest::ServicesReadStatus { selection, .. } = request else {
+            panic!("service request")
+        };
+        assert_eq!(selection.unit, "sshd.service");
+        for unit in ["*.service", "sshd.socket", "../sshd.service"] {
+            let mut invalid = valid.clone();
+            invalid["arguments"]["selection"]["unit"] = serde_json::json!(unit);
+            assert!(matches!(
+                ToolRequest::parse_json(&invalid.to_string()),
+                Err(RequestError::InvalidArguments { .. })
+            ));
+        }
+        let mut expanded = valid;
+        expanded["arguments"]["selection"]["destination"] = serde_json::json!("org.example.Other");
+        assert!(matches!(
+            ToolRequest::parse_json(&expanded.to_string()),
             Err(RequestError::InvalidArguments { .. })
         ));
     }

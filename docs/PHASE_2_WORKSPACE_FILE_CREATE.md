@@ -55,5 +55,5 @@ parent replacement, fixed permissions, absence of visible temporary names,
 atomic publication, directory durability state, and absence of executor calls.
 
 This checkpoint adds no overwrite, append, delete, arbitrary rename, directory
-listing, Bash, generic execution, IPC, LLM, privilege, or graphical shell. The
-next and final ADR-0004 tool is one exact service-status read.
+listing, Bash, generic execution, IPC daemon, LLM, privilege, or graphical
+shell. The later exact service-status checkpoint is documented separately.

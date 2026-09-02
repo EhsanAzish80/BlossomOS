@@ -42,7 +42,7 @@ Phase 1 also implements a separate Rust security vertical slice:
 
 This slice is a tested foundation, not a general command runner or finished OS.
 
-Phase 2 currently adds seven native read capabilities:
+Phase 2 currently adds eight native read capabilities:
 `system.read:os.identity`, `system.read:uptime`, and
 `system.read:memory.summary`, root-scoped `system.read:storage.summary`, and
 `process.read:self`, plus approval-gated `process.read:list`.
@@ -68,7 +68,14 @@ content in an unnamed `O_TMPFILE` inode, atomic no-replace publication with
 `linkat(AT_EMPTY_PATH)`, and file/directory durability sync. It cannot
 overwrite, append, delete, choose permissions, follow symlinks, or cross a
 nested mount.
-The remaining Phase 2 service-status capability is not implemented.
+
+The eighth read capability, `services.read:status`, observes one exact loaded
+system-manager `.service` unit after explicit once-only approval. It uses fixed
+native systemd D-Bus calls for only `GetUnit`, `Id`, `LoadState`, `ActiveState`,
+and `SubState`, with a fixed local bus address and bounded deadlines. It cannot
+list or load units, request all properties, mutate systemd, invoke `systemctl`,
+or send a caller-selected D-Bus message. Service names and states are omitted
+from persistent audit detail.
 
 ### Planned, not implemented
 

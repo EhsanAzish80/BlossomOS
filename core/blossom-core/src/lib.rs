@@ -11,6 +11,7 @@ pub mod policy;
 pub mod process_list;
 pub mod process_self;
 pub mod request;
+pub mod service_status;
 pub mod storage_summary;
 pub mod uptime;
 pub mod verification;
@@ -48,6 +49,12 @@ pub use process_self::{
     UnavailableProcessSelfProvider,
 };
 pub use request::{RequestError, RequestId, ToolRequest};
+pub use service_status::{
+    MAX_SERVICE_STATE_BYTES, MAX_SERVICE_UNIT_BYTES, SYSTEM_BUS_ADDRESS, SYSTEMD_DESTINATION,
+    SYSTEMD_MANAGER_INTERFACE, SYSTEMD_MANAGER_PATH, SYSTEMD_UNIT_INTERFACE, ServiceSelection,
+    ServiceStatus, ServiceStatusError, ServiceStatusProvider, SystemdServiceStatusProvider,
+    UnavailableServiceStatusProvider, validate_service_status, validate_service_unit,
+};
 pub use storage_summary::{
     ROOT_FILESYSTEM_PATH, RootStorageReader, StorageSummary, StorageSummaryError,
     StorageSummaryProvider, StorageSummarySource, UnavailableStorageSummaryProvider,
@@ -58,8 +65,8 @@ pub use uptime::{
 };
 pub use verification::{
     Verification, verify_execution, verify_file_content, verify_memory_summary, verify_os_identity,
-    verify_process_list, verify_process_self, verify_storage_summary, verify_uptime,
-    verify_workspace_file_created,
+    verify_process_list, verify_process_self, verify_service_status, verify_storage_summary,
+    verify_uptime, verify_workspace_file_created,
 };
 pub use workspace_create::{
     AtomicWorkspaceFileCreator, DirectoryIdentity, UnavailableWorkspaceCreateProvider,

@@ -3,13 +3,13 @@
 use blossom_cli::{
     ApprovalChoice, Clock, Interaction, exact_preview, file_read_preview, process_list_preview,
     run_file_read, run_fixed_diagnostic, run_memory_summary, run_os_identity, run_process_list,
-    run_process_self, run_storage_summary, run_uptime, run_workspace_create,
-    workspace_create_preview,
+    run_process_self, run_service_status, run_storage_summary, run_uptime, run_workspace_create,
+    service_status_preview, workspace_create_preview,
 };
 use blossom_core::{
     AtomicWorkspaceFileCreator, NativeProcessSelfReader, Openat2FileReader, OsReleaseReader,
     ProcMeminfoReader, ProcProcessListReader, ProcUptimeReader, RequestId, RootStorageReader,
-    ToolRequest, executor::bubblewrap::BubblewrapExecutor,
+    SystemdServiceStatusProvider, ToolRequest, executor::bubblewrap::BubblewrapExecutor,
 };
 use std::io::{self, IsTerminal, Write};
 use std::sync::mpsc;
@@ -83,6 +83,11 @@ fn main() {
     let storage_requested = arguments.as_slice() == ["storage-summary"];
     let process_self_requested = arguments.as_slice() == ["process-self"];
     let process_list_requested = arguments.as_slice() == ["process-list"];
+    let service_status_unit = if arguments.len() == 2 && arguments[0] == "service-status" {
+        arguments[1].to_str()
+    } else {
+        None
+    };
     let file_read_path = if arguments.len() == 2 && arguments[0] == "file-read" {
         arguments[1].to_str()
     } else {
@@ -109,9 +114,10 @@ fn main() {
         && !process_list_requested
         && file_read_path.is_none()
         && workspace_create_input.is_none()
+        && service_status_unit.is_none()
     {
         eprintln!(
-            "Usage: blossom-cli [os-identity|uptime|memory-summary|storage-summary|process-self|process-list|file-read ABSOLUTE_PATH|workspace-create ABSOLUTE_ROOT RELATIVE_DESTINATION CONTENT]\nNo executable or generic command argument input is supported."
+            "Usage: blossom-cli [os-identity|uptime|memory-summary|storage-summary|process-self|process-list|file-read ABSOLUTE_PATH|workspace-create ABSOLUTE_ROOT RELATIVE_DESTINATION CONTENT|service-status EXACT_SERVICE_UNIT]\nNo executable or generic command argument input is supported."
         );
         std::process::exit(64);
     }
@@ -269,6 +275,30 @@ fn main() {
             &mut interaction,
             &mut clock,
             request_id,
+        );
+        if let Some(result) = outcome.result {
+            println!("{result}");
+        }
+        print!("{}", outcome.activity);
+        std::process::exit(outcome.exit_code);
+    }
+
+    if let Some(unit) = service_status_unit {
+        let request = ToolRequest::ServicesReadStatus {
+            request_id: request_id.clone(),
+            selection: blossom_core::ServiceSelection { unit: unit.into() },
+        };
+        if !interaction.is_interactive() {
+            println!("{}\n", service_status_preview(&request));
+            println!("Non-interactive input is denied by default.\n");
+        }
+        let outcome = run_service_status(
+            BubblewrapExecutor::phase1_default(),
+            SystemdServiceStatusProvider,
+            &mut interaction,
+            &mut clock,
+            request_id,
+            unit.into(),
         );
         if let Some(result) = outcome.result {
             println!("{result}");
