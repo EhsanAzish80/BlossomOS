@@ -69,11 +69,15 @@ impl StorageSummaryProvider for RootStorageReader {
         let statistics =
             statvfs(ROOT_FILESYSTEM_PATH).map_err(|_| StorageSummaryError::StatFailed)?;
         build_storage_summary(
-            u64::from(statistics.blocks()),
-            u64::from(statistics.blocks_available()),
+            widen(statistics.blocks()),
+            widen(statistics.blocks_available()),
             statistics.fragment_size(),
         )
     }
+}
+
+fn widen<T: Into<u64>>(value: T) -> u64 {
+    value.into()
 }
 
 fn build_storage_summary(
