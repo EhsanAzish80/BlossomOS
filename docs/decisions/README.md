@@ -31,7 +31,10 @@ compatibility, packaging, or contributor obligations.
 - Exact systemd service-status reads: accepted in ADR-0008 and implemented in
   Phase 2.
 - Privileged-helper authorization design: accepted in ADR-0009; the first
-  operation remains blocked on a separate operation-specific ADR.
+  operation is fixed by accepted ADR-0010.
+- First privileged operation: ADR-0010 permits only an approval-gated
+  `TryRestartUnit` for the fixed already-running `bluetooth.service`; helper
+  implementation remains pending.
 - Local IPC transport and schema format.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
