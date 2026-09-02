@@ -1,0 +1,52 @@
+# Copy this into the BlossomOS repository as
+#   .github/workflows/notify-site.yml
+#
+# It tells the marketing site to rebuild whenever a contract document changes,
+# so the site's roadmap, capabilities and principles never drift from the repo.
+#
+# Setup:
+#   1. Cloudflare Pages project → Settings → Builds → Add deploy hook
+#      (name it "blossomos-docs", branch "main"), copy the URL.
+#   2. BlossomOS repo → Settings → Secrets and variables → Actions →
+#      New repository secret, named SITE_DEPLOY_HOOK, pasting that URL.
+#
+# The hook URL needs no other authentication, so treat it as a secret.
+#
+# The site build validates that these documents still parse into every section
+# it renders. If a heading is restructured the build fails and Cloudflare keeps
+# the previous deployment, so enable Cloudflare build notifications. To check
+# before merging, run `npm run check:docs` in the site repo.
+
+name: Rebuild site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*.md"
+      - "docs/**.md"
+  # Safety net: catches anything the path filter misses.
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+# Never run two rebuilds at once for the same branch.
+concurrency:
+  group: rebuild-site
+  cancel-in-progress: true
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Cloudflare Pages build
+        env:
+          HOOK: ${{ secrets.SITE_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "SITE_DEPLOY_HOOK is not set; skipping." >&2
+            exit 1
+          fi
+          code=$(curl -sS -X POST -o /dev/null -w '%{http_code}' "$HOOK")
+          echo "Cloudflare responded $code"
+          [ "$code" -ge 200 ] && [ "$code" -lt 300 ]
