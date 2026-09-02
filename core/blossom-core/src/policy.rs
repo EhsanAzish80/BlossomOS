@@ -83,7 +83,14 @@ impl PolicyEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::request::{RequestId, ToolRequest};
+    use crate::{
+        file_read::{FileIdentity, FileSelection},
+        request::{RequestId, ToolRequest},
+        service_status::ServiceSelection,
+        workspace_create::{
+            DirectoryIdentity, WORKSPACE_FILE_MODE, WorkspaceCreateSelection, digest,
+        },
+    };
 
     fn request() -> ToolRequest {
         ToolRequest::SystemUname {
@@ -145,5 +152,107 @@ mod tests {
             PolicyEngine::required_capability(&request()).as_str(),
             "system.read:kernel.identity"
         );
+    }
+
+    #[test]
+    fn every_registered_request_has_the_exact_static_capability() {
+        let id = || RequestId::parse("req-registry".into()).expect("valid test id");
+        let requests = vec![
+            (
+                ToolRequest::SystemUname { request_id: id() },
+                Capability::SystemReadKernelIdentity,
+                "system.read:kernel.identity",
+            ),
+            (
+                ToolRequest::SystemOsIdentity { request_id: id() },
+                Capability::SystemReadOsIdentity,
+                "system.read:os.identity",
+            ),
+            (
+                ToolRequest::SystemUptime { request_id: id() },
+                Capability::SystemReadUptime,
+                "system.read:uptime",
+            ),
+            (
+                ToolRequest::SystemMemorySummary { request_id: id() },
+                Capability::SystemReadMemorySummary,
+                "system.read:memory.summary",
+            ),
+            (
+                ToolRequest::SystemStorageSummary { request_id: id() },
+                Capability::SystemReadStorageSummary,
+                "system.read:storage.summary",
+            ),
+            (
+                ToolRequest::ProcessSelf { request_id: id() },
+                Capability::ProcessReadSelf,
+                "process.read:self",
+            ),
+            (
+                ToolRequest::ProcessList { request_id: id() },
+                Capability::ProcessReadList,
+                "process.read:list",
+            ),
+            (
+                ToolRequest::FilesReadContent {
+                    request_id: id(),
+                    selection: FileSelection {
+                        absolute_path: "/tmp/file".into(),
+                        identity: FileIdentity {
+                            device: 1,
+                            inode: 2,
+                            size: 3,
+                            modified_seconds: 4,
+                            modified_nanoseconds: 5,
+                            changed_seconds: 6,
+                            changed_nanoseconds: 7,
+                        },
+                    },
+                },
+                Capability::FilesReadContent,
+                "files.read:content",
+            ),
+            (
+                ToolRequest::FilesWriteCreate {
+                    request_id: id(),
+                    selection: WorkspaceCreateSelection {
+                        workspace_root: "/tmp/workspace".into(),
+                        root_identity: DirectoryIdentity {
+                            device: 1,
+                            inode: 2,
+                        },
+                        parent_identity: DirectoryIdentity {
+                            device: 1,
+                            inode: 3,
+                        },
+                        relative_destination: "new.txt".into(),
+                        content: "content".into(),
+                        content_sha256: digest(b"content"),
+                        mode: WORKSPACE_FILE_MODE,
+                    },
+                },
+                Capability::FilesWriteCreate,
+                "files.write:create",
+            ),
+            (
+                ToolRequest::ServicesReadStatus {
+                    request_id: id(),
+                    selection: ServiceSelection {
+                        unit: "dbus.service".into(),
+                    },
+                },
+                Capability::ServicesReadStatus,
+                "services.read:status",
+            ),
+        ];
+
+        for (request, capability, name) in requests {
+            assert_eq!(PolicyEngine::required_capability(&request), capability);
+            assert_eq!(capability.as_str(), name);
+            assert_eq!(
+                PolicyEngine::default().evaluate(&request),
+                PolicyDecision::Deny
+            );
+        }
     }
 }

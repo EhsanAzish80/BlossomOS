@@ -51,13 +51,13 @@ verification -> audit, including denial and failure paths.
 
 ## Phase 2: Capability and sandbox foundation
 
-Status: in progress. ADR-0004 defines the accepted capability taxonomy,
-expansion order, privacy rules, and per-tool exit evidence. The final capability
-implementation is under protected review; Phase 2 remains open pending its exit
-audit.
+Status: complete (2026-09-02). ADR-0004 defines the accepted capability
+taxonomy, expansion order, privacy rules, and per-tool exit evidence. The
+completion audit and capability matrix are recorded in
+`docs/PHASE_2_BASELINE.md`.
 
 - [x] Define the capability taxonomy and expansion rules before adding tools.
-- [ ] Add narrowly scoped system, process, file, and service-read tools in the
+- [x] Add narrowly scoped system, process, file, and service-read tools in the
   order fixed by ADR-0004.
   - [x] `system.read:os.identity` via bounded native os-release parsing.
   - [x] `system.read:uptime` via a bounded native `/proc/uptime` read.
@@ -72,7 +72,7 @@ audit.
     retained descriptors, fixed `0600`, and no-replace publication.
   - [x] One approval-gated exact systemd service-status observation using fixed
     native D-Bus calls and a redacted audit scope (ADR-0008).
-- [ ] Evaluate and select confinement technologies per resource class by ADR or
+- [x] Evaluate and select confinement technologies per resource class by ADR or
   an accepted extension of an existing profile.
   - [x] Exact-file reads: Linux `openat2` no-symlink resolution plus a retained
     descriptor and identity revalidation (ADR-0005).
@@ -82,11 +82,15 @@ audit.
   - [x] Exact service-status reads: fixed systemd system-bus calls for one
     approval-bound `.service` unit, with no listing, loading, mutation, generic
     D-Bus, or subprocess fallback (ADR-0008).
-- Enforce environment, working-directory, filesystem, network, timeout, output,
-  process, and resource controls.
-- Add property, adversarial, and integration tests for the security boundary.
+- [x] Keep environment, working-directory, filesystem, network, timeout, output,
+  process, and resource controls code-owned: the fixed Phase 1 command uses its
+  Bubblewrap profile, while native Phase 2 tools use resource-specific bounds
+  and confinement documented in the capability evidence.
+- [x] Add property, adversarial, and integration tests for each applicable
+  security boundary, including protected target-Linux evidence.
 
-Exit: every registered tool declares capabilities and passes containment tests.
+Exit satisfied: every registered tool declares a static capability and passes
+its applicable containment tests. See `docs/PHASE_2_BASELINE.md`.
 
 ## Phase 3: Privileged operations
 

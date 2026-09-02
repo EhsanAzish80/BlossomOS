@@ -883,8 +883,10 @@ pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
 
 fn request_error_category(error: &RequestError) -> &'static str {
     match error {
+        RequestError::RequestTooLarge => "request_too_large",
         RequestError::MalformedJson { .. } => "malformed_json",
         RequestError::InvalidRequestId => "invalid_request_id",
+        RequestError::InvalidToolName => "invalid_tool_name",
         RequestError::UnknownTool { .. } => "unknown_tool",
         RequestError::InvalidArguments { .. } => "invalid_arguments",
     }

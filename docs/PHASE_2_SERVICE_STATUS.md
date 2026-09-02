@@ -70,9 +70,11 @@ zero provider calls before approval, zero executor calls, verification, and
 audit redaction.
 
 Target-Linux review compiles the real zbus provider and exercises it against a
-private `dbus-daemon` with a controlled minimal systemd-compatible service. A
-real-systemd smoke observation is environment-conditional: a runner without a
-usable system manager is skipped rather than converted into false success.
+private `dbus-daemon` with a controlled minimal systemd-compatible service,
+including exact success, unavailable-unit, whole-operation timeout, and missing
+bus behavior. A real-systemd smoke observation is environment-conditional: a
+runner without a usable system manager is skipped rather than converted into
+false success.
 
 This checkpoint adds no service enumeration, unit loading, mutation, logs,
 process detail, generic IPC, Bash, sudo, LLM, privileged helper, or graphical
