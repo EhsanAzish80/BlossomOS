@@ -6,7 +6,7 @@ is not a packaged provider, an installed manifest, or the Phase 4 exit baseline.
 ## Implemented boundary
 
 The core now defines a versioned, deny-unknown-fields provider profile covering
-the provider/profile pair, protocol versions, exact binary and model artifact
+the provider/profile pair, protocol versions, exact runtime and model artifact
 sets and SHA-256 digests, service-unit digest, executable arguments, environment-name
 allowlist, fixed endpoint and inference path, filesystem visibility, resource
 bounds, and static service identities.
@@ -30,9 +30,11 @@ turn arbitrary manifest data into an accepted specification.
 
 - Ollama and llama.cpp profiles have fixed loopback endpoints, inference paths,
   provider-specific unit names, gateway unit, and namespace-anchor unit.
-- The binary and exact model mount are the complete read-only filesystem
-  allowlist. llama.cpp binds one GGUF; Ollama binds a sorted, aggregate-digested
-  manifest/blob set beneath its immutable model-store root.
+- The complete provider runtime directory and exact model mount are the
+  read-only filesystem allowlist. The executable must be an exact member of a
+  sorted, aggregate-digested runtime set, so bundled dynamic libraries are not
+  left unmeasured. llama.cpp binds one GGUF; Ollama binds a sorted,
+  aggregate-digested manifest/blob set beneath its immutable model-store root.
 - Writable paths must be absolute and disjoint from those artifacts.
 - Device access is empty, so this checkpoint does not authorize a GPU.
 - Endpoint override arguments, URLs, malformed paths, secret-bearing environment
@@ -46,9 +48,9 @@ Unit tests cover canonical loading and provenance, byte modification and
 non-canonical encoding, unknown fields, remote endpoints, endpoint override
 arguments, devices, writable-model expansion, wrong unit identity, unsafe mode,
 wrong owner, final symlinks, directories, and oversized input. Artifact-set
-tests reject ordering, duplication, root escape, aggregate drift, unknown store
-files and store symlinks. Linux-only tests also reject a symlinked parent
-component.
+tests reject ordering, duplication, root escape, aggregate drift, unbound
+executables, unknown runtime/model files and runtime/model symlinks. Linux-only
+tests also reject a symlinked parent component.
 
 ## Deliberately absent
 

@@ -109,13 +109,14 @@ def check_provider(name: str, kind: str) -> None:
         "RestrictAddressFamilies=AF_INET",
         "IPAddressAllow=localhost",
         "InaccessiblePaths=/boot /etc /home /media /mnt /opt /root /run /srv /usr/lib/blossom-os",
-        "BindReadOnlyPaths=@PROVIDER_BINARY@ @MODEL_PATH@",
+        "BindReadOnlyPaths=@PROVIDER_DIRECTORY@ @MODEL_PATH@",
         f"ReadWritePaths=/var/lib/blossom/model-provider/{kind}",
         "Restart=no",
     ]:
         require(value in text, f"{name}: provider boundary drift: {value}")
     allowed_tokens = {
         "@PROVIDER_BINARY@",
+        "@PROVIDER_DIRECTORY@",
         "@MODEL_PATH@",
         "@MODEL_DIRECTORY@",
         "@TASKS_MAX@",

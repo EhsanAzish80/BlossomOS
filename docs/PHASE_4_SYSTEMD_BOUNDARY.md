@@ -22,9 +22,9 @@ It is not installed runtime isolation or the Phase 4 exit baseline.
 
 Numeric service IDs are allocated collision-free by the target system and then
 persist in root-owned account data. They are not `DynamicUser=` identities. The
-future readiness implementation must resolve the fixed account names once,
-reject root/shared/missing identities, and bind the resolved UID/GID to the
-manifest, connected peer, unit, and runtime evidence without caller input.
+readiness implementation resolves the fixed account names from root-owned data,
+rejects root/shared/missing identities, and retains the resolved UID/GID in
+runtime evidence for future connected-peer checks without caller input.
 
 ## Hardening represented by the templates
 
@@ -35,9 +35,10 @@ address-family restrictions, syscall filtering, disabled core dumps, and
 bounded memory, swap, CPU, tasks, file size, and open files. Providers receive
 only `AF_INET` loopback and no Unix-socket or device access. Their only writable
 path is profile-specific disposable state under `/var/lib/blossom/`. The wider
-Blossom package tree is inaccessible and the selected binary/model are exposed
-through exact read-only binds. Dynamic-loader and ordinary system-library paths
-remain readable; this checkpoint does not claim a hermetic provider root.
+Blossom package tree is inaccessible and the complete measured provider runtime
+directory and selected model are exposed through exact read-only binds.
+Dynamic-loader and ordinary system-library paths remain readable; this
+checkpoint does not claim a hermetic provider root.
 
 Ollama's endpoint and model-store environment values are literal code-owned
 unit data; the manifest schema allowlists their names but never accepts values

@@ -11,7 +11,7 @@ device, endpoint, model, or template input. For each of the two CPU fixture
 profiles it fixes:
 
 - provider kind and protocol versions;
-- synthetic package-owned binary and model paths and placeholder digests;
+- synthetic package-owned runtime/model paths and placeholder digests;
 - exact executable arguments and environment-name allowlist;
 - fixed loopback endpoint and inference path;
 - exact read-only artifacts and one profile-specific disposable write path;
@@ -69,6 +69,6 @@ manifest authoritative or admit any input.
 ## Next checkpoint
 
 Implement root-owned account resolution and a fail-closed runtime readiness
-validator that binds the installed manifest, binary, model, rendered unit,
+validator that binds the installed manifest, runtime set, model, rendered unit,
 resolved identities, expected namespace/unit names, and immutable descriptor
 evidence. Keep production listening and private input disabled.

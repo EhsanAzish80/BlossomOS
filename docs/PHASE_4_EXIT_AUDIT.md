@@ -5,8 +5,10 @@ controls from evidence that does not yet exist.
 
 ## Satisfied repository gates
 
-- ADR-0011 through ADR-0014 are accepted. ADR-0014 removes guessed numeric
+- ADR-0011 through ADR-0015 are accepted. ADR-0014 removes guessed numeric
   service IDs from canonical profiles and binds installed IDs at readiness.
+- Canonical profiles and readiness bind the complete provider runtime artifact
+  set, including bundled dynamic libraries; unknown entries fail closed.
 - Both provider adapters accept only synthetic crate-owned requests and fixed
   numeric loopback endpoints.
 - Request, provider output, proposed intent, gateway frame and normalized event
@@ -25,7 +27,8 @@ controls from evidence that does not yet exist.
 
 - No release-constructible closed production profile registry exists.
 - No package recipe installs the gateway, accounts, namespace anchor, rendered
-  provider unit, manifest, provider binary and model as one reviewed set.
+  provider unit, manifest, complete provider runtime set and model as one
+  reviewed set.
 - No production service consumes readiness evidence and the retained
   descriptors at admission time.
 - No test has started the packaged services under the intended distinct users

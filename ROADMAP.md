@@ -168,7 +168,7 @@ remain blocked pending the complete ADR-0012 production and evidence gates.
     deterministic provider-unit renderer, binding exact manifest command,
     environment, filesystem, resource, identity, and rendered-unit digest data.
   - [x] Add fail-closed installed-account resolution and runtime-readiness
-    validation that binds the canonical manifest to root-owned binary, model,
+    validation that binds the canonical manifest to root-owned runtime, model,
     rendered-unit and account-database descriptor evidence while retaining the
     validated artifact descriptors against path-replacement TOCTOU.
   - [x] Route the two closed synthetic gateway profiles through the actual
@@ -179,6 +179,9 @@ remain blocked pending the complete ADR-0012 production and evidence gates.
     canonical model artifact sets so every llama.cpp GGUF or Ollama
     manifest/blob consumed by a profile is measured and unknown entries fail
     closed.
+  - [x] Accept ADR-0014 and ADR-0015 so canonical profiles bind fixed account
+    names rather than target-assigned numeric IDs and measure every executable
+    and bundled provider-runtime file as a closed immutable artifact set.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.
