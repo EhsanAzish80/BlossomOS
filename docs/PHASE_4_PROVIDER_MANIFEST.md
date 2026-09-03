@@ -21,9 +21,9 @@ exact bytes parsed. Other Unix development hosts reject a final symlink with
 
 Authority does not come from the file. Loading requires an opaque
 `ProviderProfileSpec` containing independently code-owned canonical bytes and a
-derived digest. This checkpoint intentionally provides no production constructor
-for that specification: packaging must add a closed compiled registry after the
-actual packaged artifact and unit digests exist. A caller or future model cannot
+derived digest. This checkpoint originally provided no production constructor.
+ADR-0016 now adds one embedded llama.cpp x86-64 specification after pinning its
+artifacts and unit; Ollama remains unavailable. A caller or future model cannot
 turn arbitrary manifest data into an accepted specification.
 
 ## Closed CPU-only policy
@@ -54,7 +54,7 @@ tests also reject a symlinked parent component.
 
 ## Deliberately absent
 
-- root-owned installed files or a production profile registry;
+- root-owned installed files or an installed production profile;
 - model or provider binaries, downloads, package metadata, or system accounts;
 - systemd units, namespace creation, provider lifecycle, or real provider I/O;
 - GPU access, private or ambient input, shell access, or broker authority; and

@@ -163,7 +163,7 @@ remain blocked pending the complete ADR-0012 production and evidence gates.
     unit templates, with repository drift checks and systemd verification.
   - [x] Add the fail-closed gateway process scaffold and Linux separate-process
     evidence for the one fixed synthetic request; release/default startup creates
-    no listener while the production registry and readiness proof are absent.
+    no listener while production admission and readiness proof are absent.
   - [x] Add the debug/test-only closed synthetic profile registry and
     deterministic provider-unit renderer, binding exact manifest command,
     environment, filesystem, resource, identity, and rendered-unit digest data.
@@ -182,6 +182,9 @@ remain blocked pending the complete ADR-0012 production and evidence gates.
   - [x] Accept ADR-0014 and ADR-0015 so canonical profiles bind fixed account
     names rather than target-assigned numeric IDs and measure every executable
     and bundled provider-runtime file as a closed immutable artifact set.
+  - [x] Accept ADR-0016 and add the first release-constructible x86-64 llama.cpp
+    registry entry plus an offline, deterministic, hash-pinned package-tree
+    recipe. This is not installed-service or target-Linux inference evidence.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.
@@ -212,16 +215,15 @@ credential-primitives checkpoint is
 documented in `docs/PHASE_4_GATEWAY_PROTOCOL.md`; the synthetic process boundary
 is documented in `docs/PHASE_4_GATEWAY_FIXTURE.md`. The closed manifest validator
 and synthetic filesystem evidence are documented in
-`docs/PHASE_4_PROVIDER_MANIFEST.md`. No production manifest, registry, identity,
-or service is installed, and private input remains blocked. The inactive
-sysusers and systemd template boundary is documented in
+`docs/PHASE_4_PROVIDER_MANIFEST.md`. One llama.cpp registry entry now exists,
+but no production manifest, identity, or service is installed and private input
+remains blocked. The inactive sysusers and systemd template boundary is documented in
 `docs/PHASE_4_SYSTEMD_BOUNDARY.md`; it creates no accounts or runtime state.
 The synthetic-only process scaffold is documented in
 `docs/PHASE_4_GATEWAY_PROCESS.md`; its production entry point deliberately exits
 not-ready before opening a socket.
 The closed synthetic registry and renderer evidence is documented in
-`docs/PHASE_4_PROFILE_RENDERER.md`; release builds still contain no constructible
-profile specification or provider-unit renderer.
+`docs/PHASE_4_PROFILE_RENDERER.md`.
 The runtime-readiness checkpoint is documented in
 `docs/PHASE_4_RUNTIME_READINESS.md`; it validates but does not install or start
 the package, and the production gateway remains closed.
@@ -230,6 +232,9 @@ The synthetic gateway-to-adapter checkpoint is documented in
 only and does not enable the release gateway.
 The current exit audit and exact unresolved gates are recorded in
 `docs/PHASE_4_EXIT_AUDIT.md`.
+The pinned llama.cpp registry/package checkpoint is documented in
+`docs/PHASE_4_PRODUCTION_REGISTRY.md`; Ollama packaging, gateway admission and
+target-Linux runtime evidence remain unresolved.
 ADR-0014 corrects the production identity representation: canonical profiles
 bind fixed service account names, while target-assigned numeric IDs are resolved
 from root-owned account data and retained only as readiness evidence.

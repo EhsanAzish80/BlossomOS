@@ -5,10 +5,13 @@ controls from evidence that does not yet exist.
 
 ## Satisfied repository gates
 
-- ADR-0011 through ADR-0015 are accepted. ADR-0014 removes guessed numeric
+- ADR-0011 through ADR-0016 are accepted. ADR-0014 removes guessed numeric
   service IDs from canonical profiles and binds installed IDs at readiness.
 - Canonical profiles and readiness bind the complete provider runtime artifact
   set, including bundled dynamic libraries; unknown entries fail closed.
+- One x86-64 llama.cpp profile is embedded into release builds from canonical
+  bytes, with immutable runtime/model/license pins and a deterministic offline
+  package-tree recipe.
 - Both provider adapters accept only synthetic crate-owned requests and fixed
   numeric loopback endpoints.
 - Request, provider output, proposed intent, gateway frame and normalized event
@@ -25,16 +28,17 @@ controls from evidence that does not yet exist.
 
 ## Unsatisfied production gates
 
-- No release-constructible closed production profile registry exists.
-- No package recipe installs the gateway, accounts, namespace anchor, rendered
-  provider unit, manifest, complete provider runtime set and model as one
-  reviewed set.
+- The production registry/package set is incomplete: the pinned llama.cpp
+  x86-64 entry exists, but Ollama and other supported architectures do not.
+- The llama.cpp recipe produces one reviewed package root, but it has not been
+  installed or exercised on the supported target Linux baseline.
 - No production service consumes readiness evidence and the retained
   descriptors at admission time.
 - No test has started the packaged services under the intended distinct users
   and verified namespace identity, loopback-only networking, socket ownership,
   peer authorization, filesystem denial and lifecycle failure behavior.
-- No pinned real Ollama or llama.cpp runtime and model artifacts are present.
+- No pinned real Ollama package exists; pinned llama.cpp/Qwen inputs have not
+  yet produced target-Linux runtime evidence.
 - No real local-model inference has been recorded with external networking
   disabled on the supported target Linux baseline.
 

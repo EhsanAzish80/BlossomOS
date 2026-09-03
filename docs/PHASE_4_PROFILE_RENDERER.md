@@ -61,7 +61,8 @@ manifest authoritative or admit any input.
 - trusted account-name resolution or installed numeric identity binding;
 - root-owned artifact, manifest, or rendered-unit loading and digest checks as
   one readiness transaction;
-- a production registry, renderer, package recipe, or signed artifact;
+- at this checkpoint, a production registry, renderer, package recipe, or
+  signed artifact (ADR-0016 later adds the first pinned llama.cpp recipe);
 - listener creation, group authorization, provider startup, health checks, or
   namespace membership proof;
 - private input, real prompts/models, downloads, GPU access, or tool execution.

@@ -99,7 +99,6 @@ pub struct ProviderProfileSpec {
 }
 
 impl ProviderProfileSpec {
-    #[cfg(any(test, debug_assertions))]
     fn compile(expected: ProviderProfileManifest) -> Result<Self, ProviderProfileError> {
         validate_manifest(&expected)?;
         let canonical_bytes =
@@ -115,6 +114,19 @@ impl ProviderProfileSpec {
         })
     }
 
+    fn from_embedded(bytes: &[u8]) -> Result<Self, ProviderProfileError> {
+        if bytes.len() > MAX_PROVIDER_MANIFEST_BYTES {
+            return Err(ProviderProfileError::ManifestTooLarge);
+        }
+        let expected: ProviderProfileManifest =
+            serde_json::from_slice(bytes).map_err(|_| ProviderProfileError::InvalidManifest)?;
+        let specification = Self::compile(expected)?;
+        if specification.canonical_bytes != bytes {
+            return Err(ProviderProfileError::InvalidManifest);
+        }
+        Ok(specification)
+    }
+
     pub fn manifest(&self) -> &ProviderProfileManifest {
         &self.expected
     }
@@ -125,6 +137,29 @@ impl ProviderProfileSpec {
 
     pub fn sha256(&self) -> &str {
         &self.sha256
+    }
+}
+
+/// Return the sole release-compiled production profile currently packaged.
+///
+/// This constructs authority only from repository-owned bytes embedded at
+/// compile time. It does not read a caller-selected registry or start a
+/// provider. Ollama remains unavailable until its deterministic store package
+/// is independently pinned and reviewed.
+pub fn production_provider_profile(
+    profile: GatewayProfile,
+) -> Result<Option<ProviderProfileSpec>, ProviderProfileError> {
+    const LLAMA_CPP_X86_64: &[u8] = include_bytes!(
+        "../../../../system/model-runtime/registry/llama-cpp-cpu-x86_64.profile.json"
+    );
+    match profile {
+        GatewayProfile::LlamaCppCpuV1 if cfg!(target_arch = "x86_64") => {
+            let bytes = LLAMA_CPP_X86_64
+                .strip_suffix(b"\n")
+                .unwrap_or(LLAMA_CPP_X86_64);
+            ProviderProfileSpec::from_embedded(bytes).map(Some)
+        }
+        GatewayProfile::LlamaCppCpuV1 | GatewayProfile::OllamaCpuV1 => Ok(None),
     }
 }
 
@@ -1219,6 +1254,46 @@ mod tests {
         let mut value: serde_json::Value = serde_json::from_slice(spec.canonical_bytes()).unwrap();
         value["unknown"] = serde_json::Value::Bool(true);
         assert!(serde_json::from_value::<ProviderProfileManifest>(value).is_err());
+    }
+
+    #[test]
+    fn embedded_production_registry_is_canonical_and_closed() {
+        const EMBEDDED: &[u8] = include_bytes!(
+            "../../../../system/model-runtime/registry/llama-cpp-cpu-x86_64.profile.json"
+        );
+        let bytes = EMBEDDED.strip_suffix(b"\n").unwrap_or(EMBEDDED);
+        let profile = ProviderProfileSpec::from_embedded(bytes).unwrap();
+        assert_eq!(profile.manifest().profile, GatewayProfile::LlamaCppCpuV1);
+        assert_eq!(profile.canonical_bytes(), bytes);
+
+        let mut changed = bytes.to_vec();
+        let final_byte = changed.last_mut().unwrap();
+        *final_byte = b' ';
+        assert_eq!(
+            ProviderProfileSpec::from_embedded(&changed).unwrap_err(),
+            ProviderProfileError::InvalidManifest
+        );
+    }
+
+    #[test]
+    fn production_registry_has_no_fallback_profile() {
+        assert!(
+            production_provider_profile(GatewayProfile::OllamaCpuV1)
+                .unwrap()
+                .is_none()
+        );
+        #[cfg(target_arch = "x86_64")]
+        assert!(
+            production_provider_profile(GatewayProfile::LlamaCppCpuV1)
+                .unwrap()
+                .is_some()
+        );
+        #[cfg(not(target_arch = "x86_64"))]
+        assert!(
+            production_provider_profile(GatewayProfile::LlamaCppCpuV1)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
