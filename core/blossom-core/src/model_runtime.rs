@@ -14,9 +14,17 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+mod gateway;
 mod llama_cpp;
 mod ollama;
 
+pub use gateway::{
+    GATEWAY_PROTOCOL_VERSION, GatewayEventValidator, GatewayFrame, GatewayFrameDecoder,
+    GatewayMessageKind, GatewayPeerCredentials, GatewayProfile, GatewayProtocolError,
+    MAX_GATEWAY_FRAME_BYTES, decode_gateway_cancel, decode_gateway_event, decode_gateway_hello,
+    decode_gateway_synthetic_request, encode_gateway_cancel, encode_gateway_event,
+    encode_gateway_hello, encode_gateway_synthetic_request, validate_gateway_peer,
+};
 pub use llama_cpp::{LLAMA_CPP_ENDPOINT, LlamaCppAdapter, LlamaCppAdapterError};
 pub use ollama::{OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError};
 
@@ -32,7 +40,7 @@ pub const MAX_TEXT_DELTA_BYTES: usize = 8 * 1024;
 pub const MAX_OUTPUT_BYTES: usize = 128 * 1024;
 pub const MAX_DEADLINE_MS: u64 = 120_000;
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelProviderKind {
     Ollama,
@@ -120,7 +128,7 @@ pub enum InferenceOutputMode {
     BlossomTurn,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelIntentKind {
     SystemOsIdentity,
@@ -362,7 +370,8 @@ struct ProviderToolIntent {
     arguments: Value,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ProposedToolIntent {
     kind: ModelIntentKind,
 }
@@ -373,8 +382,8 @@ impl ProposedToolIntent {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum NormalizedCompletion {
     Text { content: String },
     ToolIntents { intents: Vec<ProposedToolIntent> },
@@ -446,7 +455,7 @@ impl InferenceCancellation {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderFailureCategory {
     Unavailable,
@@ -470,8 +479,8 @@ pub enum ProviderStreamInput {
     Failed(ProviderFailureCategory),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum NormalizedStreamKind {
     Started,
     TextDelta {
@@ -493,7 +502,8 @@ pub enum NormalizedStreamKind {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct NormalizedStreamEvent {
     pub version: u16,
     pub request_id: String,

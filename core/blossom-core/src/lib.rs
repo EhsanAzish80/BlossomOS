@@ -36,14 +36,18 @@ pub use memory_summary::{
     parse_proc_meminfo,
 };
 pub use model_runtime::{
-    ConversationMessage, ConversationRole, InferenceAuditOutcome, InferenceAuditProjection,
-    InferenceCancellation, InferenceOutputMode, InferenceRequest, InferenceRequestId,
-    LLAMA_CPP_ENDPOINT, LlamaCppAdapter, LlamaCppAdapterError, MODEL_PROTOCOL_VERSION,
-    ModelContractError, ModelIntentDefinition, ModelIntentKind, ModelProfile, ModelProviderKind,
-    ModelStreamState, NormalizedCompletion, NormalizedStreamEvent, NormalizedStreamKind,
-    OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError, ProposedToolIntent,
-    ProviderFailureCategory, ProviderStreamInput, TurnIntentCatalogue,
-    validate_provider_completion,
+    ConversationMessage, ConversationRole, GATEWAY_PROTOCOL_VERSION, GatewayEventValidator,
+    GatewayFrame, GatewayFrameDecoder, GatewayMessageKind, GatewayPeerCredentials, GatewayProfile,
+    GatewayProtocolError, InferenceAuditOutcome, InferenceAuditProjection, InferenceCancellation,
+    InferenceOutputMode, InferenceRequest, InferenceRequestId, LLAMA_CPP_ENDPOINT, LlamaCppAdapter,
+    LlamaCppAdapterError, MAX_GATEWAY_FRAME_BYTES, MODEL_PROTOCOL_VERSION, ModelContractError,
+    ModelIntentDefinition, ModelIntentKind, ModelProfile, ModelProviderKind, ModelStreamState,
+    NormalizedCompletion, NormalizedStreamEvent, NormalizedStreamKind, OLLAMA_ENDPOINT,
+    OllamaAdapter, OllamaAdapterError, ProposedToolIntent, ProviderFailureCategory,
+    ProviderStreamInput, TurnIntentCatalogue, decode_gateway_cancel, decode_gateway_event,
+    decode_gateway_hello, decode_gateway_synthetic_request, encode_gateway_cancel,
+    encode_gateway_event, encode_gateway_hello, encode_gateway_synthetic_request,
+    validate_gateway_peer, validate_provider_completion,
 };
 pub use os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, OsReleaseReader, OsReleaseSource,
