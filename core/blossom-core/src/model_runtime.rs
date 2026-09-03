@@ -14,6 +14,10 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+mod ollama;
+
+pub use ollama::{OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError};
+
 pub const MODEL_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_INFERENCE_REQUEST_BYTES: usize = 256 * 1024;
 pub const MAX_MESSAGES: usize = 64;
@@ -331,6 +335,14 @@ impl InferenceRequest {
 
     pub fn intents(&self) -> &TurnIntentCatalogue {
         &self.intents
+    }
+
+    pub fn output_mode(&self) -> InferenceOutputMode {
+        self.output_mode
+    }
+
+    pub fn deadline_ms(&self) -> u64 {
+        self.deadline_ms
     }
 }
 

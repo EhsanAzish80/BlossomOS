@@ -40,8 +40,9 @@ pub use model_runtime::{
     InferenceCancellation, InferenceOutputMode, InferenceRequest, InferenceRequestId,
     MODEL_PROTOCOL_VERSION, ModelContractError, ModelIntentDefinition, ModelIntentKind,
     ModelProfile, ModelProviderKind, ModelStreamState, NormalizedCompletion, NormalizedStreamEvent,
-    NormalizedStreamKind, ProposedToolIntent, ProviderFailureCategory, ProviderStreamInput,
-    TurnIntentCatalogue, validate_provider_completion,
+    NormalizedStreamKind, OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError, ProposedToolIntent,
+    ProviderFailureCategory, ProviderStreamInput, TurnIntentCatalogue,
+    validate_provider_completion,
 };
 pub use os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, OsReleaseReader, OsReleaseSource,

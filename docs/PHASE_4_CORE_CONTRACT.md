@@ -50,10 +50,8 @@ checks, Gitleaks, CodeQL, and the existing target-Linux workflows before this
 checkpoint may merge. Those checks establish the core contract only; they do
 not satisfy the Phase 4 exit criteria.
 
-## Next checkpoint
+## Following checkpoint
 
-Implement the fixed-loopback Ollama development adapter for synthetic
-conformance prompts only. It must not receive private data, execute proposed
-tools, follow redirects, use environment proxies, or choose a caller-supplied
-endpoint. Phase 4 remains active until every exit criterion in `ROADMAP.md` is
-satisfied.
+The fixed-loopback Ollama development adapter is implemented separately in
+`docs/PHASE_4_OLLAMA_ADAPTER.md`. Phase 4 remains active until every exit
+criterion in `ROADMAP.md` is satisfied.

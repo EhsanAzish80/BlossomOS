@@ -142,8 +142,10 @@ Phases 0 through 3 are complete. Their exit evidence is recorded in
 `docs/PHASE_2_BASELINE.md`, and `docs/PHASE_3_BASELINE.md`. Phase 4 is active
 under accepted ADR-0011, beginning with provider-neutral types and synthetic
 conformance fixtures. The closed core contract is implemented and documented in
-`docs/PHASE_4_CORE_CONTRACT.md`; no provider transport or real model runtime is
-implemented yet, and private inputs remain blocked pending a separately
+`docs/PHASE_4_CORE_CONTRACT.md`. A fixed-loopback, synthetic-only Ollama
+development adapter is documented in `docs/PHASE_4_OLLAMA_ADAPTER.md`; it is not
+an authenticated or production model runtime. No private input, model download,
+provider lifecycle, or real-model evidence exists, pending a separately
 reviewed provider-identity boundary.
 
 Prototype commands in older documentation are historical development material,

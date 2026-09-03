@@ -143,7 +143,7 @@ private inputs remain blocked pending an accepted endpoint-identity ADR.
   streaming, locality, privacy, and conformance contract.
 - [x] Implement closed core types, validation, cancellation, normalized stream
   state, redacted audit projection, and scripted conformance tests.
-- [ ] Implement the fixed-local Ollama adapter.
+- [x] Implement the fixed-local, synthetic-only Ollama development adapter.
 - [ ] Implement the fixed-local llama.cpp adapter to prove replaceability.
 - [ ] Accept and implement a provider endpoint-identity and packaging boundary
   before either real adapter may receive private or ambient user data.
@@ -160,8 +160,10 @@ operation is verified offline on target Linux, and no provider path bypasses the
 broker, policy, approval, verification, or audit boundary. Unauthenticated
 loopback endpoints receive no private input.
 
-Checkpoint evidence: `docs/PHASE_4_CORE_CONTRACT.md`. Phase 4 remains active;
-the checked core-contract item does not claim either adapter or a real model.
+Checkpoint evidence: `docs/PHASE_4_CORE_CONTRACT.md` and
+`docs/PHASE_4_OLLAMA_ADAPTER.md`. Phase 4 remains active; neither checkpoint
+claims an authenticated provider endpoint, private-input support, or a real
+model test.
 
 ## Phase 5: Planning and verification
 
