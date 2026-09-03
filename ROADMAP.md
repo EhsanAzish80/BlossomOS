@@ -195,6 +195,9 @@ the complete production and evidence gates.
   - [x] Accept ADR-0017 for retained-account client eligibility,
     server-derived private request identity, one-request connections,
     cancellation races, and redacted production evidence.
+  - [x] Retain the exact account-database bytes used by readiness and authorize
+    connected non-root clients by kernel UID plus primary or unique
+    supplementary `blossom-ai` membership without reopening account paths.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.

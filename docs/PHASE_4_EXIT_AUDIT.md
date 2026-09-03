@@ -38,9 +38,9 @@ controls from evidence that does not yet exist.
 - Production startup consumes readiness evidence and retains its descriptors
   through the admission decision, but no packaged service has exercised that
   path and the listener remains deliberately disabled.
-- ADR-0017 fixes the private admission and cancellation contract, but its
-  production listener, membership checks and adversarial tests are not yet
-  implemented.
+- ADR-0017 fixes the private admission and cancellation contract. Retained
+  account-snapshot membership checks and their negative tests are implemented,
+  but the production listener and cancellation path are not yet implemented.
 - No test has started the packaged services under the intended distinct users
   and verified namespace identity, loopback-only networking, socket ownership,
   peer authorization, filesystem denial and lifecycle failure behavior.

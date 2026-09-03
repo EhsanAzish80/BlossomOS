@@ -47,8 +47,8 @@ pub use provider_profile::{
 #[cfg(debug_assertions)]
 pub use provider_profile::{SyntheticProviderPackage, fixed_synthetic_provider_package};
 pub use runtime_readiness::{
-    AccountDatabaseEvidence, ResolvedModelIdentities, RuntimeFileEvidence, RuntimeReadinessError,
-    RuntimeReadinessEvidence, load_installed_runtime_readiness,
+    AccountDatabaseEvidence, AuthorizedGatewayClient, ResolvedModelIdentities, RuntimeFileEvidence,
+    RuntimeReadinessError, RuntimeReadinessEvidence, load_installed_runtime_readiness,
 };
 
 pub const MODEL_PROTOCOL_VERSION: u16 = 1;
