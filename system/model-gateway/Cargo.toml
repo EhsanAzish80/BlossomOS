@@ -12,6 +12,6 @@ path = "src/main.rs"
 
 [dependencies]
 blossom-core = { path = "../../core/blossom-core" }
+nix.workspace = true
 
 [dev-dependencies]
-nix.workspace = true

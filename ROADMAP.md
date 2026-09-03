@@ -188,6 +188,9 @@ remain blocked pending the complete ADR-0012 production and evidence gates.
   - [x] Render the gateway service per closed package profile so its sandbox
     exposes only the selected manifest, measured runtime set, and model needed
     for readiness validation; keep the production listener disabled.
+  - [x] Make supported-Linux release startup select the sole embedded profile,
+    consume installed readiness, and match its effective service UID/GID before
+    returning fail-closed without a listener.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.

@@ -52,6 +52,9 @@ lint matrix continues to validate other supported build hosts.
 - socket creation, listener readiness, health checks or namespace membership;
 - private prompts, ambient data, real models, downloads or GPU access.
 
-The release gateway still exits not-ready before opening a socket. Phase 4
-remains active until the remaining ADR-0012 production-path and offline
-real-model target-Linux evidence is produced.
+On supported Linux builds, the release gateway now selects the sole embedded
+production profile, loads installed readiness from its one fixed manifest path,
+and requires its effective UID/GID to equal the resolved gateway identity. It
+still exits not-ready before opening a socket. Phase 4 remains active until the
+remaining ADR-0012 production-path and offline real-model target-Linux evidence
+is produced.

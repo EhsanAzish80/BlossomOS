@@ -52,7 +52,8 @@ pub use model_runtime::{
     decode_gateway_cancel, decode_gateway_event, decode_gateway_hello,
     decode_gateway_synthetic_request, encode_gateway_cancel, encode_gateway_event,
     encode_gateway_hello, encode_gateway_synthetic_request, load_installed_provider_profile,
-    production_provider_profile, validate_gateway_peer, validate_provider_completion,
+    load_installed_runtime_readiness, production_provider_profile, validate_gateway_peer,
+    validate_provider_completion,
 };
 #[cfg(unix)]
 pub use model_runtime::{
