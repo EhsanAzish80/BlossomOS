@@ -44,3 +44,6 @@ compatibility, packaging, or contributor obligations.
   local transports, untrusted tool intents, streaming/cancellation semantics,
   minimal per-turn tool catalogues, synthetic/private input gating, endpoint
   identity, adapter conformance, and real offline evidence requirements.
+- Provider endpoint identity and packaging: proposed in ADR-0012. It selects a
+  distinct-UID Unix-socket gateway and an isolated, separately sandboxed
+  provider profile; private input remains blocked until review and implementation.
