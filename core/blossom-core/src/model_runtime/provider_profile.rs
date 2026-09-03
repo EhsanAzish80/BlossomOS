@@ -479,37 +479,22 @@ fn metadata_inode(_: &Metadata) -> u64 {
 
 #[cfg(target_os = "linux")]
 fn open_manifest(path: &Path) -> Result<File, ProviderProfileError> {
-    use std::ffi::CString;
-    use std::os::fd::{AsRawFd, FromRawFd};
-    use std::os::unix::ffi::OsStrExt;
+    use nix::fcntl::{OFlag, OpenHow, ResolveFlag, openat2};
 
     let relative = path
         .strip_prefix("/")
         .map_err(|_| ProviderProfileError::InvalidPath)?;
-    let encoded = CString::new(relative.as_os_str().as_bytes())
-        .map_err(|_| ProviderProfileError::InvalidPath)?;
     let root = File::open("/").map_err(|_| ProviderProfileError::OpenFailed)?;
-    let how = libc::open_how {
-        flags: (libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NOFOLLOW) as u64,
-        mode: 0,
-        resolve: libc::RESOLVE_BENEATH | libc::RESOLVE_NO_MAGICLINKS | libc::RESOLVE_NO_SYMLINKS,
-    };
-    // SAFETY: `encoded` and `how` live for the syscall, their lengths are
-    // exact, and a successful returned descriptor is uniquely owned by File.
-    let fd = unsafe {
-        libc::syscall(
-            libc::SYS_openat2,
-            root.as_raw_fd(),
-            encoded.as_ptr(),
-            &how,
-            std::mem::size_of::<libc::open_how>(),
-        )
-    };
-    if fd < 0 {
-        return Err(ProviderProfileError::OpenFailed);
-    }
-    // SAFETY: successful openat2 returns a new owned descriptor.
-    Ok(unsafe { File::from_raw_fd(fd as i32) })
+    let how = OpenHow::new()
+        .flags(OFlag::O_RDONLY | OFlag::O_CLOEXEC | OFlag::O_NOFOLLOW)
+        .resolve(
+            ResolveFlag::RESOLVE_BENEATH
+                | ResolveFlag::RESOLVE_NO_MAGICLINKS
+                | ResolveFlag::RESOLVE_NO_SYMLINKS,
+        );
+    openat2(root, relative, how)
+        .map(File::from)
+        .map_err(|_| ProviderProfileError::OpenFailed)
 }
 
 #[cfg(all(unix, not(target_os = "linux")))]
