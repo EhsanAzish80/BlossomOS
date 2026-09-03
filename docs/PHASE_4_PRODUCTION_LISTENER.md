@@ -18,6 +18,13 @@ through the fixed llama.cpp adapter and the existing concurrent cancellation
 state machine. Connections are processed sequentially, bounding active
 inference to one. Per-connection failure does not widen authority.
 
+ADR-0018 adds a create-new, boot-scoped operational journal under the runtime
+directory. Admission, request start, protocol rejection and terminal outcomes
+are bounded, synced and hash-chained. Client and request identifiers use
+domain-separated per-process digests. A request-start write failure starts no
+inference, and the handler holds its validated terminal frame until terminal
+evidence is durable. Records omit private content and raw identity data.
+
 The socket guard removes only the same socket device/inode on orderly unwind.
 Systemd's non-preserved runtime directory remains responsible for cleanup when
 the process is terminated without Rust unwinding.

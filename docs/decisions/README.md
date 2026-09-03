@@ -63,3 +63,6 @@ compatibility, packaging, or contributor obligations.
   the admission order, retained-account membership check, server-derived
   private request identity, one-request connection, cancellation race, and
   redacted evidence rules that must pass before the listener is enabled.
+- Boot-scoped gateway operational audit: accepted in ADR-0018. It fixes the
+  bounded, synced, hash-chained, content-free production evidence journal and
+  makes audit availability a prerequisite for successful private inference.

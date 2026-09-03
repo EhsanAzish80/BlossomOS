@@ -5,7 +5,7 @@ controls from evidence that does not yet exist.
 
 ## Satisfied repository gates
 
-- ADR-0011 through ADR-0017 are accepted. ADR-0014 removes guessed numeric
+- ADR-0011 through ADR-0018 are accepted. ADR-0014 removes guessed numeric
   service IDs from canonical profiles and binds installed IDs at readiness.
 - Canonical profiles and readiness bind the complete provider runtime artifact
   set, including bundled dynamic libraries; unknown entries fail closed.
@@ -28,6 +28,9 @@ controls from evidence that does not yet exist.
   `production-private-inference` package feature. Default builds remain closed.
   The gated path refuses stale socket paths, verifies exact socket metadata,
   authorizes kernel peer credentials before hello/input and retains readiness.
+- The feature-gated path creates a bounded, synced, hash-chained boot journal;
+  request-start audit failure starts no inference and terminal evidence is
+  durable before the terminal frame is released.
 - Linux peer-credential primitives and a separate-process synthetic Unix
   gateway are tested.
 - Both real adapter implementations are exercised through authenticated
@@ -54,6 +57,9 @@ controls from evidence that does not yet exist.
 - No test has started the packaged services under the intended distinct users
   and verified namespace identity, loopback-only networking, socket ownership,
   peer authorization, filesystem denial and lifecycle failure behavior.
+- The journal has unit-level integrity and redaction evidence, but its ownership,
+  access denial, capacity and failure behavior remain unproved in the installed
+  systemd service.
 - No pinned real Ollama package exists; pinned llama.cpp/Qwen inputs have not
   yet produced target-Linux runtime evidence.
 - No real local-model inference has been recorded with external networking
@@ -64,5 +70,5 @@ controls from evidence that does not yet exist.
 The Phase 4 exit criterion is not satisfied. Controlled-protocol conformance is
 not real-model evidence, and static unit analysis is not runtime isolation
 evidence. Private and ambient input must remain disabled in packages, the
-default gateway must remain fail closed, and Phase 5 must not begin until every item
-above is backed by reviewable target-Linux evidence.
+default gateway must remain fail closed, and Phase 5 must not begin until every
+item above is backed by reviewable target-Linux evidence.
