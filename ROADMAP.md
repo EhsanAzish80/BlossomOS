@@ -213,6 +213,9 @@ the complete production and evidence gates.
     listener with stale-path refusal, exact socket metadata, boot/process
     identity, peer credentials and retained-snapshot authorization. Default
     builds remain fail closed until installed adversarial evidence enables it.
+  - [x] Accept ADR-0018 and implement the boot-scoped, synced, hash-chained,
+    content-free operational journal so request-start evidence precedes
+    inference and terminal evidence precedes terminal delivery.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.
