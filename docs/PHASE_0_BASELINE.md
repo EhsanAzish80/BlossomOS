@@ -43,18 +43,19 @@ phase. It is not a claim that the target agent-native system exists.
 
 ### Implemented versus aspirational
 
-- Status: documented.
-- Implemented: prototype ISO/setup scripts, XFCE/Picom configuration, VM helpers,
-  and a rule-based Python CLI that gathers limited system information and returns
-  canned guidance.
-- Not implemented: a real LLM runtime, Hyprland/Quickshell shell, Blossom Bus,
-  capability broker, policy engine, approval protocol, sandboxed executor,
-  privileged helper, structured audit service, agent planner, or verification
-  state machine.
+- Status: historical Phase 0 inventory; superseded for current implementation
+  status by the root README and later phase baselines.
+- At Phase 0, only the prototype ISO/setup scripts, XFCE/Picom configuration,
+  VM helpers, and rule-based Python CLI existed.
+- Phases 1 through 3 have since implemented the separate trusted Rust security
+  core, closed capabilities, sandboxed fixed diagnostic, verification/audit,
+  and one narrowly typed privileged helper operation. A real LLM runtime,
+  Hyprland/Quickshell shell, Blossom Bus, and agent planner remain unimplemented.
 
 ### Contributor rules
 
-- Status: documented but not enforced by repository settings or CI.
+- Status: documented and enforced by repository policy, CI, and protected
+  `main` settings as of 2026-09-03.
 - `CONTRIBUTING.md` defines review, architecture, test, documentation, and Git
   expectations.
 - External changes must not be treated as authorization for system operations.
@@ -79,7 +80,8 @@ phase. It is not a claim that the target agent-native system exists.
   conversations. Force-pushes and branch deletion are disabled.
 - `docs/BRANCH_RELEASE_POLICY.md` defines the initial branch, review, versioning,
   release, checksum, and signing policy. No supported releases exist.
-- Required checks are `Repository checks`, `Analyze Python`, and `Gitleaks`.
+- Required checks are `Repository checks`, `Analyze Python`, `Gitleaks`, and
+  `Dependency review`.
 
 ### CI, lint, tests, and security scanning
 
@@ -97,6 +99,9 @@ phase. It is not a claim that the target agent-native system exists.
   error severity, and Actionlint passed.
 - Default-branch evidence on commit `42aa8d0`: Quality, CodeQL, and Secret scan
   completed successfully.
+- Later phases added strict Rust formatting, Clippy, target-Linux tests,
+  privileged packaging validation, and dependency review. The dependency graph
+  and required `Dependency review` check were verified enabled on 2026-09-02.
 
 ## Prototype safety and repository-hygiene findings
 

@@ -33,8 +33,8 @@ compatibility, packaging, or contributor obligations.
 - Privileged-helper authorization design: accepted in ADR-0009; the first
   operation is fixed by accepted ADR-0010.
 - First privileged operation: ADR-0010 permits only an approval-gated
-  `TryRestartUnit` for the fixed already-running `bluetooth.service`; helper
-  implementation remains pending.
+  `TryRestartUnit` for the fixed already-running `bluetooth.service`; its Phase
+  3 implementation and independent exit review are complete.
 - Local IPC transport and schema format.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
