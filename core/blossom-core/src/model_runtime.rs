@@ -29,6 +29,8 @@ pub use gateway::{
     decode_gateway_synthetic_request, encode_gateway_cancel, encode_gateway_event,
     encode_gateway_hello, encode_gateway_synthetic_request, validate_gateway_peer,
 };
+#[cfg(all(unix, debug_assertions))]
+pub use gateway_fixture::serve_synthetic_gateway_via_adapter_once;
 #[cfg(unix)]
 pub use gateway_fixture::{
     GatewayFixtureError, SyntheticGatewayClient, fixed_synthetic_gateway_request,

@@ -35,6 +35,8 @@ pub use memory_summary::{
     MemorySummaryProvider, PROC_MEMINFO_PATH, ProcMeminfoReader, UnavailableMemorySummaryProvider,
     parse_proc_meminfo,
 };
+#[cfg(all(unix, debug_assertions))]
+pub use model_runtime::serve_synthetic_gateway_via_adapter_once;
 pub use model_runtime::{
     ConversationMessage, ConversationRole, GATEWAY_PROTOCOL_VERSION, GatewayEventValidator,
     GatewayFrame, GatewayFrameDecoder, GatewayMessageKind, GatewayPeerCredentials, GatewayProfile,
