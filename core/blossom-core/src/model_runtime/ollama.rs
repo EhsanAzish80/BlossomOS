@@ -20,9 +20,9 @@ use std::time::{Duration, Instant};
 
 pub const OLLAMA_ENDPOINT: &str = "127.0.0.1:11434";
 const OLLAMA_PATH: &str = "/api/chat";
-const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
+pub(super) const MAX_HTTP_HEADER_BYTES: usize = 16 * 1024;
 const MAX_HTTP_HEADERS: usize = 64;
-const MAX_HTTP_BODY_BYTES: usize = 256 * 1024;
+pub(super) const MAX_HTTP_BODY_BYTES: usize = 256 * 1024;
 const MAX_HTTP_CHUNK_BYTES: usize = 64 * 1024;
 const MAX_PROVIDER_LINE_BYTES: usize = 192 * 1024;
 const MAX_PROVIDER_EVENTS: u64 = 4_096;
@@ -44,7 +44,7 @@ impl Default for OllamaAdapter {
 
 impl OllamaAdapter {
     #[cfg(test)]
-    fn for_test(endpoint: SocketAddr) -> Result<Self, OllamaAdapterError> {
+    pub(super) fn for_test(endpoint: SocketAddr) -> Result<Self, OllamaAdapterError> {
         if !endpoint.ip().is_loopback() {
             return Err(OllamaAdapterError::InvalidEndpoint);
         }
@@ -62,7 +62,7 @@ impl OllamaAdapter {
     }
 
     #[cfg(test)]
-    fn infer(
+    pub(super) fn infer(
         &self,
         request: &InferenceRequest,
         cancellation: InferenceCancellation,
@@ -119,6 +119,8 @@ impl OllamaAdapter {
         match write_request(
             &mut stream,
             self.endpoint,
+            OLLAMA_PATH,
+            "application/x-ndjson",
             &payload,
             deadline,
             &cancellation,
@@ -136,18 +138,19 @@ impl OllamaAdapter {
         }
 
         let mut reader = BufReader::new(stream);
-        let framing = match read_headers(&mut reader, deadline, &cancellation) {
-            Ok(framing) => framing,
-            Err(OllamaAdapterError::Cancelled) => {
-                push_event(
-                    &mut events,
-                    state.apply(1, ProviderStreamInput::Finished)?,
-                    emit,
-                );
-                return Ok(events);
-            }
-            Err(error) => return terminalize(error, state, events, 1, emit),
-        };
+        let framing =
+            match read_headers(&mut reader, "application/x-ndjson", deadline, &cancellation) {
+                Ok(framing) => framing,
+                Err(OllamaAdapterError::Cancelled) => {
+                    push_event(
+                        &mut events,
+                        state.apply(1, ProviderStreamInput::Finished)?,
+                        emit,
+                    );
+                    return Ok(events);
+                }
+                Err(error) => return terminalize(error, state, events, 1, emit),
+            };
         let mut line_decoder = LineDecoder::default();
         let mut sequence = 1;
         let mut terminal_seen = false;
@@ -307,7 +310,7 @@ fn terminalize(
     }
 }
 
-fn configure_stream(stream: &TcpStream) -> Result<(), OllamaAdapterError> {
+pub(super) fn configure_stream(stream: &TcpStream) -> Result<(), OllamaAdapterError> {
     stream.set_read_timeout(Some(IO_POLL_INTERVAL))?;
     stream.set_write_timeout(Some(IO_POLL_INTERVAL))?;
     stream.set_nodelay(true)?;
@@ -388,15 +391,17 @@ fn encode_request(request: &InferenceRequest) -> Result<Vec<u8>, OllamaAdapterEr
     .map_err(|_| OllamaAdapterError::EncodingFailed)
 }
 
-fn write_request(
+pub(super) fn write_request(
     stream: &mut TcpStream,
     endpoint: SocketAddr,
+    path: &str,
+    accept: &str,
     payload: &[u8],
     deadline: Instant,
     cancellation: &InferenceCancellation,
 ) -> Result<(), OllamaAdapterError> {
     let header = format!(
-        "POST {OLLAMA_PATH} HTTP/1.1\r\nHost: {endpoint}\r\nContent-Type: application/json\r\nAccept: application/x-ndjson\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "POST {path} HTTP/1.1\r\nHost: {endpoint}\r\nContent-Type: application/json\r\nAccept: {accept}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         payload.len()
     );
     write_all_checked(stream, header.as_bytes(), deadline, cancellation)?;
@@ -423,14 +428,15 @@ fn write_all_checked(
 }
 
 #[derive(Clone, Copy)]
-enum BodyFraming {
+pub(super) enum BodyFraming {
     ContentLength(usize),
     Chunked,
     UntilClose,
 }
 
-fn read_headers(
+pub(super) fn read_headers(
     reader: &mut BufReader<TcpStream>,
+    expected_content_type: &str,
     deadline: Instant,
     cancellation: &InferenceCancellation,
 ) -> Result<BodyFraming, OllamaAdapterError> {
@@ -508,7 +514,7 @@ fn read_headers(
                 return Err(OllamaAdapterError::UnsupportedHttpEncoding);
             }
             "content-type" => {
-                if content_type_seen || !value.eq_ignore_ascii_case("application/x-ndjson") {
+                if content_type_seen || !value.eq_ignore_ascii_case(expected_content_type) {
                     return Err(OllamaAdapterError::UnsupportedHttpEncoding);
                 }
                 content_type_seen = true;
@@ -528,7 +534,7 @@ fn read_headers(
     }
 }
 
-fn read_body(
+pub(super) fn read_body(
     reader: &mut BufReader<TcpStream>,
     framing: BodyFraming,
     deadline: Instant,
@@ -696,7 +702,7 @@ fn check_progress(
     Ok(())
 }
 
-fn remaining(deadline: Instant) -> Result<Duration, OllamaAdapterError> {
+pub(super) fn remaining(deadline: Instant) -> Result<Duration, OllamaAdapterError> {
     deadline
         .checked_duration_since(Instant::now())
         .filter(|duration| !duration.is_zero())

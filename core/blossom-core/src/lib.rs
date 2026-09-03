@@ -38,9 +38,10 @@ pub use memory_summary::{
 pub use model_runtime::{
     ConversationMessage, ConversationRole, InferenceAuditOutcome, InferenceAuditProjection,
     InferenceCancellation, InferenceOutputMode, InferenceRequest, InferenceRequestId,
-    MODEL_PROTOCOL_VERSION, ModelContractError, ModelIntentDefinition, ModelIntentKind,
-    ModelProfile, ModelProviderKind, ModelStreamState, NormalizedCompletion, NormalizedStreamEvent,
-    NormalizedStreamKind, OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError, ProposedToolIntent,
+    LLAMA_CPP_ENDPOINT, LlamaCppAdapter, LlamaCppAdapterError, MODEL_PROTOCOL_VERSION,
+    ModelContractError, ModelIntentDefinition, ModelIntentKind, ModelProfile, ModelProviderKind,
+    ModelStreamState, NormalizedCompletion, NormalizedStreamEvent, NormalizedStreamKind,
+    OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError, ProposedToolIntent,
     ProviderFailureCategory, ProviderStreamInput, TurnIntentCatalogue,
     validate_provider_completion,
 };
