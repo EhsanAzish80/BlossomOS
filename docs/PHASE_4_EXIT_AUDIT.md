@@ -5,7 +5,8 @@ controls from evidence that does not yet exist.
 
 ## Satisfied repository gates
 
-- ADR-0011 and ADR-0012 are accepted.
+- ADR-0011 through ADR-0014 are accepted. ADR-0014 removes guessed numeric
+  service IDs from canonical profiles and binds installed IDs at readiness.
 - Both provider adapters accept only synthetic crate-owned requests and fixed
   numeric loopback endpoints.
 - Request, provider output, proposed intent, gateway frame and normalized event

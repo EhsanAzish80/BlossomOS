@@ -213,15 +213,16 @@ pub(super) fn load_runtime_readiness(
         false,
         true,
     )?;
-    let accounts = resolve_accounts(&passwd_bytes, &group_bytes)?;
     let expected = profile.identity();
-    if accounts.gateway_uid != expected.gateway_uid()
-        || accounts.gateway_gid != expected.gateway_gid()
-        || accounts.provider_uid != expected.provider_uid()
-        || accounts.provider_gid != expected.provider_gid()
+    if expected.gateway_user() != GATEWAY_USER
+        || expected.gateway_group() != GATEWAY_USER
+        || expected.provider_user() != PROVIDER_USER
+        || expected.provider_group() != PROVIDER_USER
+        || expected.access_group() != ACCESS_GROUP
     {
         return Err(RuntimeReadinessError::IdentityMismatch);
     }
+    let accounts = resolve_accounts(&passwd_bytes, &group_bytes)?;
     let (binary, binary_descriptor) = read_digest_bound(
         profile.binary().path(),
         expected_owner,

@@ -15,7 +15,7 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 pub const MAX_PROVIDER_MANIFEST_BYTES: usize = 32 * 1024;
-const PROVIDER_PROFILE_VERSION: u16 = 2;
+const PROVIDER_PROFILE_VERSION: u16 = 3;
 const MAX_PATH_BYTES: usize = 4096;
 const MAX_ARGUMENTS: usize = 64;
 const MAX_ARGUMENT_BYTES: usize = 4096;
@@ -34,10 +34,11 @@ pub struct ProviderArtifact {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProviderServiceIdentity {
-    gateway_uid: u32,
-    gateway_gid: u32,
-    provider_uid: u32,
-    provider_gid: u32,
+    gateway_user: String,
+    gateway_group: String,
+    provider_user: String,
+    provider_group: String,
+    access_group: String,
     gateway_unit: String,
     provider_unit: String,
     namespace_unit: String,
@@ -247,10 +248,11 @@ pub fn fixed_synthetic_provider_package(
             request_deadline_ms: super::MAX_DEADLINE_MS,
         },
         identity: ProviderServiceIdentity {
-            gateway_uid: 980,
-            gateway_gid: 980,
-            provider_uid: 981,
-            provider_gid: 981,
+            gateway_user: "blossom-model-gateway".into(),
+            gateway_group: "blossom-model-gateway".into(),
+            provider_user: "blossom-model-provider".into(),
+            provider_group: "blossom-model-provider".into(),
+            access_group: "blossom-ai".into(),
             gateway_unit: "blossom-model-gateway.service".into(),
             provider_unit: fixture.provider_unit.into(),
             namespace_unit: "blossom-model-netns.service".into(),
@@ -390,17 +392,20 @@ impl ProviderArtifact {
 }
 
 impl ProviderServiceIdentity {
-    pub(crate) fn gateway_uid(&self) -> u32 {
-        self.gateway_uid
+    pub(crate) fn gateway_user(&self) -> &str {
+        &self.gateway_user
     }
-    pub(crate) fn gateway_gid(&self) -> u32 {
-        self.gateway_gid
+    pub(crate) fn gateway_group(&self) -> &str {
+        &self.gateway_group
     }
-    pub(crate) fn provider_uid(&self) -> u32 {
-        self.provider_uid
+    pub(crate) fn provider_user(&self) -> &str {
+        &self.provider_user
     }
-    pub(crate) fn provider_gid(&self) -> u32 {
-        self.provider_gid
+    pub(crate) fn provider_group(&self) -> &str {
+        &self.provider_group
+    }
+    pub(crate) fn access_group(&self) -> &str {
+        &self.access_group
     }
     pub(crate) fn provider_unit(&self) -> &str {
         &self.provider_unit
@@ -661,12 +666,11 @@ fn model_set_digest(files: &[ProviderArtifact]) -> Result<String, ProviderProfil
 }
 
 fn validate_identity(identity: &ProviderServiceIdentity) -> Result<(), ProviderProfileError> {
-    if identity.gateway_uid == 0
-        || identity.gateway_gid == 0
-        || identity.provider_uid == 0
-        || identity.provider_gid == 0
-        || identity.gateway_uid == identity.provider_uid
-        || identity.gateway_gid == identity.provider_gid
+    if identity.gateway_user != "blossom-model-gateway"
+        || identity.gateway_group != "blossom-model-gateway"
+        || identity.provider_user != "blossom-model-provider"
+        || identity.provider_group != "blossom-model-provider"
+        || identity.access_group != "blossom-ai"
     {
         return Err(ProviderProfileError::InvalidManifest);
     }
@@ -899,10 +903,11 @@ mod tests {
                 request_deadline_ms: 120_000,
             },
             identity: ProviderServiceIdentity {
-                gateway_uid: 980,
-                gateway_gid: 980,
-                provider_uid: 981,
-                provider_gid: 981,
+                gateway_user: "blossom-model-gateway".into(),
+                gateway_group: "blossom-model-gateway".into(),
+                provider_user: "blossom-model-provider".into(),
+                provider_group: "blossom-model-provider".into(),
+                access_group: "blossom-ai".into(),
                 gateway_unit: "blossom-model-gateway.service".into(),
                 provider_unit: "blossom-model-llama-cpp.service".into(),
                 namespace_unit: "blossom-model-netns.service".into(),
@@ -1111,6 +1116,31 @@ mod tests {
         let mut value: serde_json::Value = serde_json::from_slice(spec.canonical_bytes()).unwrap();
         value["unknown"] = serde_json::Value::Bool(true);
         assert!(serde_json::from_value::<ProviderProfileManifest>(value).is_err());
+    }
+
+    #[test]
+    fn numeric_or_mutable_service_identity_profiles_are_rejected() {
+        let spec = ProviderProfileSpec::compile(fixture()).unwrap();
+        let mut old_schema: serde_json::Value =
+            serde_json::from_slice(spec.canonical_bytes()).unwrap();
+        old_schema["profile_version"] = 2.into();
+        old_schema["identity"] = serde_json::json!({
+            "gateway_uid": 980,
+            "gateway_gid": 980,
+            "provider_uid": 981,
+            "provider_gid": 981,
+            "gateway_unit": "blossom-model-gateway.service",
+            "provider_unit": "blossom-model-llama-cpp.service",
+            "namespace_unit": "blossom-model-netns.service"
+        });
+        assert!(serde_json::from_value::<ProviderProfileManifest>(old_schema).is_err());
+
+        let mut wrong_name = fixture();
+        wrong_name.identity.provider_user = "caller-selected-provider".into();
+        assert_eq!(
+            ProviderProfileSpec::compile(wrong_name).unwrap_err(),
+            ProviderProfileError::InvalidManifest
+        );
     }
 
     #[cfg(unix)]

@@ -166,6 +166,11 @@ gateway must resolve those names from root-owned account data and bind the
 resolved numeric UID/GID into the expected manifest and peer checks. Missing,
 root, shared, or changed identities fail closed; callers cannot supply IDs.
 
+The phrase "bind the resolved numeric UID/GID into the expected manifest" above
+is superseded by ADR-0014. Numeric IDs are retained in runtime readiness
+evidence and peer checks; the canonical manifest binds only the fixed account
+names so it remains immutable across target-system allocation.
+
 The gateway accepts only profiles compiled into its closed registry and requires
 the installed manifest to match that registry. It opens and hashes root-owned
 regular files without following symlinks before marking a profile ready. Files
