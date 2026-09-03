@@ -1,7 +1,8 @@
 # ADR-0012: Provider endpoint identity and packaging boundary
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-03
+- Accepted: 2026-09-03 after explicit project review
 - Owners: Project maintainers
 
 ## Context

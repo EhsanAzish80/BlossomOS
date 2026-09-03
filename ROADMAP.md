@@ -166,8 +166,8 @@ Checkpoint evidence: `docs/PHASE_4_CORE_CONTRACT.md` and
 claim neither an authenticated provider endpoint, private-input support, nor a
 real-model test. Cross-provider fixture equivalence, offline real-model
 target-Linux evidence, and the endpoint-identity boundary remain unresolved.
-ADR-0012 proposes the endpoint-identity and packaging boundary; it is not yet
-accepted or implemented.
+ADR-0012 accepts the endpoint-identity and packaging boundary; it is not yet
+implemented.
 
 ## Phase 5: Planning and verification
 
