@@ -2,14 +2,15 @@
 
 //! Fail-closed process boundary for the future local model gateway.
 //!
-//! Release builds perform the fixed production-profile and installed-runtime
-//! readiness preflight but expose no listener yet. Debug builds retain one
-//! explicit synthetic fixture mode for separate-process protocol evidence only.
+//! Default release builds remain fail closed. Target-Linux packages may compile
+//! the fixed, credential-gated production Unix listener only through an explicit
+//! feature after installed evidence passes. Debug builds retain one synthetic
+//! fixture mode for separate-process protocol evidence.
 
 use std::fmt;
 
 pub const PRODUCTION_SOCKET_PATH: &str = "/run/blossom-model-gateway/inference.sock";
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "production-private-inference"))]
 const PRODUCTION_PROFILE_PATH: &str = "/etc/blossom-os/model-profiles/llama-cpp-cpu-x86_64.json";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -45,9 +46,12 @@ impl fmt::Display for GatewayProcessError {
 }
 
 #[cfg(unix)]
-#[allow(
-    dead_code,
-    reason = "wired into production only after its Linux adversarial checkpoint passes"
+#[cfg_attr(
+    not(all(target_os = "linux", feature = "production-private-inference")),
+    allow(
+        dead_code,
+        reason = "production listener is target-Linux and package-feature gated"
+    )
 )]
 fn serve_authorized_private_connection<F>(
     mut stream: std::os::unix::net::UnixStream,
@@ -225,15 +229,134 @@ where
 
 impl std::error::Error for GatewayProcessError {}
 
-/// Perform all currently implemented production admission checks, then fail
-/// before creating or connecting any socket. The retained readiness evidence
-/// remains alive through the admission decision so validated descriptors are
-/// not reopened by this process.
+#[cfg(all(target_os = "linux", feature = "production-private-inference"))]
+struct ProductionSocket {
+    listener: std::os::unix::net::UnixListener,
+    path: std::path::PathBuf,
+    device: u64,
+    inode: u64,
+}
+
+#[cfg(all(target_os = "linux", feature = "production-private-inference"))]
+impl Drop for ProductionSocket {
+    fn drop(&mut self) {
+        use std::os::unix::fs::{FileTypeExt, MetadataExt};
+
+        let Ok(metadata) = std::fs::symlink_metadata(&self.path) else {
+            return;
+        };
+        if metadata.file_type().is_socket()
+            && metadata.dev() == self.device
+            && metadata.ino() == self.inode
+        {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
+
+#[cfg(all(target_os = "linux", feature = "production-private-inference"))]
+fn bind_production_socket(
+    path: &std::path::Path,
+    owner_uid: u32,
+    access_gid: u32,
+) -> Result<ProductionSocket, GatewayProcessError> {
+    use nix::unistd::{Gid, chown};
+    use std::fs;
+    use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
+    use std::os::unix::net::UnixListener;
+
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        _ => return Err(GatewayProcessError::PrivateConnectionUnavailable),
+    }
+    let listener =
+        UnixListener::bind(path).map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    let initial = fs::symlink_metadata(path)
+        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    if !initial.file_type().is_socket() {
+        return Err(GatewayProcessError::PrivateConnectionUnavailable);
+    }
+    let socket = ProductionSocket {
+        listener,
+        path: path.to_path_buf(),
+        device: initial.dev(),
+        inode: initial.ino(),
+    };
+    chown(path, None, Some(Gid::from_raw(access_gid)))
+        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o660))
+        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    if !metadata.file_type().is_socket()
+        || metadata.uid() != owner_uid
+        || metadata.gid() != access_gid
+        || metadata.mode() & 0o7777 != 0o660
+    {
+        return Err(GatewayProcessError::PrivateConnectionUnavailable);
+    }
+    if metadata.dev() != socket.device || metadata.ino() != socket.inode {
+        return Err(GatewayProcessError::PrivateConnectionUnavailable);
+    }
+    Ok(socket)
+}
+
+#[cfg(all(target_os = "linux", feature = "production-private-inference"))]
+fn process_identity() -> Result<(String, String), GatewayProcessError> {
+    use sha2::{Digest, Sha256};
+    use std::fs::File;
+    use std::io::Read;
+    use std::os::unix::fs::MetadataExt;
+
+    let mut file = File::open("/proc/sys/kernel/random/boot_id")
+        .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?;
+    let metadata_before = file
+        .metadata()
+        .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?;
+    if !metadata_before.is_file() {
+        return Err(GatewayProcessError::ProfileRegistryUnavailable);
+    }
+    let mut boot_id = Vec::new();
+    file.by_ref()
+        .take(129)
+        .read_to_end(&mut boot_id)
+        .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?;
+    let metadata_after = file
+        .metadata()
+        .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?;
+    let text = std::str::from_utf8(&boot_id)
+        .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
+        .trim_end_matches('\n');
+    if boot_id.len() > 128
+        || text.len() != 36
+        || !text.bytes().enumerate().all(|(index, byte)| {
+            matches!(index, 8 | 13 | 18 | 23) && byte == b'-'
+                || !matches!(index, 8 | 13 | 18 | 23) && byte.is_ascii_hexdigit()
+        })
+        || metadata_before.dev() != metadata_after.dev()
+        || metadata_before.ino() != metadata_after.ino()
+    {
+        return Err(GatewayProcessError::ProfileRegistryUnavailable);
+    }
+    let boot_digest = Sha256::digest(&boot_id)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let mut nonce = [0_u8; 32];
+    getrandom::fill(&mut nonce).map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?;
+    let instance_nonce = nonce.iter().map(|byte| format!("{byte:02x}")).collect();
+    Ok((boot_digest, instance_nonce))
+}
+
+/// Start the sole fixed production listener after all installed-runtime and
+/// service-identity checks pass. Each connection is authorized from kernel
+/// credentials before the hello or any request bytes are read.
 pub fn run_production() -> Result<(), GatewayProcessError> {
-    #[cfg(target_os = "linux")]
+    #[cfg(all(target_os = "linux", feature = "production-private-inference"))]
     {
         use blossom_core::{
-            GatewayProfile, load_installed_runtime_readiness, production_provider_profile,
+            GatewayPeerCredentials, GatewayProfile, LlamaCppAdapter, ModelProfile,
+            ModelProviderKind, load_installed_runtime_readiness, production_provider_profile,
         };
         use std::path::Path;
 
@@ -250,9 +373,46 @@ pub fn run_production() -> Result<(), GatewayProcessError> {
         {
             return Err(GatewayProcessError::ProfileRegistryUnavailable);
         }
-        drop(readiness);
+        let model = ModelProfile::parse(readiness.profile().manifest().logical_model().to_owned())
+            .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?;
+        let (boot_id_sha256, instance_nonce) = process_identity()?;
+        let socket = bind_production_socket(
+            Path::new(PRODUCTION_SOCKET_PATH),
+            readiness.accounts().gateway_uid(),
+            readiness.accounts().access_gid(),
+        )?;
+        loop {
+            let (stream, _) = socket
+                .listener
+                .accept()
+                .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+            let peer = match GatewayPeerCredentials::from_stream(&stream) {
+                Ok(peer) => peer,
+                Err(_) => continue,
+            };
+            if readiness.authorize_client(peer).is_err() {
+                continue;
+            }
+            let adapter = LlamaCppAdapter::default();
+            let _ = serve_authorized_private_connection(
+                stream,
+                GatewayProfile::LlamaCppCpuV1,
+                ModelProviderKind::LlamaCpp,
+                model.clone(),
+                &boot_id_sha256,
+                &instance_nonce,
+                |request, cancellation, emit| {
+                    adapter
+                        .stream(request, cancellation, emit)
+                        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)
+                },
+            );
+        }
     }
-    Err(GatewayProcessError::ProfileRegistryUnavailable)
+    #[cfg(not(all(target_os = "linux", feature = "production-private-inference")))]
+    {
+        Err(GatewayProcessError::ProfileRegistryUnavailable)
+    }
 }
 
 #[cfg(all(debug_assertions, unix))]
@@ -335,6 +495,44 @@ mod tests {
                 .to_string()
                 .contains(PRODUCTION_SOCKET_PATH)
         );
+    }
+
+    #[cfg(all(target_os = "linux", feature = "production-private-inference"))]
+    #[test]
+    fn production_socket_is_exact_rejects_stale_path_and_cleans_up() {
+        use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
+
+        let directory = std::env::temp_dir().join(format!(
+            "blossom-production-socket-{}-{}",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("unnamed")
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("inference.sock");
+        let uid = nix::unistd::geteuid().as_raw();
+        let gid = nix::unistd::getegid().as_raw();
+        let socket = bind_production_socket(&path, uid, gid).unwrap();
+        let metadata = std::fs::symlink_metadata(&path).unwrap();
+        assert!(metadata.file_type().is_socket());
+        assert_eq!(metadata.uid(), uid);
+        assert_eq!(metadata.gid(), gid);
+        assert_eq!(metadata.permissions().mode() & 0o7777, 0o660);
+        assert!(bind_production_socket(&path, uid, gid).is_err());
+        drop(socket);
+        assert!(!path.exists());
+        std::fs::remove_dir(&directory).unwrap();
+    }
+
+    #[cfg(all(target_os = "linux", feature = "production-private-inference"))]
+    #[test]
+    fn process_identity_is_boot_bound_and_nonce_is_fresh() {
+        let (first_boot, first_nonce) = process_identity().unwrap();
+        let (second_boot, second_nonce) = process_identity().unwrap();
+        assert_eq!(first_boot.len(), 64);
+        assert_eq!(first_boot, second_boot);
+        assert_eq!(first_nonce.len(), 64);
+        assert_eq!(second_nonce.len(), 64);
+        assert_ne!(first_nonce, second_nonce);
     }
 
     #[cfg(unix)]

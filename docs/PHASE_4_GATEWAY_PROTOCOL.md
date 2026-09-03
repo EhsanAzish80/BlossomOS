@@ -51,9 +51,11 @@ post-terminal reuse, cancellation winning at sequence zero, and peer-credential
 mismatch. Target-Linux CI additionally reads real kernel credentials from a
 connected Unix socket pair.
 
-## Deliberately absent
+## Deliberately absent from default packages
 
-- `/run/blossom-model-gateway/inference.sock` or any listener;
+- an enabled `/run/blossom-model-gateway/inference.sock`; the reviewed listener
+  path is compiled only with the non-default `production-private-inference`
+  package feature pending installed evidence;
 - gateway or provider binaries and system accounts;
 - systemd units, a private network namespace, manifests, model artifacts, or
   runtime artifact validation;
@@ -64,10 +66,10 @@ connected Unix socket pair.
 
 ## Next checkpoint
 
-The next checkpoint binds this parser and retained-account authorization into a
-one-request production listener with concurrent cancellation. Installed service
-and real-model target-Linux evidence remains mandatory before private input is
-enabled.
+The parser, retained-account authorization and one-request handler are now
+bound by the feature-gated production listener documented in
+`PHASE_4_PRODUCTION_LISTENER.md`. Installed-service and real-model target-Linux
+evidence remains mandatory before a package may enable private input.
 
 The authority-free client encoder and already-authorized stream handler now
 exist as an intermediate checkpoint. The handler sends the profile-bound hello
@@ -75,4 +77,5 @@ before accepting input, rejects a pipelined second frame before inference,
 runs the bound cancellation reader concurrently with inference, cancels on
 invalid frames or disconnects, bounds I/O, and writes only schema-validated
 events. Unix-pair tests cover completion, a matching cancellation winning, and
-pipelining starting no inference. Production still does not create a listener.
+pipelining starting no inference. Default production packages still create no
+listener.

@@ -1,15 +1,16 @@
 # Phase 4 synthetic-only gateway process checkpoint
 
-Status: implemented as a fail-closed process scaffold and debug-only synthetic
-fixture. It is not a production listener or the Phase 4 exit baseline.
+Status: historical scaffold checkpoint plus the retained debug-only synthetic
+fixture. The later feature-gated listener is documented in
+`PHASE_4_PRODUCTION_LISTENER.md`; neither checkpoint is the Phase 4 exit baseline.
 
 ## Production behavior
 
-`blossom-model-gateway` is now a workspace binary matching the fixed systemd
-unit path. Its default entry point returns a content-free not-ready category and
-exit code 78 before binding or connecting any socket. Release builds contain no
-synthetic fixture entry point. This behavior remains mandatory until a closed
-installed-profile registry and runtime identity/readiness proof exist.
+`blossom-model-gateway` is a workspace binary matching the fixed systemd unit
+path. Default builds return a content-free not-ready category and exit code 78
+before binding or connecting any socket. Release builds contain no synthetic
+fixture entry point. A non-default package feature now compiles the production
+listener path, but packages must not enable it until installed evidence passes.
 
 Unknown arguments fail closed. There is no endpoint, socket, provider, model,
 prompt, identity, mount, environment, resource, tool, or lifecycle option in the
@@ -42,7 +43,7 @@ request payload, provider error, OS error, or credential structure.
 
 ## Deliberately absent
 
-- a production listener, socket ownership/group setup, or group authorization;
+- an enabled-by-default production listener or installed listener evidence;
 - installed-profile registry, manifest/artifact/unit validation, or readiness;
 - an Ollama or llama.cpp connection, provider lifecycle, namespace observation,
   model binary, model file, download, or GPU device;

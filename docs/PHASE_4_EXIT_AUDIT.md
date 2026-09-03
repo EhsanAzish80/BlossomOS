@@ -21,10 +21,13 @@ controls from evidence that does not yet exist.
   schemas are closed, bounded and fail closed before any broker integration.
 - The private-inference frame omits provider, model, endpoint, path and
   classification authority; its decoder injects those values from the admitted
-  profile. The production listener remains disabled.
+  profile. Canonical schema v5 also binds the logical model identity.
 - The authorized-stream handler enforces one request, rejects pipelining,
-  watches cancellation concurrently, and emits only validated events. It is
-  tested through Unix socket pairs but is not yet reachable from production.
+  watches cancellation concurrently, and emits only validated events.
+- The production listener lifecycle is implemented behind the non-default
+  `production-private-inference` package feature. Default builds remain closed.
+  The gated path refuses stale socket paths, verifies exact socket metadata,
+  authorizes kernel peer credentials before hello/input and retains readiness.
 - Linux peer-credential primitives and a separate-process synthetic Unix
   gateway are tested.
 - Both real adapter implementations are exercised through authenticated
@@ -42,12 +45,12 @@ controls from evidence that does not yet exist.
 - The llama.cpp recipe produces one reviewed package root, but it has not been
   installed or exercised on the supported target Linux baseline.
 - Production startup consumes readiness evidence and retains its descriptors
-  through the admission decision, but no packaged service has exercised that
-  path and the listener remains deliberately disabled.
+  through admission. The listener remains disabled in default packages and no
+  installed service has exercised the feature-gated path.
 - ADR-0017 fixes the private admission and cancellation contract. Retained
   account-snapshot membership checks and their negative tests are implemented,
-  and the isolated one-request/cancellation handler is implemented, but the
-  production listener and installed-service path are not yet implemented.
+  and the isolated one-request/cancellation handler and gated listener are
+  implemented, but installed-service evidence is not.
 - No test has started the packaged services under the intended distinct users
   and verified namespace identity, loopback-only networking, socket ownership,
   peer authorization, filesystem denial and lifecycle failure behavior.
@@ -60,6 +63,6 @@ controls from evidence that does not yet exist.
 
 The Phase 4 exit criterion is not satisfied. Controlled-protocol conformance is
 not real-model evidence, and static unit analysis is not runtime isolation
-evidence. Private and ambient input must remain disabled, the production
-gateway must remain fail closed, and Phase 5 must not begin until every item
+evidence. Private and ambient input must remain disabled in packages, the
+default gateway must remain fail closed, and Phase 5 must not begin until every item
 above is backed by reviewable target-Linux evidence.
