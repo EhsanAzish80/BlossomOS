@@ -30,7 +30,8 @@ pub use gateway::{
 };
 #[cfg(unix)]
 pub use gateway_fixture::{
-    GatewayFixtureError, SyntheticGatewayClient, serve_synthetic_gateway_once,
+    GatewayFixtureError, SyntheticGatewayClient, fixed_synthetic_gateway_request,
+    serve_synthetic_gateway_once,
 };
 pub use llama_cpp::{LLAMA_CPP_ENDPOINT, LlamaCppAdapter, LlamaCppAdapterError};
 pub use ollama::{OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError};

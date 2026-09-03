@@ -54,8 +54,9 @@ paths remain visible because the provider cannot start without them.
 
 ## Not implemented
 
-The gateway binary, renderer, closed production registry, package recipe,
-installed manifests, provider/model artifacts, account creation, socket
-creation, service activation, runtime readiness proof, private input, and real
-model execution remain absent. Template validation is not production isolation
-evidence and does not complete ADR-0012 or Phase 4.
+The gateway process source now exists, but its production entry point exits
+not-ready before creating a listener. A renderer, closed production registry,
+package recipe, installed release binary/manifests, provider/model artifacts,
+account creation, socket creation, service activation, runtime readiness proof,
+private input, and real model execution remain absent. Template validation is
+not production isolation evidence and does not complete ADR-0012 or Phase 4.

@@ -20,6 +20,31 @@ use std::time::Duration;
 const FIXTURE_IO_TIMEOUT: Duration = Duration::from_secs(2);
 const READ_BUFFER_BYTES: usize = 8 * 1024;
 
+/// One fixed developer-authored request for cross-crate process evidence. This
+/// does not accept prompt text, model selection, intents, or a deadline.
+pub fn fixed_synthetic_gateway_request() -> InferenceRequest {
+    use super::{
+        ConversationMessage, ConversationRole, InferenceOutputMode, InferenceRequestId,
+        ModelProfile, ModelProviderKind, TurnIntentCatalogue,
+    };
+
+    InferenceRequest::synthetic(
+        InferenceRequestId::parse("gateway-process-1".into())
+            .expect("fixed request ID must remain valid"),
+        ModelProviderKind::LlamaCpp,
+        ModelProfile::parse("fixture-model:1".into())
+            .expect("fixed model profile must remain valid"),
+        vec![
+            ConversationMessage::new(ConversationRole::User, "synthetic".into())
+                .expect("fixed message must remain valid"),
+        ],
+        TurnIntentCatalogue::empty(),
+        InferenceOutputMode::Text,
+        2_000,
+    )
+    .expect("fixed synthetic request must remain valid")
+}
+
 pub struct SyntheticGatewayClient {
     stream: UnixStream,
     reader: FrameReader,

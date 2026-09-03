@@ -54,7 +54,8 @@ pub use model_runtime::{
 };
 #[cfg(unix)]
 pub use model_runtime::{
-    GatewayFixtureError, SyntheticGatewayClient, serve_synthetic_gateway_once,
+    GatewayFixtureError, SyntheticGatewayClient, fixed_synthetic_gateway_request,
+    serve_synthetic_gateway_once,
 };
 pub use os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, OsReleaseReader, OsReleaseSource,
