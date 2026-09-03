@@ -35,8 +35,9 @@ controls from evidence that does not yet exist.
   x86-64 entry exists, but Ollama and other supported architectures do not.
 - The llama.cpp recipe produces one reviewed package root, but it has not been
   installed or exercised on the supported target Linux baseline.
-- No production service consumes readiness evidence and the retained
-  descriptors at admission time.
+- Production startup consumes readiness evidence and retains its descriptors
+  through the admission decision, but no packaged service has exercised that
+  path and the listener remains deliberately disabled.
 - No test has started the packaged services under the intended distinct users
   and verified namespace identity, loopback-only networking, socket ownership,
   peer authorization, filesystem denial and lifecycle failure behavior.

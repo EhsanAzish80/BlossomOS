@@ -2,13 +2,15 @@
 
 //! Fail-closed process boundary for the future local model gateway.
 //!
-//! Release builds expose no listener until the installed-profile registry and
-//! runtime readiness proof exist. Debug builds retain one explicit synthetic
-//! fixture mode for separate-process protocol evidence only.
+//! Release builds perform the fixed production-profile and installed-runtime
+//! readiness preflight but expose no listener yet. Debug builds retain one
+//! explicit synthetic fixture mode for separate-process protocol evidence only.
 
 use std::fmt;
 
 pub const PRODUCTION_SOCKET_PATH: &str = "/run/blossom-model-gateway/inference.sock";
+#[cfg(target_os = "linux")]
+const PRODUCTION_PROFILE_PATH: &str = "/etc/blossom-os/model-profiles/llama-cpp-cpu-x86_64.json";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GatewayProcessError {
@@ -41,10 +43,33 @@ impl fmt::Display for GatewayProcessError {
 
 impl std::error::Error for GatewayProcessError {}
 
-/// The production entry point deliberately fails before creating or connecting
-/// any socket. A later checkpoint must replace this only after closed registry
-/// and runtime identity validation are available.
+/// Perform all currently implemented production admission checks, then fail
+/// before creating or connecting any socket. The retained readiness evidence
+/// remains alive through the admission decision so validated descriptors are
+/// not reopened by this process.
 pub fn run_production() -> Result<(), GatewayProcessError> {
+    #[cfg(target_os = "linux")]
+    {
+        use blossom_core::{
+            GatewayProfile, load_installed_runtime_readiness, production_provider_profile,
+        };
+        use std::path::Path;
+
+        let specification = production_provider_profile(GatewayProfile::LlamaCppCpuV1)
+            .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
+            .ok_or(GatewayProcessError::ProfileRegistryUnavailable)?;
+        let readiness =
+            load_installed_runtime_readiness(Path::new(PRODUCTION_PROFILE_PATH), &specification)
+                .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?;
+        let effective_uid = nix::unistd::geteuid().as_raw();
+        let effective_gid = nix::unistd::getegid().as_raw();
+        if effective_uid != readiness.accounts().gateway_uid()
+            || effective_gid != readiness.accounts().gateway_gid()
+        {
+            return Err(GatewayProcessError::ProfileRegistryUnavailable);
+        }
+        drop(readiness);
+    }
     Err(GatewayProcessError::ProfileRegistryUnavailable)
 }
 
