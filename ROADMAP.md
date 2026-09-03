@@ -135,13 +135,26 @@ protected CI and merged to `main` as `0662e51`.
 
 ## Phase 4: Replaceable local AI runtime
 
-- Define provider-neutral inference, tool-call, cancellation, and streaming APIs.
-- Implement one local provider, then a second provider to prove replaceability.
-- Validate all model output against strict schemas.
-- Keep arbitrary shell as an explicit fallback capability.
+Status: active. ADR-0011 proposes the provider-neutral local inference boundary
+and must be accepted before runtime implementation begins.
 
-Exit: deterministic conformance tests pass for both providers and offline operation
-is verified.
+- [ ] Accept the provider-neutral inference, proposed-tool-intent, cancellation,
+  streaming, locality, privacy, and conformance contract.
+- [ ] Implement closed core types, validation, cancellation, normalized stream
+  state, redacted audit projection, and scripted conformance tests.
+- [ ] Implement the fixed-local Ollama adapter.
+- [ ] Implement the fixed-local llama.cpp adapter to prove replaceability.
+- [ ] Validate every model output and proposed tool intent against strict,
+  code-owned schemas before it reaches the broker.
+- [ ] Produce controlled-protocol and real-model target-Linux evidence with
+  external network access disabled.
+
+Arbitrary shell remains a separately reviewed fallback capability in the target
+security model; Phase 4 does not implement or expose it.
+
+Exit: deterministic conformance tests pass for both providers, real local-model
+operation is verified offline on target Linux, and no provider path bypasses the
+broker, policy, approval, verification, or audit boundary.
 
 ## Phase 5: Planning and verification
 

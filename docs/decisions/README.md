@@ -40,3 +40,6 @@ compatibility, packaging, or contributor obligations.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy.
 - Model-provider protocol and offline guarantees.
+- Provider-neutral local model runtime: proposed in ADR-0011, including fixed
+  local transports, untrusted tool intents, streaming/cancellation semantics,
+  adapter conformance, and real offline evidence requirements.
