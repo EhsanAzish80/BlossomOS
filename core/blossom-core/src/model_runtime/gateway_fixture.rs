@@ -23,15 +23,19 @@ const READ_BUFFER_BYTES: usize = 8 * 1024;
 /// One fixed developer-authored request for cross-crate process evidence. This
 /// does not accept prompt text, model selection, intents, or a deadline.
 pub fn fixed_synthetic_gateway_request() -> InferenceRequest {
+    synthetic_request_for_profile(GatewayProfile::LlamaCppCpuV1)
+}
+
+fn synthetic_request_for_profile(profile: GatewayProfile) -> InferenceRequest {
     use super::{
         ConversationMessage, ConversationRole, InferenceOutputMode, InferenceRequestId,
-        ModelProfile, ModelProviderKind, TurnIntentCatalogue,
+        ModelProfile, TurnIntentCatalogue,
     };
 
     InferenceRequest::synthetic(
         InferenceRequestId::parse("gateway-process-1".into())
             .expect("fixed request ID must remain valid"),
-        ModelProviderKind::LlamaCpp,
+        profile.provider(),
         ModelProfile::parse("fixture-model:1".into())
             .expect("fixed model profile must remain valid"),
         vec![
@@ -43,6 +47,67 @@ pub fn fixed_synthetic_gateway_request() -> InferenceRequest {
         2_000,
     )
     .expect("fixed synthetic request must remain valid")
+}
+
+/// Route one authenticated, synthetic-only gateway request through the real
+/// bounded adapter selected by the closed profile enum.
+#[cfg(any(test, debug_assertions))]
+pub fn serve_synthetic_gateway_via_adapter_once(
+    listener: &UnixListener,
+    expected_client_uid: u32,
+    expected_client_gid: u32,
+    profile: GatewayProfile,
+    boot_id_sha256: &str,
+    instance_nonce: &str,
+) -> Result<(), GatewayFixtureError> {
+    let (mut stream, _) = listener.accept().map_err(GatewayFixtureError::from_io)?;
+    configure(&stream)?;
+    let peer = GatewayPeerCredentials::from_stream(&stream)?;
+    validate_gateway_peer(peer, expected_client_uid, expected_client_gid)?;
+    stream
+        .write_all(&encode_gateway_hello(
+            profile,
+            boot_id_sha256,
+            instance_nonce,
+        )?)
+        .map_err(GatewayFixtureError::from_io)?;
+    stream.flush().map_err(GatewayFixtureError::from_io)?;
+
+    let mut reader = FrameReader::default();
+    let request = decode_gateway_synthetic_request(&reader.read_one(&mut stream)?, profile)?;
+    if !reader.is_idle() {
+        return Err(GatewayFixtureError::UnexpectedFrame);
+    }
+    let cancellation = InferenceCancellation::new();
+    let mut write_error = None;
+    let mut emit = |event: &NormalizedStreamEvent| {
+        if write_error.is_none()
+            && let Err(error) = encode_gateway_event(event)
+                .map_err(GatewayFixtureError::from)
+                .and_then(|frame| {
+                    stream
+                        .write_all(&frame)
+                        .map_err(GatewayFixtureError::from_io)
+                })
+        {
+            write_error = Some(error);
+        }
+    };
+    match profile {
+        GatewayProfile::OllamaCpuV1 => super::OllamaAdapter::default()
+            .stream(&request, cancellation, &mut emit)
+            .map_err(GatewayFixtureError::Ollama)?,
+        GatewayProfile::LlamaCppCpuV1 => super::LlamaCppAdapter::default()
+            .stream(&request, cancellation, &mut emit)
+            .map_err(GatewayFixtureError::LlamaCpp)?,
+    }
+    if let Some(error) = write_error {
+        return Err(error);
+    }
+    stream.flush().map_err(GatewayFixtureError::from_io)?;
+    stream
+        .shutdown(std::net::Shutdown::Write)
+        .map_err(GatewayFixtureError::from_io)
 }
 
 pub struct SyntheticGatewayClient {
@@ -207,6 +272,8 @@ pub enum GatewayFixtureError {
     UnexpectedFrame,
     Protocol(GatewayProtocolError),
     Contract(super::ModelContractError),
+    Ollama(super::OllamaAdapterError),
+    LlamaCpp(super::LlamaCppAdapterError),
 }
 
 impl GatewayFixtureError {
@@ -243,6 +310,9 @@ impl fmt::Display for GatewayFixtureError {
             Self::UnexpectedFrame => "synthetic gateway fixture sent an unexpected frame",
             Self::Protocol(_) => "synthetic gateway fixture violated the gateway protocol",
             Self::Contract(_) => "synthetic gateway fixture violated the model contract",
+            Self::Ollama(_) | Self::LlamaCpp(_) => {
+                "synthetic gateway provider violated the adapter contract"
+            }
         })
     }
 }
@@ -278,6 +348,7 @@ mod tests {
         TurnIntentCatalogue,
     };
     use std::fs;
+    use std::net::TcpListener;
     use std::process::{Command, Stdio};
     use std::thread;
     use std::time::{Duration, Instant};
@@ -397,5 +468,113 @@ mod tests {
             ))
         ));
         assert!(child.wait().unwrap().success());
+    }
+
+    fn serve_http_once(
+        endpoint: &str,
+        content_type: &'static str,
+        body: String,
+    ) -> thread::JoinHandle<()> {
+        let listener = TcpListener::bind(endpoint).unwrap();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0_u8; 4096];
+            let mut expected = None;
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                assert_ne!(count, 0);
+                request.extend_from_slice(&buffer[..count]);
+                if expected.is_none()
+                    && let Some(header_end) =
+                        request.windows(4).position(|part| part == b"\r\n\r\n")
+                {
+                    let headers = std::str::from_utf8(&request[..header_end]).unwrap();
+                    let content_length = headers
+                        .lines()
+                        .find_map(|line| line.strip_prefix("Content-Length: "))
+                        .unwrap()
+                        .parse::<usize>()
+                        .unwrap();
+                    expected = Some(header_end + 4 + content_length);
+                }
+                if expected.is_some_and(|size| request.len() >= size) {
+                    break;
+                }
+            }
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        })
+    }
+
+    #[test]
+    fn authenticated_gateway_routes_both_closed_profiles_through_real_adapters() {
+        let fixtures = [
+            (
+                GatewayProfile::OllamaCpuV1,
+                super::super::OLLAMA_ENDPOINT,
+                "application/x-ndjson",
+                concat!(
+                    r#"{"model":"fixture-model:1","created_at":"2026-09-03T00:00:00Z","message":{"role":"assistant","content":"gateway-"},"done":false}"#,
+                    "\n",
+                    r#"{"model":"fixture-model:1","created_at":"2026-09-03T00:00:01Z","message":{"role":"assistant","content":"ollama"},"done":true,"done_reason":"stop","prompt_eval_count":3,"eval_count":2}"#,
+                    "\n"
+                )
+                .to_owned(),
+                "gateway-ollama",
+            ),
+            (
+                GatewayProfile::LlamaCppCpuV1,
+                super::super::LLAMA_CPP_ENDPOINT,
+                "text/event-stream",
+                concat!(
+                    "data: ",
+                    r#"{"id":"chatcmpl-gateway","object":"chat.completion.chunk","created":1,"model":"fixture-model:1","choices":[{"index":0,"delta":{"role":"assistant","content":"gateway-llama"},"finish_reason":"stop"}]}"#,
+                    "\n\n",
+                    "data: ",
+                    r#"{"id":"chatcmpl-gateway","object":"chat.completion.chunk","created":1,"model":"fixture-model:1","choices":[],"usage":{"completion_tokens":2,"prompt_tokens":3,"total_tokens":5}}"#,
+                    "\n\n",
+                    "data: [DONE]\n\n"
+                )
+                .to_owned(),
+                "gateway-llama",
+            ),
+        ];
+        for (profile, endpoint, content_type, body, expected) in fixtures {
+            let provider = serve_http_once(endpoint, content_type, body);
+            let socket = socket_path("adapter");
+            let listener = UnixListener::bind(&socket).unwrap();
+            let uid = nix::unistd::geteuid().as_raw();
+            let gid = nix::unistd::getegid().as_raw();
+            let gateway = thread::spawn(move || {
+                serve_synthetic_gateway_via_adapter_once(
+                    &listener,
+                    uid,
+                    gid,
+                    profile,
+                    &"a".repeat(64),
+                    "adapter-fixture-1",
+                )
+            });
+            let client = SyntheticGatewayClient::connect_at(&socket, uid, gid, profile).unwrap();
+            let events = client
+                .infer(&synthetic_request_for_profile(profile))
+                .unwrap();
+            assert!(matches!(
+                &events.last().unwrap().event,
+                NormalizedStreamKind::Finished {
+                    completion: NormalizedCompletion::Text { content }
+                } if content == expected
+            ));
+            assert_eq!(gateway.join().unwrap(), Ok(()));
+            provider.join().unwrap();
+            fs::remove_file(socket).unwrap();
+        }
     }
 }

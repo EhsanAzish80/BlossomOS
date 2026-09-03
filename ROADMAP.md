@@ -170,6 +170,10 @@ private inputs remain blocked pending an accepted endpoint-identity ADR.
     validation that binds the canonical manifest to root-owned binary, model,
     rendered-unit and account-database descriptor evidence while retaining the
     validated artifact descriptors against path-replacement TOCTOU.
+  - [x] Route the two closed synthetic gateway profiles through the actual
+    bounded Ollama and llama.cpp adapters, with Linux end-to-end framing,
+    credential, request, provider-response, normalization and terminal-event
+    evidence.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.
@@ -212,6 +216,9 @@ profile specification or provider-unit renderer.
 The runtime-readiness checkpoint is documented in
 `docs/PHASE_4_RUNTIME_READINESS.md`; it validates but does not install or start
 the package, and the production gateway remains closed.
+The synthetic gateway-to-adapter checkpoint is documented in
+`docs/PHASE_4_GATEWAY_ADAPTERS.md`; it carries developer-authored fixture input
+only and does not enable the release gateway.
 
 ## Phase 5: Planning and verification
 
