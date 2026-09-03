@@ -257,6 +257,52 @@ pub fn decode_gateway_private_request(
     wire.into_request(&frame.payload, provider, model)
 }
 
+/// Encode the authority-free client payload. Provider identity and private
+/// classification cannot be supplied through this API or its wire schema.
+pub fn encode_gateway_private_request(
+    request_id: &InferenceRequestId,
+    messages: &[ConversationMessage],
+    intents: &TurnIntentCatalogue,
+    output_mode: InferenceOutputMode,
+    deadline_ms: u64,
+) -> Result<Vec<u8>, GatewayProtocolError> {
+    let wire = WirePrivateInferenceRequest {
+        version: MODEL_PROTOCOL_VERSION,
+        request_id: request_id.as_str().into(),
+        messages: messages
+            .iter()
+            .map(|message| WireMessage {
+                role: match message.role {
+                    ConversationRole::System => WireRole::System,
+                    ConversationRole::User => WireRole::User,
+                    ConversationRole::Assistant => WireRole::Assistant,
+                    ConversationRole::Tool => WireRole::Tool,
+                },
+                content: message.content.clone(),
+            })
+            .collect(),
+        intents: WireCatalogue {
+            eligible: intents.eligible.clone(),
+        },
+        output_mode: match output_mode {
+            InferenceOutputMode::Text => WireOutputMode::Text,
+            InferenceOutputMode::BlossomTurn => WireOutputMode::BlossomTurn,
+        },
+        deadline_ms,
+    };
+    let payload = serde_json::to_vec(&wire).map_err(|_| GatewayProtocolError::EncodingFailed)?;
+    // Reconstruct through the same validator used by the server. The fixed
+    // provider/model values are validation placeholders and are never encoded.
+    WirePrivateInferenceRequest::into_request(
+        wire,
+        &payload,
+        ModelProviderKind::LlamaCpp,
+        ModelProfile::parse("validation-only".into())
+            .map_err(|_| GatewayProtocolError::InvalidRequest)?,
+    )?;
+    GatewayFrame::encode(GatewayMessageKind::PrivateInference, payload)
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WirePrivateInferenceRequest {

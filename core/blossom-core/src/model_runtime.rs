@@ -27,8 +27,8 @@ pub use gateway::{
     GatewayMessageKind, GatewayPeerCredentials, GatewayProfile, GatewayProtocolError,
     MAX_GATEWAY_FRAME_BYTES, decode_gateway_cancel, decode_gateway_event, decode_gateway_hello,
     decode_gateway_private_request, decode_gateway_synthetic_request, encode_gateway_cancel,
-    encode_gateway_event, encode_gateway_hello, encode_gateway_synthetic_request,
-    validate_gateway_peer,
+    encode_gateway_event, encode_gateway_hello, encode_gateway_private_request,
+    encode_gateway_synthetic_request, validate_gateway_peer,
 };
 #[cfg(all(unix, debug_assertions))]
 pub use gateway_fixture::serve_synthetic_gateway_via_adapter_once;
