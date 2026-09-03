@@ -136,8 +136,9 @@ protected CI and merged to `main` as `0662e51`.
 ## Phase 4: Replaceable local AI runtime
 
 Status: active. ADR-0011 defines the accepted provider-neutral local inference
-boundary. Implementation begins with closed core types and synthetic fixtures;
-private inputs remain blocked pending an accepted endpoint-identity ADR.
+boundary, and ADR-0012 defines the accepted endpoint-identity and packaging
+boundary. Controlled synthetic implementation is substantial; private inputs
+remain blocked pending the complete ADR-0012 production and evidence gates.
 
 - [x] Accept the provider-neutral inference, proposed-tool-intent, cancellation,
   streaming, locality, privacy, and conformance contract.
@@ -179,7 +180,7 @@ private inputs remain blocked pending an accepted endpoint-identity ADR.
     manifests, and runtime identity evidence.
   - [ ] Pass adversarial production-path Linux evidence before enabling private
     input.
-- [ ] Validate every model output and proposed tool intent against strict,
+- [x] Validate every model output and proposed tool intent against strict,
   code-owned schemas before it reaches the broker.
 - [ ] Produce controlled-protocol and real-model target-Linux evidence with
   external network access disabled.
@@ -195,11 +196,12 @@ loopback endpoints receive no private input.
 Checkpoint evidence: `docs/PHASE_4_CORE_CONTRACT.md` and
 `docs/PHASE_4_OLLAMA_ADAPTER.md`, and
 `docs/PHASE_4_LLAMA_CPP_ADAPTER.md`. Phase 4 remains active; these checkpoints
-claim neither an authenticated provider endpoint, private-input support, nor a
-real-model test. Cross-provider fixture equivalence, offline real-model
-target-Linux evidence, and the endpoint-identity boundary remain unresolved.
-ADR-0012 accepts the endpoint-identity and packaging boundary; it is not yet
-fully implemented. The closed protocol and credential-primitives checkpoint is
+claim neither a production authenticated provider endpoint, private-input
+support, nor a real-model test. Controlled cross-provider gateway/adapter
+equivalence now exists, while offline real-model target-Linux evidence and the
+production endpoint-identity boundary remain unresolved. ADR-0012 accepts that
+boundary; it is not yet fully implemented. The closed protocol and
+credential-primitives checkpoint is
 documented in `docs/PHASE_4_GATEWAY_PROTOCOL.md`; the synthetic process boundary
 is documented in `docs/PHASE_4_GATEWAY_FIXTURE.md`. The closed manifest validator
 and synthetic filesystem evidence are documented in
@@ -219,6 +221,8 @@ the package, and the production gateway remains closed.
 The synthetic gateway-to-adapter checkpoint is documented in
 `docs/PHASE_4_GATEWAY_ADAPTERS.md`; it carries developer-authored fixture input
 only and does not enable the release gateway.
+The current exit audit and exact unresolved gates are recorded in
+`docs/PHASE_4_EXIT_AUDIT.md`.
 
 ## Phase 5: Planning and verification
 
