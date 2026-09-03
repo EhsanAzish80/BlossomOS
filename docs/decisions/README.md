@@ -48,3 +48,6 @@ compatibility, packaging, or contributor obligations.
   distinct-UID Unix-socket gateway and an isolated, separately sandboxed
   provider profile; private input remains blocked until implementation and
   production Linux evidence are complete.
+- Closed model artifact sets: accepted in ADR-0013. It refines ADR-0012 by
+  binding llama.cpp's single GGUF and Ollama's complete manifest/blob store as
+  exact, bounded, immutable file sets.

@@ -100,12 +100,12 @@ pub struct RuntimeReadinessEvidence {
     accounts: ResolvedModelIdentities,
     account_databases: AccountDatabaseEvidence,
     binary: RuntimeFileEvidence,
-    model: RuntimeFileEvidence,
+    model_files: Vec<RuntimeFileEvidence>,
     unit: RuntimeFileEvidence,
     // Retained so a future launcher can consume the exact validated files
     // instead of reopening attacker-replaceable paths.
     binary_descriptor: File,
-    model_descriptor: File,
+    model_descriptors: Vec<File>,
     unit_descriptor: File,
 }
 
@@ -122,8 +122,8 @@ impl RuntimeReadinessEvidence {
     pub fn binary(&self) -> &RuntimeFileEvidence {
         &self.binary
     }
-    pub fn model(&self) -> &RuntimeFileEvidence {
-        &self.model
+    pub fn model_files(&self) -> &[RuntimeFileEvidence] {
+        &self.model_files
     }
     pub fn unit(&self) -> &RuntimeFileEvidence {
         &self.unit
@@ -135,9 +135,9 @@ impl RuntimeReadinessEvidence {
         self.binary_descriptor.as_fd()
     }
     #[cfg(unix)]
-    pub fn model_descriptor(&self) -> std::os::fd::BorrowedFd<'_> {
+    pub fn model_descriptors(&self) -> impl Iterator<Item = std::os::fd::BorrowedFd<'_>> {
         use std::os::fd::AsFd;
-        self.model_descriptor.as_fd()
+        self.model_descriptors.iter().map(File::as_fd)
     }
     #[cfg(unix)]
     pub fn unit_descriptor(&self) -> std::os::fd::BorrowedFd<'_> {
@@ -160,11 +160,14 @@ pub enum RuntimeReadinessError {
     ReadFailed,
     SourceChanged,
     DigestMismatch,
+    SizeMismatch,
     InvalidAccountDatabase,
     MissingIdentity,
     DuplicateIdentity,
     UnsafeIdentity,
     IdentityMismatch,
+    UnsafeModelDirectory,
+    UnexpectedModelEntry,
 }
 
 impl From<ProviderProfileError> for RuntimeReadinessError {
@@ -226,13 +229,33 @@ pub(super) fn load_runtime_readiness(
         profile.binary().sha256(),
         true,
     )?;
-    let (model, model_descriptor) = read_digest_bound(
-        profile.model().path(),
-        expected_owner,
-        MAX_MODEL_BYTES,
-        profile.model().sha256(),
-        false,
-    )?;
+    if binary.bytes() != profile.binary().bytes() {
+        return Err(RuntimeReadinessError::SizeMismatch);
+    }
+    validate_model_inventory(&profile, expected_owner)?;
+    let mut model_files = Vec::with_capacity(profile.model_files().len());
+    let mut model_descriptors = Vec::with_capacity(profile.model_files().len());
+    let mut model_total = 0_u64;
+    for artifact in profile.model_files() {
+        let remaining = MAX_MODEL_BYTES
+            .checked_sub(model_total)
+            .ok_or(RuntimeReadinessError::TooLarge)?;
+        let (evidence, descriptor) = read_digest_bound(
+            artifact.path(),
+            expected_owner,
+            remaining,
+            artifact.sha256(),
+            false,
+        )?;
+        if evidence.bytes() != artifact.bytes() {
+            return Err(RuntimeReadinessError::SizeMismatch);
+        }
+        model_total = model_total
+            .checked_add(evidence.bytes())
+            .ok_or(RuntimeReadinessError::TooLarge)?;
+        model_files.push(evidence);
+        model_descriptors.push(descriptor);
+    }
     let (unit, unit_descriptor) = read_digest_bound(
         unit_path,
         expected_owner,
@@ -245,12 +268,92 @@ pub(super) fn load_runtime_readiness(
         accounts,
         account_databases: AccountDatabaseEvidence { passwd, group },
         binary,
-        model,
+        model_files,
         unit,
         binary_descriptor,
-        model_descriptor,
+        model_descriptors,
         unit_descriptor,
     })
+}
+
+pub(super) fn validate_model_inventory(
+    profile: &ValidatedProviderProfile,
+    expected_owner: u32,
+) -> Result<(), RuntimeReadinessError> {
+    if profile.profile() == super::GatewayProfile::LlamaCppCpuV1 {
+        return Ok(());
+    }
+    let mut observed = Vec::new();
+    collect_model_files(profile.model_mount(), expected_owner, &mut observed)?;
+    observed.sort();
+    let expected = profile
+        .model_files()
+        .iter()
+        .map(|artifact| artifact.path().to_path_buf())
+        .collect::<Vec<_>>();
+    if observed != expected {
+        return Err(RuntimeReadinessError::UnexpectedModelEntry);
+    }
+    Ok(())
+}
+
+fn collect_model_files(
+    directory: &Path,
+    expected_owner: u32,
+    files: &mut Vec<PathBuf>,
+) -> Result<(), RuntimeReadinessError> {
+    if files.len() > 4_096 {
+        return Err(RuntimeReadinessError::TooLarge);
+    }
+    let before =
+        std::fs::symlink_metadata(directory).map_err(|_| RuntimeReadinessError::OpenFailed)?;
+    validate_directory_metadata(&before, expected_owner)?;
+    let entries = std::fs::read_dir(directory).map_err(|_| RuntimeReadinessError::ReadFailed)?;
+    for entry in entries {
+        let entry = entry.map_err(|_| RuntimeReadinessError::ReadFailed)?;
+        let path = entry.path();
+        let metadata =
+            std::fs::symlink_metadata(&path).map_err(|_| RuntimeReadinessError::MetadataFailed)?;
+        if metadata.file_type().is_symlink() {
+            return Err(RuntimeReadinessError::UnexpectedModelEntry);
+        }
+        if metadata.is_dir() {
+            collect_model_files(&path, expected_owner, files)?;
+        } else if metadata.is_file() {
+            files.push(path);
+            if files.len() > 4_096 {
+                return Err(RuntimeReadinessError::TooLarge);
+            }
+        } else {
+            return Err(RuntimeReadinessError::UnexpectedModelEntry);
+        }
+    }
+    let after =
+        std::fs::symlink_metadata(directory).map_err(|_| RuntimeReadinessError::MetadataFailed)?;
+    if !same_state(&before, &after) {
+        return Err(RuntimeReadinessError::SourceChanged);
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn validate_directory_metadata(metadata: &Metadata, uid: u32) -> Result<(), RuntimeReadinessError> {
+    use std::os::unix::fs::MetadataExt;
+    if !metadata.is_dir() {
+        return Err(RuntimeReadinessError::UnsafeModelDirectory);
+    }
+    if metadata.uid() != uid {
+        return Err(RuntimeReadinessError::WrongOwner);
+    }
+    if metadata.mode() & 0o022 != 0 {
+        return Err(RuntimeReadinessError::UnsafePermissions);
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn validate_directory_metadata(_: &Metadata, _: u32) -> Result<(), RuntimeReadinessError> {
+    Err(RuntimeReadinessError::MetadataFailed)
 }
 
 fn read_digest_bound(
