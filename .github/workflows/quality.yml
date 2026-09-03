@@ -41,6 +41,15 @@ jobs:
           sudo install -m 0755 /bin/true /usr/lib/blossom-os/blossom-privileged-helper
           systemd-analyze verify system/privileged-helper/packaging/blossom-privileged-helper.service
 
+      - name: Validate inactive model runtime packaging boundary
+        run: |
+          python3 scripts/ci/check_model_runtime_packaging.py
+          sudo install -d -m 0755 /usr/lib/blossom-os
+          sudo install -m 0755 /bin/true /usr/lib/blossom-os/blossom-model-gateway
+          systemd-analyze verify \
+            system/model-runtime/packaging/blossom-model-netns.service \
+            system/model-runtime/packaging/blossom-model-gateway.service
+
       - name: Run prototype smoke tests
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
 

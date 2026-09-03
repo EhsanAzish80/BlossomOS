@@ -159,6 +159,13 @@ that fixes:
 - process, memory, CPU, task, output, and deadline bounds; and
 - expected static service UID/GID and systemd unit names.
 
+Here, static means persistent named system accounts rather than systemd
+`DynamicUser=` identities. Package templates use `systemd-sysusers` without
+guessing globally collision-prone numeric IDs. At readiness time, the trusted
+gateway must resolve those names from root-owned account data and bind the
+resolved numeric UID/GID into the expected manifest and peer checks. Missing,
+root, shared, or changed identities fail closed; callers cannot supply IDs.
+
 The gateway accepts only profiles compiled into its closed registry and requires
 the installed manifest to match that registry. It opens and hashes root-owned
 regular files without following symlinks before marking a profile ready. Files

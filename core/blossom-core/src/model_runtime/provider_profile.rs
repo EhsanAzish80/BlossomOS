@@ -300,8 +300,10 @@ fn validate_environment(names: &[String]) -> Result<(), ProviderProfileError> {
     }
     let mut previous: Option<&str> = None;
     for name in names {
-        if !matches!(name.as_str(), "LANG" | "LC_ALL" | "OMP_NUM_THREADS" | "TZ")
-            || name.is_empty()
+        if !matches!(
+            name.as_str(),
+            "HOME" | "LANG" | "LC_ALL" | "OLLAMA_HOST" | "OLLAMA_MODELS" | "OMP_NUM_THREADS" | "TZ"
+        ) || name.is_empty()
             || name.len() > 128
             || !name
                 .bytes()
@@ -680,6 +682,20 @@ mod tests {
                 ProviderProfileError::InvalidManifest
             );
         }
+    }
+
+    #[test]
+    fn accepts_only_the_code_owned_provider_environment_names() {
+        let mut manifest = fixture();
+        manifest.environment_names = vec![
+            "HOME".into(),
+            "LANG".into(),
+            "OLLAMA_HOST".into(),
+            "OLLAMA_MODELS".into(),
+            "OMP_NUM_THREADS".into(),
+            "TZ".into(),
+        ];
+        ProviderProfileSpec::compile(manifest).unwrap();
     }
 
     #[test]
