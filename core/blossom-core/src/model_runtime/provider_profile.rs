@@ -327,6 +327,50 @@ impl ValidatedProviderProfile {
     pub fn source_inode(&self) -> u64 {
         self.source_inode
     }
+
+    pub(crate) fn binary(&self) -> &ProviderArtifact {
+        &self.manifest.binary
+    }
+
+    pub(crate) fn model(&self) -> &ProviderArtifact {
+        &self.manifest.model
+    }
+
+    pub(crate) fn identity(&self) -> &ProviderServiceIdentity {
+        &self.manifest.identity
+    }
+
+    pub(crate) fn unit_sha256(&self) -> &str {
+        &self.manifest.unit_sha256
+    }
+}
+
+impl ProviderArtifact {
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub(crate) fn sha256(&self) -> &str {
+        &self.sha256
+    }
+}
+
+impl ProviderServiceIdentity {
+    pub(crate) fn gateway_uid(&self) -> u32 {
+        self.gateway_uid
+    }
+    pub(crate) fn gateway_gid(&self) -> u32 {
+        self.gateway_gid
+    }
+    pub(crate) fn provider_uid(&self) -> u32 {
+        self.provider_uid
+    }
+    pub(crate) fn provider_gid(&self) -> u32 {
+        self.provider_gid
+    }
+    pub(crate) fn provider_unit(&self) -> &str {
+        &self.provider_unit
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1019,6 +1063,63 @@ mod tests {
         assert_eq!(
             load_provider_profile(&path, &spec, uid.saturating_add(1)),
             Err(ProviderProfileError::WrongOwner)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn readiness_binds_accounts_manifest_artifacts_and_rendered_unit() {
+        use super::super::runtime_readiness::load_runtime_readiness;
+        use std::os::unix::fs::MetadataExt;
+
+        let directory = TestDirectory::new();
+        let binary_path = directory.path().join("provider");
+        let model_path = directory.path().join("model.gguf");
+        let unit_path = directory.path().join("provider.service");
+        let passwd_path = directory.path().join("passwd");
+        let group_path = directory.path().join("group");
+        let binary = b"synthetic-provider";
+        let model = b"synthetic-model";
+        let unit = b"[Service]\nExecStart=/synthetic\n";
+        fs::write(&binary_path, binary).unwrap();
+        fs::write(&model_path, model).unwrap();
+        fs::write(&unit_path, unit).unwrap();
+        fs::write(
+            &passwd_path,
+            b"blossom-model-gateway:x:980:980::/:/usr/bin/nologin\nblossom-model-provider:x:981:981::/:/usr/bin/nologin\n",
+        )
+        .unwrap();
+        fs::write(
+            &group_path,
+            b"blossom-model-gateway:x:980:\nblossom-model-provider:x:981:\nblossom-ai:x:982:blossom-model-gateway\n",
+        )
+        .unwrap();
+        fs::set_permissions(&binary_path, fs::Permissions::from_mode(0o700)).unwrap();
+        for path in [&model_path, &unit_path, &passwd_path, &group_path] {
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+
+        let mut manifest = fixture();
+        manifest.binary.path = binary_path.clone();
+        manifest.binary.sha256 = hex_digest(binary);
+        manifest.model.path = model_path.clone();
+        manifest.model.sha256 = hex_digest(model);
+        manifest.unit_sha256 = hex_digest(unit);
+        manifest.executable_arguments[0] = binary_path.to_string_lossy().into_owned();
+        manifest.executable_arguments[2] = model_path.to_string_lossy().into_owned();
+        manifest.filesystem.read_only_paths = vec![binary_path, model_path];
+        let spec = ProviderProfileSpec::compile(manifest).unwrap();
+        let (manifest_path, _, uid) = write_fixture(&directory, spec.canonical_bytes());
+        let profile = load_provider_profile(&manifest_path, &spec, uid).unwrap();
+        let readiness =
+            load_runtime_readiness(profile, &passwd_path, &group_path, &unit_path, uid).unwrap();
+        assert_eq!(readiness.accounts().access_gid(), 982);
+        assert_eq!(readiness.binary().sha256(), hex_digest(binary));
+        assert_eq!(readiness.model().sha256(), hex_digest(model));
+        assert_eq!(readiness.unit().sha256(), hex_digest(unit));
+        assert_eq!(
+            readiness.binary().device(),
+            fs::metadata(readiness.binary().path()).unwrap().dev()
         );
     }
 }

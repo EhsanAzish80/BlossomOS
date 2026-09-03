@@ -20,6 +20,7 @@ mod gateway_fixture;
 mod llama_cpp;
 mod ollama;
 mod provider_profile;
+mod runtime_readiness;
 
 pub use gateway::{
     GATEWAY_PROTOCOL_VERSION, GatewayEventValidator, GatewayFrame, GatewayFrameDecoder,
@@ -42,6 +43,10 @@ pub use provider_profile::{
 };
 #[cfg(debug_assertions)]
 pub use provider_profile::{SyntheticProviderPackage, fixed_synthetic_provider_package};
+pub use runtime_readiness::{
+    AccountDatabaseEvidence, ResolvedModelIdentities, RuntimeFileEvidence, RuntimeReadinessError,
+    RuntimeReadinessEvidence, load_installed_runtime_readiness,
+};
 
 pub const MODEL_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_INFERENCE_REQUEST_BYTES: usize = 256 * 1024;
