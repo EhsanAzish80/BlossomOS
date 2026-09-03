@@ -227,6 +227,9 @@ The synthetic gateway-to-adapter checkpoint is documented in
 only and does not enable the release gateway.
 The current exit audit and exact unresolved gates are recorded in
 `docs/PHASE_4_EXIT_AUDIT.md`.
+ADR-0014 corrects the production identity representation: canonical profiles
+bind fixed service account names, while target-assigned numeric IDs are resolved
+from root-owned account data and retained only as readiness evidence.
 
 ## Phase 5: Planning and verification
 
