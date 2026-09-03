@@ -19,6 +19,7 @@ mod gateway;
 mod gateway_fixture;
 mod llama_cpp;
 mod ollama;
+mod provider_profile;
 
 pub use gateway::{
     GATEWAY_PROTOCOL_VERSION, GatewayEventValidator, GatewayFrame, GatewayFrameDecoder,
@@ -33,6 +34,11 @@ pub use gateway_fixture::{
 };
 pub use llama_cpp::{LLAMA_CPP_ENDPOINT, LlamaCppAdapter, LlamaCppAdapterError};
 pub use ollama::{OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError};
+pub use provider_profile::{
+    MAX_PROVIDER_MANIFEST_BYTES, ProviderArtifact, ProviderFilesystemPolicy, ProviderProfileError,
+    ProviderProfileManifest, ProviderProfileResources, ProviderProfileSpec,
+    ProviderServiceIdentity, ValidatedProviderProfile, load_installed_provider_profile,
+};
 
 pub const MODEL_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_INFERENCE_REQUEST_BYTES: usize = 256 * 1024;

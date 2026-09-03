@@ -166,7 +166,7 @@ pub enum GatewayProfile {
 }
 
 impl GatewayProfile {
-    fn provider(self) -> ModelProviderKind {
+    pub(super) fn provider(self) -> ModelProviderKind {
         match self {
             Self::OllamaCpuV1 => ModelProviderKind::Ollama,
             Self::LlamaCppCpuV1 => ModelProviderKind::LlamaCpp,

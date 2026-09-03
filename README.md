@@ -165,6 +165,13 @@ gateway in a separate process and prove that a peer-identity mismatch closes the
 connection before any request byte is written. This remains test infrastructure,
 not the packaged production gateway. See `docs/PHASE_4_GATEWAY_FIXTURE.md`.
 
+A third checkpoint defines a closed CPU-only provider-profile manifest and
+validates canonical expected bytes, artifact and unit digests, fixed endpoints,
+static identities, filesystem visibility, and resource bounds. Its tests use
+synthetic user-owned files; no root-owned production manifest, compiled profile
+registry, package, service, model, or private-input path exists. See
+`docs/PHASE_4_PROVIDER_MANIFEST.md`.
+
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.
 

@@ -55,7 +55,9 @@ by ADR-0012.
 
 ## Next checkpoint
 
-Define the closed root-owned provider-profile manifest and validator, including
-canonical bytes, exact paths, digests, identities, unit names, endpoints,
-arguments, environment allowlist, and resource bounds. Keep it synthetic and
-filesystem-fixture-only until package and systemd checkpoints are reviewed.
+The closed root-owned provider-profile format and synthetic validator evidence
+are now documented in `PHASE_4_PROVIDER_MANIFEST.md`. The next checkpoint is the
+package-owned static identities, filesystem locations, namespace anchor, and
+hardened systemd unit templates. It must remain unable to receive private input
+until the production profile registry and runtime identity evidence are bound to
+the actual packaged artifacts.

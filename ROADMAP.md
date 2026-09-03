@@ -153,8 +153,13 @@ private inputs remain blocked pending an accepted endpoint-identity ADR.
     validation, cancellation binding, and Linux peer-credential primitives.
   - [x] Implement the synthetic-only Unix client and one-request fixture gateway,
     including separate-process proof that peer validation precedes request bytes.
+  - [x] Define and validate the closed, CPU-only root-owned provider-profile
+    manifest format, canonical expected bytes, artifact/unit digests, fixed
+    endpoints, identities, filesystem scope, and resource bounds using only
+    synthetic filesystem fixtures.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
-    hardened services, profile manifests, and runtime identity evidence.
+    hardened services, closed production profile registry, installed manifests,
+    and runtime identity evidence.
   - [ ] Pass adversarial production-path Linux evidence before enabling private
     input.
 - [ ] Validate every model output and proposed tool intent against strict,
@@ -179,8 +184,10 @@ target-Linux evidence, and the endpoint-identity boundary remain unresolved.
 ADR-0012 accepts the endpoint-identity and packaging boundary; it is not yet
 fully implemented. The closed protocol and credential-primitives checkpoint is
 documented in `docs/PHASE_4_GATEWAY_PROTOCOL.md`; the synthetic process boundary
-is documented in `docs/PHASE_4_GATEWAY_FIXTURE.md`. No service is installed and
-private input remains blocked.
+is documented in `docs/PHASE_4_GATEWAY_FIXTURE.md`. The closed manifest validator
+and synthetic filesystem evidence are documented in
+`docs/PHASE_4_PROVIDER_MANIFEST.md`. No production manifest, registry, identity,
+or service is installed, and private input remains blocked.
 
 ## Phase 5: Planning and verification
 
