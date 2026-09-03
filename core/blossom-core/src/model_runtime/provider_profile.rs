@@ -6,7 +6,7 @@
 
 use super::{
     GATEWAY_PROTOCOL_VERSION, GatewayProfile, LLAMA_CPP_ENDPOINT, MODEL_PROTOCOL_VERSION,
-    ModelProviderKind, OLLAMA_ENDPOINT,
+    ModelProfile, ModelProviderKind, OLLAMA_ENDPOINT,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -15,7 +15,7 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 pub const MAX_PROVIDER_MANIFEST_BYTES: usize = 32 * 1024;
-const PROVIDER_PROFILE_VERSION: u16 = 4;
+const PROVIDER_PROFILE_VERSION: u16 = 5;
 const MAX_PATH_BYTES: usize = 4096;
 const MAX_ARGUMENTS: usize = 64;
 const MAX_ARGUMENT_BYTES: usize = 4096;
@@ -71,6 +71,7 @@ pub struct ProviderProfileManifest {
     profile_version: u16,
     profile: GatewayProfile,
     provider: ModelProviderKind,
+    logical_model: String,
     gateway_protocol_version: u16,
     model_protocol_version: u16,
     binary: ProviderArtifact,
@@ -137,6 +138,14 @@ impl ProviderProfileSpec {
 
     pub fn sha256(&self) -> &str {
         &self.sha256
+    }
+}
+
+impl ProviderProfileManifest {
+    /// Return the validated, code-owned logical model identity carried by this
+    /// closed profile. This is never sourced from a gateway client.
+    pub fn logical_model(&self) -> &str {
+        &self.logical_model
     }
 }
 
@@ -249,6 +258,7 @@ pub fn fixed_synthetic_provider_package(
         profile_version: PROVIDER_PROFILE_VERSION,
         profile,
         provider: profile.provider(),
+        logical_model: "fixture-model:1".into(),
         gateway_protocol_version: GATEWAY_PROTOCOL_VERSION,
         model_protocol_version: MODEL_PROTOCOL_VERSION,
         binary: ProviderArtifact {
@@ -550,6 +560,8 @@ fn validate_manifest(manifest: &ProviderProfileManifest) -> Result<(), ProviderP
     {
         return Err(ProviderProfileError::InvalidManifest);
     }
+    ModelProfile::parse(manifest.logical_model.clone())
+        .map_err(|_| ProviderProfileError::InvalidManifest)?;
 
     let (endpoint, inference_path, provider_unit) = match manifest.profile {
         GatewayProfile::OllamaCpuV1 => {
@@ -946,6 +958,7 @@ mod tests {
             profile_version: PROVIDER_PROFILE_VERSION,
             profile: GatewayProfile::LlamaCppCpuV1,
             provider: ModelProviderKind::LlamaCpp,
+            logical_model: "fixture-model:1".into(),
             gateway_protocol_version: GATEWAY_PROTOCOL_VERSION,
             model_protocol_version: MODEL_PROTOCOL_VERSION,
             binary: ProviderArtifact {
@@ -1264,6 +1277,10 @@ mod tests {
         let bytes = EMBEDDED.strip_suffix(b"\n").unwrap_or(EMBEDDED);
         let profile = ProviderProfileSpec::from_embedded(bytes).unwrap();
         assert_eq!(profile.manifest().profile, GatewayProfile::LlamaCppCpuV1);
+        assert_eq!(
+            profile.manifest().logical_model(),
+            "qwen2.5-0.5b-instruct:q4_k_m"
+        );
         assert_eq!(profile.canonical_bytes(), bytes);
 
         let mut changed = bytes.to_vec();
@@ -1271,6 +1288,20 @@ mod tests {
         *final_byte = b' ';
         assert_eq!(
             ProviderProfileSpec::from_embedded(&changed).unwrap_err(),
+            ProviderProfileError::InvalidManifest
+        );
+    }
+
+    #[test]
+    fn logical_model_is_required_and_validated_as_model_identity() {
+        let mut missing: serde_json::Value = serde_json::to_value(fixture()).unwrap();
+        missing.as_object_mut().unwrap().remove("logical_model");
+        assert!(serde_json::from_value::<ProviderProfileManifest>(missing).is_err());
+
+        let mut unsafe_model = fixture();
+        unsafe_model.logical_model = "https://caller.example/model".into();
+        assert_eq!(
+            ProviderProfileSpec::compile(unsafe_model).unwrap_err(),
             ProviderProfileError::InvalidManifest
         );
     }
