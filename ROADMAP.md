@@ -163,6 +163,9 @@ private inputs remain blocked pending an accepted endpoint-identity ADR.
   - [x] Add the fail-closed gateway process scaffold and Linux separate-process
     evidence for the one fixed synthetic request; release/default startup creates
     no listener while the production registry and readiness proof are absent.
+  - [x] Add the debug/test-only closed synthetic profile registry and
+    deterministic provider-unit renderer, binding exact manifest command,
+    environment, filesystem, resource, identity, and rendered-unit digest data.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.
@@ -199,6 +202,9 @@ sysusers and systemd template boundary is documented in
 The synthetic-only process scaffold is documented in
 `docs/PHASE_4_GATEWAY_PROCESS.md`; its production entry point deliberately exits
 not-ready before opening a socket.
+The closed synthetic registry and renderer evidence is documented in
+`docs/PHASE_4_PROFILE_RENDERER.md`; release builds still contain no constructible
+profile specification or provider-unit renderer.
 
 ## Phase 5: Planning and verification
 

@@ -184,6 +184,12 @@ production profile registry or readiness proof exists. Debug builds expose only
 one fixed, argument-free synthetic request through an explicit fixture mode for
 Linux separate-process testing. See `docs/PHASE_4_GATEWAY_PROCESS.md`.
 
+A sixth checkpoint adds a debug/test-only closed registry for two synthetic CPU
+packages and deterministically renders the reviewed Ollama and llama.cpp unit
+templates. Each synthetic manifest derives its unit digest from those exact
+bytes. Release builds still contain neither a constructible registry nor a
+renderer. See `docs/PHASE_4_PROFILE_RENDERER.md`.
+
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.
 

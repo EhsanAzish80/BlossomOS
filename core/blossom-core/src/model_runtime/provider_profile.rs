@@ -57,6 +57,7 @@ pub struct ProviderProfileResources {
     cpu_quota_percent: u16,
     tasks_max: u32,
     open_files_max: u32,
+    file_size_max_bytes: u64,
     output_max_bytes: u32,
     request_deadline_ms: u64,
 }
@@ -90,7 +91,7 @@ pub struct ProviderProfileSpec {
 }
 
 impl ProviderProfileSpec {
-    #[cfg(test)]
+    #[cfg(any(test, debug_assertions))]
     fn compile(expected: ProviderProfileManifest) -> Result<Self, ProviderProfileError> {
         validate_manifest(&expected)?;
         let canonical_bytes =
@@ -117,6 +118,184 @@ impl ProviderProfileSpec {
     pub fn sha256(&self) -> &str {
         &self.sha256
     }
+}
+
+/// A deterministic, developer-authored package fixture. It is excluded from
+/// release builds and cannot carry a real artifact or private input.
+#[cfg(any(test, debug_assertions))]
+#[derive(Clone, Debug)]
+pub struct SyntheticProviderPackage {
+    profile: GatewayProfile,
+    spec: ProviderProfileSpec,
+    rendered_unit: Vec<u8>,
+}
+
+#[cfg(any(test, debug_assertions))]
+impl SyntheticProviderPackage {
+    pub fn profile(&self) -> GatewayProfile {
+        self.profile
+    }
+
+    pub fn spec(&self) -> &ProviderProfileSpec {
+        &self.spec
+    }
+
+    pub fn rendered_unit(&self) -> &[u8] {
+        &self.rendered_unit
+    }
+}
+
+/// Render one of the two closed provider templates with fixed synthetic
+/// artifacts and resource values. No caller-controlled path, argument,
+/// environment, identity, digest, or resource enters the result.
+#[cfg(any(test, debug_assertions))]
+pub fn fixed_synthetic_provider_package(
+    profile: GatewayProfile,
+) -> Result<SyntheticProviderPackage, ProviderProfileError> {
+    const OLLAMA_TEMPLATE: &str =
+        include_str!("../../../../system/model-runtime/packaging/blossom-model-ollama.service.in");
+    const LLAMA_CPP_TEMPLATE: &str = include_str!(
+        "../../../../system/model-runtime/packaging/blossom-model-llama-cpp.service.in"
+    );
+
+    let fixture = match profile {
+        GatewayProfile::OllamaCpuV1 => SyntheticPackageFields {
+            template: OLLAMA_TEMPLATE,
+            binary: "/usr/lib/blossom-os/providers/ollama/ollama",
+            model: "/usr/lib/blossom-os/models/ollama/evidence-model",
+            model_directory: Some("/usr/lib/blossom-os/models/ollama"),
+            writable: "/var/lib/blossom/model-provider/ollama",
+            arguments: vec![
+                "/usr/lib/blossom-os/providers/ollama/ollama".into(),
+                "serve".into(),
+            ],
+            environment_names: vec!["HOME".into(), "OLLAMA_HOST".into(), "OLLAMA_MODELS".into()],
+            endpoint: OLLAMA_ENDPOINT,
+            inference_path: "/api/chat",
+            provider_unit: "blossom-model-ollama.service",
+        },
+        GatewayProfile::LlamaCppCpuV1 => SyntheticPackageFields {
+            template: LLAMA_CPP_TEMPLATE,
+            binary: "/usr/lib/blossom-os/providers/llama-cpp/llama-server",
+            model: "/usr/lib/blossom-os/models/llama-cpp/evidence.gguf",
+            model_directory: None,
+            writable: "/var/lib/blossom/model-provider/llama-cpp",
+            arguments: vec![
+                "/usr/lib/blossom-os/providers/llama-cpp/llama-server".into(),
+                "--model".into(),
+                "/usr/lib/blossom-os/models/llama-cpp/evidence.gguf".into(),
+                "--no-webui".into(),
+            ],
+            environment_names: vec!["HOME".into()],
+            endpoint: LLAMA_CPP_ENDPOINT,
+            inference_path: "/v1/chat/completions",
+            provider_unit: "blossom-model-llama-cpp.service",
+        },
+    };
+    let rendered = render_synthetic_unit(&fixture)?;
+    let manifest = ProviderProfileManifest {
+        profile_version: PROVIDER_PROFILE_VERSION,
+        profile,
+        provider: profile.provider(),
+        gateway_protocol_version: GATEWAY_PROTOCOL_VERSION,
+        model_protocol_version: MODEL_PROTOCOL_VERSION,
+        binary: ProviderArtifact {
+            path: fixture.binary.into(),
+            sha256: "a".repeat(64),
+        },
+        model: ProviderArtifact {
+            path: fixture.model.into(),
+            sha256: "b".repeat(64),
+        },
+        unit_sha256: hex_digest(&rendered),
+        executable_arguments: fixture.arguments,
+        environment_names: fixture.environment_names,
+        endpoint: fixture.endpoint.into(),
+        inference_path: fixture.inference_path.into(),
+        filesystem: ProviderFilesystemPolicy {
+            read_only_paths: vec![fixture.binary.into(), fixture.model.into()],
+            writable_paths: vec![fixture.writable.into()],
+            devices: vec![],
+        },
+        resources: ProviderProfileResources {
+            memory_max_bytes: 4 * 1024 * 1024 * 1024,
+            memory_swap_max_bytes: 0,
+            cpu_quota_percent: 200,
+            tasks_max: 64,
+            open_files_max: 256,
+            file_size_max_bytes: 1024 * 1024,
+            output_max_bytes: super::MAX_OUTPUT_BYTES as u32,
+            request_deadline_ms: super::MAX_DEADLINE_MS,
+        },
+        identity: ProviderServiceIdentity {
+            gateway_uid: 980,
+            gateway_gid: 980,
+            provider_uid: 981,
+            provider_gid: 981,
+            gateway_unit: "blossom-model-gateway.service".into(),
+            provider_unit: fixture.provider_unit.into(),
+            namespace_unit: "blossom-model-netns.service".into(),
+        },
+    };
+    Ok(SyntheticProviderPackage {
+        profile,
+        spec: ProviderProfileSpec::compile(manifest)?,
+        rendered_unit: rendered,
+    })
+}
+
+#[cfg(any(test, debug_assertions))]
+struct SyntheticPackageFields {
+    template: &'static str,
+    binary: &'static str,
+    model: &'static str,
+    model_directory: Option<&'static str>,
+    writable: &'static str,
+    arguments: Vec<String>,
+    environment_names: Vec<String>,
+    endpoint: &'static str,
+    inference_path: &'static str,
+    provider_unit: &'static str,
+}
+
+#[cfg(any(test, debug_assertions))]
+fn render_synthetic_unit(
+    fixture: &SyntheticPackageFields,
+) -> Result<Vec<u8>, ProviderProfileError> {
+    let replacements = [
+        ("@PROVIDER_BINARY@", fixture.binary),
+        ("@MODEL_PATH@", fixture.model),
+        ("@TASKS_MAX@", "64"),
+        ("@MEMORY_MAX@", "4G"),
+        ("@MEMORY_SWAP_MAX@", "0"),
+        ("@CPU_QUOTA@", "200%"),
+        ("@FILE_SIZE_MAX@", "1M"),
+        ("@OPEN_FILES_MAX@", "256"),
+    ];
+    let mut rendered = fixture.template.to_owned();
+    for (token, value) in replacements {
+        if !rendered.contains(token) {
+            return Err(ProviderProfileError::InvalidManifest);
+        }
+        rendered = rendered.replace(token, value);
+    }
+    if let Some(model_directory) = fixture.model_directory {
+        if !rendered.contains("@MODEL_DIRECTORY@") {
+            return Err(ProviderProfileError::InvalidManifest);
+        }
+        rendered = rendered.replace("@MODEL_DIRECTORY@", model_directory);
+    }
+    if rendered.contains("@PROVIDER_")
+        || rendered.contains("@MODEL_")
+        || rendered.contains("@TASKS_")
+        || rendered.contains("@MEMORY_")
+        || rendered.contains("@CPU_")
+        || rendered.contains("@FILE_")
+        || rendered.contains("@OPEN_")
+    {
+        return Err(ProviderProfileError::InvalidManifest);
+    }
+    Ok(rendered.into_bytes())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -284,11 +463,13 @@ fn validate_arguments(manifest: &ProviderProfileManifest) -> Result<(), Provider
             return Err(ProviderProfileError::InvalidManifest);
         }
     }
-    if Path::new(&arguments[0]) != manifest.binary.path
-        || !arguments
+    let provider_arguments_valid = match manifest.profile {
+        GatewayProfile::OllamaCpuV1 => arguments.len() == 2 && arguments[1] == "serve",
+        GatewayProfile::LlamaCppCpuV1 => arguments
             .iter()
-            .any(|argument| Path::new(argument) == manifest.model.path)
-    {
+            .any(|argument| Path::new(argument) == manifest.model.path),
+    };
+    if Path::new(&arguments[0]) != manifest.binary.path || !provider_arguments_valid {
         return Err(ProviderProfileError::InvalidManifest);
     }
     Ok(())
@@ -377,6 +558,7 @@ fn validate_resources(resources: &ProviderProfileResources) -> Result<(), Provid
         || !(1..=1600).contains(&resources.cpu_quota_percent)
         || !(1..=4096).contains(&resources.tasks_max)
         || !(32..=65_536).contains(&resources.open_files_max)
+        || !(1..=16 * 1024 * 1024).contains(&resources.file_size_max_bytes)
         || resources.output_max_bytes == 0
         || resources.output_max_bytes as usize > super::MAX_OUTPUT_BYTES
         || resources.request_deadline_ms == 0
@@ -587,6 +769,7 @@ mod tests {
                 cpu_quota_percent: 200,
                 tasks_max: 64,
                 open_files_max: 256,
+                file_size_max_bytes: 1024 * 1024,
                 output_max_bytes: 128 * 1024,
                 request_deadline_ms: 120_000,
             },
@@ -696,6 +879,70 @@ mod tests {
             "TZ".into(),
         ];
         ProviderProfileSpec::compile(manifest).unwrap();
+    }
+
+    #[test]
+    fn closed_synthetic_packages_bind_manifest_to_rendered_unit() {
+        for profile in [GatewayProfile::OllamaCpuV1, GatewayProfile::LlamaCppCpuV1] {
+            let first = fixed_synthetic_provider_package(profile)
+                .unwrap_or_else(|error| panic!("{profile:?}: {error:?}"));
+            let second = fixed_synthetic_provider_package(profile).unwrap();
+            assert_eq!(first.profile(), profile);
+            assert_eq!(first.rendered_unit(), second.rendered_unit());
+            assert_eq!(
+                first.spec().canonical_bytes(),
+                second.spec().canonical_bytes()
+            );
+
+            let manifest: serde_json::Value =
+                serde_json::from_slice(first.spec().canonical_bytes()).unwrap();
+            assert_eq!(
+                manifest["unit_sha256"].as_str().unwrap(),
+                hex_digest(first.rendered_unit())
+            );
+            let arguments = manifest["executable_arguments"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_str().unwrap())
+                .collect::<Vec<_>>()
+                .join(" ");
+            let rendered = std::str::from_utf8(first.rendered_unit()).unwrap();
+            assert!(rendered.contains(&format!("ExecStart={arguments}\n")));
+            let environment_names = rendered
+                .lines()
+                .filter_map(|line| line.strip_prefix("Environment="))
+                .map(|assignment| assignment.split('=').next().unwrap())
+                .collect::<Vec<_>>();
+            let manifest_environment = manifest["environment_names"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_str().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(environment_names, manifest_environment);
+            assert!(rendered.contains("TasksMax=64\n"));
+            assert!(rendered.contains("MemoryMax=4G\n"));
+            assert!(rendered.contains("MemorySwapMax=0\n"));
+            assert!(rendered.contains("CPUQuota=200%\n"));
+            assert!(rendered.contains("LimitFSIZE=1M\n"));
+            assert!(rendered.contains("LimitNOFILE=256\n"));
+            assert!(rendered.contains(&format!(
+                "BindReadOnlyPaths={} {}\n",
+                manifest["binary"]["path"].as_str().unwrap(),
+                manifest["model"]["path"].as_str().unwrap()
+            )));
+            assert!(rendered.contains(&format!(
+                "ReadWritePaths={}\n",
+                manifest["filesystem"]["writable_paths"][0]
+                    .as_str()
+                    .unwrap()
+            )));
+            assert!(!rendered.contains("@PROVIDER_"));
+            assert!(!rendered.contains("@MODEL_"));
+            assert!(!rendered.contains("DeviceAllow="));
+            assert!(!rendered.contains("%i"));
+        }
     }
 
     #[test]

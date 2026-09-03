@@ -40,6 +40,8 @@ pub use provider_profile::{
     ProviderProfileManifest, ProviderProfileResources, ProviderProfileSpec,
     ProviderServiceIdentity, ValidatedProviderProfile, load_installed_provider_profile,
 };
+#[cfg(debug_assertions)]
+pub use provider_profile::{SyntheticProviderPackage, fixed_synthetic_provider_package};
 
 pub const MODEL_PROTOCOL_VERSION: u16 = 1;
 pub const MAX_INFERENCE_REQUEST_BYTES: usize = 256 * 1024;
