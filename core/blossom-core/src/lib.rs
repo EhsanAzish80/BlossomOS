@@ -57,6 +57,8 @@ pub use model_runtime::{
     GatewayFixtureError, SyntheticGatewayClient, fixed_synthetic_gateway_request,
     serve_synthetic_gateway_once,
 };
+#[cfg(debug_assertions)]
+pub use model_runtime::{SyntheticProviderPackage, fixed_synthetic_provider_package};
 pub use os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, OsReleaseReader, OsReleaseSource,
     UnavailableOsIdentityProvider, parse_os_release,

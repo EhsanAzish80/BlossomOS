@@ -44,11 +44,29 @@ jobs:
       - name: Validate inactive model runtime packaging boundary
         run: |
           python3 scripts/ci/check_model_runtime_packaging.py
-          sudo install -d -m 0755 /usr/lib/blossom-os
+          sudo install -d -m 0755 \
+            /usr/lib/blossom-os/providers/ollama \
+            /usr/lib/blossom-os/providers/llama-cpp \
+            /usr/lib/blossom-os/models/ollama \
+            /usr/lib/blossom-os/models/llama-cpp
           sudo install -m 0755 /bin/true /usr/lib/blossom-os/blossom-model-gateway
-          systemd-analyze verify \
+          sudo install -m 0755 /bin/true /usr/lib/blossom-os/providers/ollama/ollama
+          sudo install -m 0755 /bin/true /usr/lib/blossom-os/providers/llama-cpp/llama-server
+          sudo install -m 0644 /dev/null /usr/lib/blossom-os/models/ollama/evidence-model
+          sudo install -m 0644 /dev/null /usr/lib/blossom-os/models/llama-cpp/evidence.gguf
+          fixture_units=/tmp/blossom-model-runtime-units
+          install -d -m 0755 "$fixture_units"
+          install -m 0644 \
             system/model-runtime/packaging/blossom-model-netns.service \
-            system/model-runtime/packaging/blossom-model-gateway.service
+            system/model-runtime/packaging/blossom-model-gateway.service \
+            "$fixture_units"
+          cargo run --quiet --package blossom-core \
+            --example render_synthetic_provider_units -- "$fixture_units"
+          systemd-analyze verify \
+            "$fixture_units"/blossom-model-netns.service \
+            "$fixture_units"/blossom-model-gateway.service \
+            "$fixture_units"/blossom-model-ollama.service \
+            "$fixture_units"/blossom-model-llama-cpp.service
 
       - name: Run prototype smoke tests
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v

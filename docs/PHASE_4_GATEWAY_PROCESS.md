@@ -52,7 +52,8 @@ request payload, provider error, OS error, or credential structure.
 
 ## Next checkpoint
 
-Implement a closed production profile registry and deterministic provider-unit
-renderer using reviewed fixture artifacts only. It must make manifest, command,
-environment, filesystem, resource, identity-name, and unit bytes agree without
-starting a service or permitting private input.
+The debug/test-only closed synthetic registry and deterministic unit renderer are
+now documented in `PHASE_4_PROFILE_RENDERER.md`. Next, define root-owned account
+resolution and complete artifact/manifest/unit validation as one runtime
+readiness transaction, without opening the production listener or permitting
+private input.
