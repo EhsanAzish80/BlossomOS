@@ -92,7 +92,7 @@ def check_namespace_and_gateway() -> None:
         "RuntimeDirectory=blossom-model-gateway",
         "InaccessiblePaths=-/boot -/home -/media -/mnt -/opt -/root -/srv -/run/user",
         "TemporaryFileSystem=/etc:ro /usr/lib/blossom-os:ro",
-        "BindReadOnlyPaths=/usr/lib/blossom-os/blossom-model-gateway @PROFILE_PATH@ @PROVIDER_DIRECTORY@ @MODEL_PATH@ /etc/passwd /etc/group /proc/sys/kernel/random/boot_id",
+        "BindReadOnlyPaths=/usr/lib/blossom-os/blossom-model-gateway @PROFILE_DIRECTORY@ @PROVIDER_DIRECTORY@ @MODEL_PATH@ /etc/passwd /etc/group /proc/sys/kernel/random/boot_id",
         "ReadWritePaths=/run/blossom-model-gateway",
         "ProtectProc=invisible",
         "ProcSubset=all",
@@ -103,7 +103,7 @@ def check_namespace_and_gateway() -> None:
         require(value in gateway, f"gateway boundary drift: {value}")
     tokens = set(re.findall(r"@[A-Za-z0-9_-]+@?", gateway))
     require(
-        tokens <= {"@PROFILE_PATH@", "@PROVIDER_DIRECTORY@", "@MODEL_PATH@", "@system-service"},
+        tokens <= {"@PROFILE_DIRECTORY@", "@PROVIDER_DIRECTORY@", "@MODEL_PATH@", "@system-service"},
         "gateway: unknown render token",
     )
 
