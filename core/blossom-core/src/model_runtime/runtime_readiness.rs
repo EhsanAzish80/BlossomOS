@@ -4,6 +4,7 @@
 //! opened descriptors. It does not start a provider, create a socket, or admit
 //! model input.
 
+use super::GatewayPeerCredentials;
 use super::provider_profile::{
     ProviderProfileError, ProviderProfileSpec, ValidatedProviderProfile,
     load_installed_provider_profile,
@@ -99,6 +100,8 @@ pub struct RuntimeReadinessEvidence {
     profile: ValidatedProviderProfile,
     accounts: ResolvedModelIdentities,
     account_databases: AccountDatabaseEvidence,
+    passwd_bytes: Vec<u8>,
+    group_bytes: Vec<u8>,
     runtime_files: Vec<RuntimeFileEvidence>,
     binary_index: usize,
     model_files: Vec<RuntimeFileEvidence>,
@@ -131,6 +134,16 @@ impl RuntimeReadinessEvidence {
     }
     pub fn unit(&self) -> &RuntimeFileEvidence {
         &self.unit
+    }
+
+    /// Authorize one connected client against the exact account-database bytes
+    /// captured during this readiness decision. No pathname is reopened and no
+    /// caller-supplied name or group is trusted.
+    pub fn authorize_client(
+        &self,
+        peer: GatewayPeerCredentials,
+    ) -> Result<AuthorizedGatewayClient, RuntimeReadinessError> {
+        authorize_client_from_snapshot(&self.passwd_bytes, &self.group_bytes, &self.accounts, peer)
     }
 
     #[cfg(unix)]
@@ -178,6 +191,23 @@ pub enum RuntimeReadinessError {
     UnsafeModelDirectory,
     UnexpectedModelEntry,
     UnexpectedRuntimeEntry,
+    UnauthorizedClient,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AuthorizedGatewayClient {
+    uid: u32,
+    pid: u32,
+}
+
+impl AuthorizedGatewayClient {
+    pub fn uid(&self) -> u32 {
+        self.uid
+    }
+
+    pub fn pid(&self) -> u32 {
+        self.pid
+    }
 }
 
 impl From<ProviderProfileError> for RuntimeReadinessError {
@@ -303,6 +333,8 @@ pub(super) fn load_runtime_readiness(
         profile,
         accounts,
         account_databases: AccountDatabaseEvidence { passwd, group },
+        passwd_bytes,
+        group_bytes,
         runtime_files,
         binary_index,
         model_files,
@@ -310,6 +342,48 @@ pub(super) fn load_runtime_readiness(
         runtime_descriptors,
         model_descriptors,
         unit_descriptor,
+    })
+}
+
+fn authorize_client_from_snapshot(
+    passwd: &[u8],
+    group: &[u8],
+    identities: &ResolvedModelIdentities,
+    peer: GatewayPeerCredentials,
+) -> Result<AuthorizedGatewayClient, RuntimeReadinessError> {
+    if peer.pid == 0
+        || peer.uid == 0
+        || peer.uid == identities.gateway_uid
+        || peer.uid == identities.provider_uid
+    {
+        return Err(RuntimeReadinessError::UnauthorizedClient);
+    }
+    let passwd =
+        std::str::from_utf8(passwd).map_err(|_| RuntimeReadinessError::InvalidAccountDatabase)?;
+    let group =
+        std::str::from_utf8(group).map_err(|_| RuntimeReadinessError::InvalidAccountDatabase)?;
+    if passwd.contains('\0') || group.contains('\0') {
+        return Err(RuntimeReadinessError::InvalidAccountDatabase);
+    }
+    let client = unique_passwd_by_uid(passwd, peer.uid)?;
+    let access = unique_group(group, ACCESS_GROUP)?;
+    if access.gid != identities.access_gid {
+        return Err(RuntimeReadinessError::IdentityMismatch);
+    }
+    let membership_count = access
+        .members
+        .iter()
+        .filter(|member| member.as_str() == client.name)
+        .count();
+    if membership_count > 1 {
+        return Err(RuntimeReadinessError::InvalidAccountDatabase);
+    }
+    if client.gid != identities.access_gid && membership_count != 1 {
+        return Err(RuntimeReadinessError::UnauthorizedClient);
+    }
+    Ok(AuthorizedGatewayClient {
+        uid: peer.uid,
+        pid: peer.pid,
     })
 }
 
@@ -537,6 +611,7 @@ fn resolve_accounts(
 }
 
 struct PasswdEntry<'a> {
+    name: &'a str,
     uid: u32,
     gid: u32,
     home: &'a str,
@@ -562,6 +637,7 @@ fn unique_passwd<'a>(
                 return Err(RuntimeReadinessError::DuplicateIdentity);
             }
             found = Some(PasswdEntry {
+                name: fields[0],
                 uid: fields[2]
                     .parse()
                     .map_err(|_| RuntimeReadinessError::InvalidAccountDatabase)?,
@@ -576,11 +652,40 @@ fn unique_passwd<'a>(
     found.ok_or(RuntimeReadinessError::MissingIdentity)
 }
 
+fn unique_passwd_by_uid(source: &str, uid: u32) -> Result<PasswdEntry<'_>, RuntimeReadinessError> {
+    let mut found = None;
+    for line in source.lines().filter(|line| !line.is_empty()) {
+        let fields: Vec<_> = line.split(':').collect();
+        if fields.len() != 7 || !valid_account_name(fields[0]) {
+            return Err(RuntimeReadinessError::InvalidAccountDatabase);
+        }
+        let parsed_uid = fields[2]
+            .parse::<u32>()
+            .map_err(|_| RuntimeReadinessError::InvalidAccountDatabase)?;
+        let parsed_gid = fields[3]
+            .parse::<u32>()
+            .map_err(|_| RuntimeReadinessError::InvalidAccountDatabase)?;
+        if parsed_uid == uid {
+            if found.is_some() {
+                return Err(RuntimeReadinessError::DuplicateIdentity);
+            }
+            found = Some(PasswdEntry {
+                name: fields[0],
+                uid: parsed_uid,
+                gid: parsed_gid,
+                home: fields[5],
+                shell: fields[6],
+            });
+        }
+    }
+    found.ok_or(RuntimeReadinessError::UnauthorizedClient)
+}
+
 fn unique_group(source: &str, name: &str) -> Result<GroupEntry, RuntimeReadinessError> {
     let mut found = None;
     for line in source.lines().filter(|line| !line.is_empty()) {
         let fields: Vec<_> = line.split(':').collect();
-        if fields.len() != 4 {
+        if fields.len() != 4 || !valid_account_name(fields[0]) {
             return Err(RuntimeReadinessError::InvalidAccountDatabase);
         }
         if fields[0] == name {
@@ -592,6 +697,9 @@ fn unique_group(source: &str, name: &str) -> Result<GroupEntry, RuntimeReadiness
             } else {
                 fields[3].split(',').map(str::to_owned).collect()
             };
+            if members.iter().any(|member| !valid_account_name(member)) {
+                return Err(RuntimeReadinessError::InvalidAccountDatabase);
+            }
             found = Some(GroupEntry {
                 gid: fields[2]
                     .parse()
@@ -601,6 +709,14 @@ fn unique_group(source: &str, name: &str) -> Result<GroupEntry, RuntimeReadiness
         }
     }
     found.ok_or(RuntimeReadinessError::MissingIdentity)
+}
+
+fn valid_account_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 256
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
 }
 
 fn validate_path(path: &Path) -> Result<(), RuntimeReadinessError> {
@@ -752,6 +868,110 @@ mod tests {
         assert_eq!(identities.gateway_uid(), 980);
         assert_eq!(identities.provider_uid(), 981);
         assert_eq!(identities.access_gid(), 982);
+    }
+
+    #[test]
+    fn authorizes_primary_or_supplementary_client_from_retained_snapshot() {
+        let passwd = b"blossom-model-gateway:x:980:980::/:/usr/bin/nologin\nblossom-model-provider:x:981:981::/:/usr/bin/nologin\nalice:x:1000:1000::/home/alice:/bin/bash\nbob:x:1001:982::/home/bob:/bin/bash\n";
+        let group = b"blossom-model-gateway:x:980:\nblossom-model-provider:x:981:\nblossom-ai:x:982:blossom-model-gateway,alice\n";
+        let identities = resolve_accounts(passwd, group).unwrap();
+        let supplementary = authorize_client_from_snapshot(
+            passwd,
+            group,
+            &identities,
+            GatewayPeerCredentials {
+                pid: 10,
+                uid: 1000,
+                gid: 1000,
+            },
+        )
+        .unwrap();
+        assert_eq!((supplementary.uid(), supplementary.pid()), (1000, 10));
+        let primary = authorize_client_from_snapshot(
+            passwd,
+            group,
+            &identities,
+            GatewayPeerCredentials {
+                pid: 11,
+                uid: 1001,
+                gid: 1001,
+            },
+        )
+        .unwrap();
+        assert_eq!((primary.uid(), primary.pid()), (1001, 11));
+    }
+
+    #[test]
+    fn client_eligibility_rejects_privileged_unknown_duplicate_and_unlisted_peers() {
+        let passwd = b"blossom-model-gateway:x:980:980::/:/usr/bin/nologin\nblossom-model-provider:x:981:981::/:/usr/bin/nologin\nalice:x:1000:1000::/home/alice:/bin/bash\nmallory:x:1002:1002::/home/mallory:/bin/bash\n";
+        let group = b"blossom-model-gateway:x:980:\nblossom-model-provider:x:981:\nblossom-ai:x:982:blossom-model-gateway,alice\n";
+        let identities = resolve_accounts(passwd, group).unwrap();
+        for peer in [
+            GatewayPeerCredentials {
+                pid: 1,
+                uid: 0,
+                gid: 0,
+            },
+            GatewayPeerCredentials {
+                pid: 1,
+                uid: 980,
+                gid: 980,
+            },
+            GatewayPeerCredentials {
+                pid: 1,
+                uid: 981,
+                gid: 981,
+            },
+            GatewayPeerCredentials {
+                pid: 0,
+                uid: 1000,
+                gid: 1000,
+            },
+            GatewayPeerCredentials {
+                pid: 1,
+                uid: 1002,
+                gid: 1002,
+            },
+            GatewayPeerCredentials {
+                pid: 1,
+                uid: 9999,
+                gid: 9999,
+            },
+        ] {
+            assert_eq!(
+                authorize_client_from_snapshot(passwd, group, &identities, peer),
+                Err(RuntimeReadinessError::UnauthorizedClient)
+            );
+        }
+
+        let duplicate_uid = b"blossom-model-gateway:x:980:980::/:/usr/bin/nologin\nblossom-model-provider:x:981:981::/:/usr/bin/nologin\nalice:x:1000:1000::/home/alice:/bin/bash\nalias:x:1000:1000::/home/alias:/bin/bash\n";
+        assert_eq!(
+            authorize_client_from_snapshot(
+                duplicate_uid,
+                group,
+                &identities,
+                GatewayPeerCredentials {
+                    pid: 2,
+                    uid: 1000,
+                    gid: 1000
+                },
+            ),
+            Err(RuntimeReadinessError::DuplicateIdentity)
+        );
+        let duplicate_member = b"blossom-model-gateway:x:980:\nblossom-model-provider:x:981:\nblossom-ai:x:982:blossom-model-gateway,alice,alice\n";
+        assert_eq!(
+            authorize_client_from_snapshot(
+                passwd,
+                duplicate_member,
+                &identities,
+                GatewayPeerCredentials {
+                    pid: 2,
+                    uid: 1000,
+                    gid: 1000
+                },
+            ),
+            Err(RuntimeReadinessError::InvalidAccountDatabase)
+        );
     }
 
     #[test]

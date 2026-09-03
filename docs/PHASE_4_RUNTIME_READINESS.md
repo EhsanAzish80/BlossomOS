@@ -58,3 +58,10 @@ and requires its effective UID/GID to equal the resolved gateway identity. It
 still exits not-ready before opening a socket. Phase 4 remains active until the
 remaining ADR-0012 production-path and offline real-model target-Linux evidence
 is produced.
+
+Readiness now also retains the exact bounded passwd and group bytes captured
+through those validated descriptors. A connected peer can be authorized from
+that immutable snapshot by its kernel UID: root, gateway/provider identities,
+zero PIDs, unknown or duplicate UIDs, duplicate memberships and malformed data
+fail closed; an ordinary account must use the access-group primary GID or occur
+exactly once in the `blossom-ai` member list. This does not create a listener.
