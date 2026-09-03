@@ -37,6 +37,11 @@ test prompts only and must reject private or ambient user data. Model-visible
 tool catalogues are empty by default and minimized per turn; model calls remain
 untrusted proposals outside the internal request and approval types.
 
+ADR-0012 accepts a distinct-UID Unix-socket gateway and a separately isolated
+provider service as that identity boundary. The boundary is not yet
+implemented. Direct loopback adapters therefore remain synthetic-only, and no
+current model path is authorized to receive private or ambient user data.
+
 The shell may collect approval but may not forge policy decisions. The broker and
 policy engine run without root. The executor receives only an approved,
 normalized request. The privileged helper independently validates a narrow typed
