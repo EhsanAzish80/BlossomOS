@@ -114,7 +114,7 @@ def check_provider(name: str, kind: str) -> None:
         "DynamicUser=no",
         "RestrictAddressFamilies=AF_INET",
         "IPAddressAllow=localhost",
-        "InaccessiblePaths=-/boot -/etc -/home -/media -/mnt -/opt -/root -/run -/srv -/usr/lib/blossom-os",
+        "InaccessiblePaths=-/boot -/etc -/home -/media -/mnt -/opt -/root -/run/user -/srv -/usr/lib/blossom-os",
         "BindReadOnlyPaths=@PROVIDER_DIRECTORY@ @MODEL_PATH@",
         f"ReadWritePaths=/var/lib/blossom/model-provider/{kind}",
         "Restart=no",
