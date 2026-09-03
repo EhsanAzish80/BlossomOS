@@ -153,3 +153,8 @@ jobs:
             systemctl show "$unit" \
               --property ActiveState,SubState,Result,ExecMainStatus || true
           done
+          # The namespace anchor never handles prompts, completions, provider
+          # responses, or caller metadata. Its journal is therefore safe to
+          # expose when diagnosing pre-inference sandbox setup failures.
+          sudo journalctl --unit blossom-model-netns.service \
+            --boot --no-pager --output short-monotonic || true
