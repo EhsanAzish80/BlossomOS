@@ -146,7 +146,7 @@ def render_provider_unit() -> bytes:
 def render_gateway_unit() -> bytes:
     template = (PACKAGE / "blossom-model-gateway.service.in").read_text(encoding="utf-8")
     replacements = {
-        "@PROFILE_DIRECTORY@": str(PROFILE_PATH.parent),
+        "@PROFILE_ROOT@": str(PROFILE_PATH.parents[1]),
         "@PROVIDER_DIRECTORY@": str(RUNTIME_ROOT),
         "@MODEL_PATH@": str(MODEL_PATH),
     }
