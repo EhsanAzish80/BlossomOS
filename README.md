@@ -77,6 +77,20 @@ list or load units, request all properties, mutate systemd, invoke `systemctl`,
 or send a caller-selected D-Bus message. Service names and states are omitted
 from persistent audit detail.
 
+Phase 3 implements one narrowly typed privileged operation:
+`services.restart:bluetooth.service`. An interactive CLI displays the exact
+fixed operation and grants approval once only. A system D-Bus service captures
+the authenticated sender and UID, independently requests the fixed polkit
+action, persists replay-safe journal state, calls only
+`TryRestartUnit("bluetooth.service", "replace")`, verifies the changed active
+invocation, and writes a bounded, synced, hash-chained audit trail. The helper
+cannot accept a shell command, executable, argument vector, caller-selected
+unit, D-Bus address, method, object path, polkit action, or job mode.
+
+The Phase 3 package boundary is validated on controlled Linux CI services but
+is not installed by this repository, and real target-Arch or Bluetooth-hardware
+behavior has not yet been claimed. See `docs/PHASE_3_BASELINE.md`.
+
 ### Planned, not implemented
 
 The following are architectural goals only:
@@ -84,8 +98,8 @@ The following are architectural goals only:
 - Hyprland integration and a Quickshell-based Blossom Shell.
 - A provider-neutral local AI runtime with replaceable model backends.
 - A typed Blossom Bus and structured desktop/system context.
-- A minimal typed privileged helper with no generic root shell.
-- Persistent, user-manageable local audit storage.
+- A complete user-facing, persistent and manageable audit service beyond the
+  current security-core and privileged-helper audit backends.
 - Agent planning, execution verification, memory, packaging, and safe updates.
 
 No security property described in the target documents should be treated as a
@@ -123,9 +137,11 @@ not been moved or restructured.
 
 ## Development
 
-Phases 0, 1, and 2 are complete. Phase 2's closed capability inventory,
-containment evidence, composition review, and exit audit are recorded in
-`docs/PHASE_2_BASELINE.md`. Phase 3 privileged-operation design has not begun.
+Phases 0 through 3 are complete. Their exit evidence is recorded in
+`docs/PHASE_0_BASELINE.md`, `docs/PHASE_1_SECURITY_CORE.md`,
+`docs/PHASE_2_BASELINE.md`, and `docs/PHASE_3_BASELINE.md`. Phase 4 begins with
+an ADR for a provider-neutral local model boundary; no real model runtime is
+implemented yet.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.

@@ -1,7 +1,7 @@
 # Phase 2 capability and sandbox baseline
 
-Status: completion baseline prepared on 2026-09-02. Phase 2 is complete when
-this exit audit passes the protected pull-request checks and merges to `main`.
+Status: complete. The exit audit passed protected checks and merged to `main`
+on 2026-09-02.
 
 ## Scope
 
@@ -95,8 +95,9 @@ an ADR when it changes a trust boundary.
 
 ## Exit decision
 
-After this baseline passes protected review and merges, every registered tool
+Every registered Phase 2 tool
 has a statically derived capability, code-owned operation boundary, deterministic
 verification, redacted audit behavior, and applicable containment tests. The
-Phase 2 exit gate is satisfied. Phase 3 remains separate and must begin with its
-own privileged-helper design and threat review.
+Phase 2 exit gate is satisfied. Phase 3 subsequently completed its independent
+privileged-helper design, implementation, and exit review; see
+`docs/PHASE_3_BASELINE.md`.
