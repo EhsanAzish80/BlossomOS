@@ -202,6 +202,10 @@ the complete production and evidence gates.
     cannot select a provider, model, endpoint, classification, path or runtime
     setting; its decoder injects provider/model/private identity from admitted
     code-owned inputs.
+  - [x] Implement the already-authorized one-request connection state machine,
+    including hello-before-input, pipelining rejection, concurrent bound
+    cancellation, validated event encoding, bounded I/O and fail-closed
+    disconnect/write behavior. It is not yet wired to the production listener.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.

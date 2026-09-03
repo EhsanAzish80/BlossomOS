@@ -52,9 +52,10 @@ pub use model_runtime::{
     ProviderServiceIdentity, ProviderStreamInput, TurnIntentCatalogue, ValidatedProviderProfile,
     decode_gateway_cancel, decode_gateway_event, decode_gateway_hello,
     decode_gateway_private_request, decode_gateway_synthetic_request, encode_gateway_cancel,
-    encode_gateway_event, encode_gateway_hello, encode_gateway_synthetic_request,
-    load_installed_provider_profile, load_installed_runtime_readiness, production_provider_profile,
-    validate_gateway_peer, validate_provider_completion,
+    encode_gateway_event, encode_gateway_hello, encode_gateway_private_request,
+    encode_gateway_synthetic_request, load_installed_provider_profile,
+    load_installed_runtime_readiness, production_provider_profile, validate_gateway_peer,
+    validate_provider_completion,
 };
 #[cfg(unix)]
 pub use model_runtime::{

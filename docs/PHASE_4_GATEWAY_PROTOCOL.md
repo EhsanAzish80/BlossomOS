@@ -68,3 +68,11 @@ The next checkpoint binds this parser and retained-account authorization into a
 one-request production listener with concurrent cancellation. Installed service
 and real-model target-Linux evidence remains mandatory before private input is
 enabled.
+
+The authority-free client encoder and already-authorized stream handler now
+exist as an intermediate checkpoint. The handler sends the profile-bound hello
+before accepting input, rejects a pipelined second frame before inference,
+runs the bound cancellation reader concurrently with inference, cancels on
+invalid frames or disconnects, bounds I/O, and writes only schema-validated
+events. Unix-pair tests cover completion, a matching cancellation winning, and
+pipelining starting no inference. Production still does not create a listener.

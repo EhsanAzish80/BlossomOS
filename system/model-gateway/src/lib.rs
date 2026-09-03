@@ -18,6 +18,7 @@ pub enum GatewayProcessError {
     InvalidInvocation,
     InvalidFixtureConfiguration,
     FixtureUnavailable,
+    PrivateConnectionUnavailable,
 }
 
 impl GatewayProcessError {
@@ -26,6 +27,7 @@ impl GatewayProcessError {
             Self::ProfileRegistryUnavailable => 78,
             Self::InvalidInvocation | Self::InvalidFixtureConfiguration => 64,
             Self::FixtureUnavailable => 69,
+            Self::PrivateConnectionUnavailable => 70,
         }
     }
 }
@@ -37,8 +39,188 @@ impl fmt::Display for GatewayProcessError {
             Self::InvalidInvocation => "model gateway invocation is invalid",
             Self::InvalidFixtureConfiguration => "synthetic gateway configuration is invalid",
             Self::FixtureUnavailable => "synthetic gateway fixture is unavailable",
+            Self::PrivateConnectionUnavailable => "private gateway connection failed closed",
         })
     }
+}
+
+#[cfg(unix)]
+#[allow(
+    dead_code,
+    reason = "wired into production only after its Linux adversarial checkpoint passes"
+)]
+fn serve_authorized_private_connection<F>(
+    mut stream: std::os::unix::net::UnixStream,
+    profile: blossom_core::GatewayProfile,
+    provider: blossom_core::ModelProviderKind,
+    model: blossom_core::ModelProfile,
+    boot_id_sha256: &str,
+    instance_nonce: &str,
+    inference: F,
+) -> Result<(), GatewayProcessError>
+where
+    F: FnOnce(
+        &blossom_core::InferenceRequest,
+        blossom_core::InferenceCancellation,
+        &mut dyn FnMut(&blossom_core::NormalizedStreamEvent),
+    ) -> Result<(), GatewayProcessError>,
+{
+    use blossom_core::{
+        GatewayFrame, GatewayFrameDecoder, InferenceCancellation, decode_gateway_cancel,
+        decode_gateway_private_request, encode_gateway_event, encode_gateway_hello,
+    };
+    use std::collections::VecDeque;
+    use std::io::{Read, Write};
+    use std::net::Shutdown;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
+    use std::time::Duration;
+
+    struct Reader {
+        decoder: GatewayFrameDecoder,
+        pending: VecDeque<GatewayFrame>,
+    }
+
+    enum ReadFailure {
+        TimedOut,
+        Failed,
+    }
+
+    impl Reader {
+        fn new() -> Self {
+            Self {
+                decoder: GatewayFrameDecoder::default(),
+                pending: VecDeque::new(),
+            }
+        }
+
+        fn read_one(
+            &mut self,
+            stream: &mut std::os::unix::net::UnixStream,
+        ) -> Result<GatewayFrame, ReadFailure> {
+            if let Some(frame) = self.pending.pop_front() {
+                return Ok(frame);
+            }
+            let mut buffer = [0_u8; 8 * 1024];
+            loop {
+                let count = stream.read(&mut buffer).map_err(|error| {
+                    if matches!(
+                        error.kind(),
+                        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock
+                    ) {
+                        ReadFailure::TimedOut
+                    } else {
+                        ReadFailure::Failed
+                    }
+                })?;
+                if count == 0 {
+                    return Err(ReadFailure::Failed);
+                }
+                self.pending.extend(
+                    self.decoder
+                        .push(&buffer[..count])
+                        .map_err(|_| ReadFailure::Failed)?,
+                );
+                if let Some(frame) = self.pending.pop_front() {
+                    return Ok(frame);
+                }
+            }
+        }
+
+        fn is_idle(&self) -> bool {
+            self.pending.is_empty() && self.decoder.is_idle()
+        }
+    }
+
+    stream
+        .set_read_timeout(Some(Duration::from_millis(250)))
+        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(2)))
+        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    stream
+        .write_all(
+            &encode_gateway_hello(profile, boot_id_sha256, instance_nonce)
+                .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?,
+        )
+        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    stream
+        .flush()
+        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+
+    let mut reader = Reader::new();
+    let request = decode_gateway_private_request(
+        &reader
+            .read_one(&mut stream)
+            .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?,
+        provider,
+        model,
+    )
+    .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    if !reader.is_idle() {
+        return Err(GatewayProcessError::PrivateConnectionUnavailable);
+    }
+
+    let cancellation = InferenceCancellation::new();
+    let cancellation_reader = cancellation.clone();
+    let request_id = request.request_id().clone();
+    let finished = Arc::new(AtomicBool::new(false));
+    let reader_finished = finished.clone();
+    let mut read_stream = stream
+        .try_clone()
+        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    let cancellation_thread = std::thread::spawn(move || {
+        loop {
+            match reader.read_one(&mut read_stream) {
+                Ok(frame) => {
+                    let valid = decode_gateway_cancel(&frame)
+                        .is_ok_and(|cancelled| cancelled == request_id);
+                    cancellation_reader.cancel();
+                    return valid;
+                }
+                Err(ReadFailure::TimedOut) if reader_finished.load(Ordering::Acquire) => {
+                    return true;
+                }
+                Err(ReadFailure::TimedOut) => continue,
+                Err(ReadFailure::Failed) if reader_finished.load(Ordering::Acquire) => return true,
+                Err(ReadFailure::Failed) => {
+                    cancellation_reader.cancel();
+                    return false;
+                }
+            }
+        }
+    });
+
+    let mut write_failed = false;
+    let mut emit = |event: &blossom_core::NormalizedStreamEvent| {
+        if write_failed {
+            cancellation.cancel();
+            return;
+        }
+        let encoded = encode_gateway_event(event)
+            .map_err(|_| ())
+            .and_then(|frame| stream.write_all(&frame).map_err(|_| ()));
+        if encoded.is_err() {
+            write_failed = true;
+            cancellation.cancel();
+        }
+    };
+    let inference_result = inference(&request, cancellation.clone(), &mut emit);
+    finished.store(true, Ordering::Release);
+    let _ = stream.shutdown(Shutdown::Read);
+    let cancellation_valid = cancellation_thread.join().unwrap_or(false);
+    if write_failed || !cancellation_valid {
+        return Err(GatewayProcessError::PrivateConnectionUnavailable);
+    }
+    inference_result?;
+    stream
+        .flush()
+        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    stream
+        .shutdown(Shutdown::Write)
+        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)
 }
 
 impl std::error::Error for GatewayProcessError {}
@@ -153,5 +335,193 @@ mod tests {
                 .to_string()
                 .contains(PRODUCTION_SOCKET_PATH)
         );
+    }
+
+    #[cfg(unix)]
+    mod private_connection {
+        use super::*;
+        use blossom_core::{
+            ConversationMessage, ConversationRole, GATEWAY_PROTOCOL_VERSION, GatewayFrame,
+            GatewayFrameDecoder, GatewayMessageKind, GatewayProfile, InferenceOutputMode,
+            InferenceRequestId, ModelProfile, ModelProviderKind, ModelStreamState,
+            NormalizedStreamKind, ProviderStreamInput, TurnIntentCatalogue, decode_gateway_event,
+            decode_gateway_hello, encode_gateway_cancel, encode_gateway_private_request,
+        };
+        use std::collections::VecDeque;
+        use std::io::{Read, Write};
+        use std::os::unix::net::UnixStream;
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+        use std::time::{Duration, Instant};
+
+        struct ClientReader {
+            decoder: GatewayFrameDecoder,
+            pending: VecDeque<GatewayFrame>,
+        }
+
+        impl ClientReader {
+            fn new() -> Self {
+                Self {
+                    decoder: GatewayFrameDecoder::default(),
+                    pending: VecDeque::new(),
+                }
+            }
+
+            fn read_one(&mut self, stream: &mut UnixStream) -> GatewayFrame {
+                if let Some(frame) = self.pending.pop_front() {
+                    return frame;
+                }
+                let mut bytes = [0_u8; 4096];
+                loop {
+                    let count = stream.read(&mut bytes).unwrap();
+                    assert_ne!(count, 0);
+                    self.pending
+                        .extend(self.decoder.push(&bytes[..count]).unwrap());
+                    if let Some(frame) = self.pending.pop_front() {
+                        return frame;
+                    }
+                }
+            }
+        }
+
+        fn private_frame(id: &InferenceRequestId) -> Vec<u8> {
+            encode_gateway_private_request(
+                id,
+                &[
+                    ConversationMessage::new(ConversationRole::User, "private fixture".into())
+                        .unwrap(),
+                ],
+                &TurnIntentCatalogue::empty(),
+                InferenceOutputMode::Text,
+                2_000,
+            )
+            .unwrap()
+        }
+
+        #[test]
+        fn one_private_request_streams_one_validated_terminal_result() {
+            let (mut client, server) = UnixStream::pair().unwrap();
+            client
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let server_thread = std::thread::spawn(move || {
+                serve_authorized_private_connection(
+                    server,
+                    GatewayProfile::LlamaCppCpuV1,
+                    ModelProviderKind::LlamaCpp,
+                    ModelProfile::parse("fixture-model:1".into()).unwrap(),
+                    &"a".repeat(64),
+                    "private-connection-1",
+                    |request, cancellation, emit| {
+                        let mut state = ModelStreamState::new(request, cancellation);
+                        emit(&state.apply(0, ProviderStreamInput::Started).unwrap());
+                        emit(
+                            &state
+                                .apply(1, ProviderStreamInput::TextDelta("ok".into()))
+                                .unwrap(),
+                        );
+                        emit(&state.apply(2, ProviderStreamInput::Finished).unwrap());
+                        Ok(())
+                    },
+                )
+            });
+            let mut reader = ClientReader::new();
+            let hello = reader.read_one(&mut client);
+            assert_eq!(hello.kind(), GatewayMessageKind::Hello);
+            assert_eq!(
+                decode_gateway_hello(&hello, GatewayProfile::LlamaCppCpuV1)
+                    .unwrap()
+                    .0,
+                "a".repeat(64)
+            );
+            let request_id = InferenceRequestId::parse("private-connection-1".into()).unwrap();
+            client.write_all(&private_frame(&request_id)).unwrap();
+            let mut terminal = false;
+            while !terminal {
+                let event = decode_gateway_event(&reader.read_one(&mut client)).unwrap();
+                terminal = matches!(event.event, NormalizedStreamKind::Finished { .. });
+            }
+            assert_eq!(server_thread.join().unwrap(), Ok(()));
+        }
+
+        #[test]
+        fn matching_cancel_wins_before_completion() {
+            let (mut client, server) = UnixStream::pair().unwrap();
+            client
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let server_thread = std::thread::spawn(move || {
+                serve_authorized_private_connection(
+                    server,
+                    GatewayProfile::LlamaCppCpuV1,
+                    ModelProviderKind::LlamaCpp,
+                    ModelProfile::parse("fixture-model:1".into()).unwrap(),
+                    &"b".repeat(64),
+                    "private-cancel-1",
+                    |request, cancellation, emit| {
+                        let mut state = ModelStreamState::new(request, cancellation.clone());
+                        emit(&state.apply(0, ProviderStreamInput::Started).unwrap());
+                        let deadline = Instant::now() + Duration::from_secs(2);
+                        while !cancellation.is_cancelled() {
+                            assert!(Instant::now() < deadline);
+                            std::thread::yield_now();
+                        }
+                        emit(&state.apply(1, ProviderStreamInput::Finished).unwrap());
+                        Ok(())
+                    },
+                )
+            });
+            let mut reader = ClientReader::new();
+            let _ = reader.read_one(&mut client);
+            let request_id = InferenceRequestId::parse("private-cancel-1".into()).unwrap();
+            client.write_all(&private_frame(&request_id)).unwrap();
+            let started = decode_gateway_event(&reader.read_one(&mut client)).unwrap();
+            assert!(matches!(started.event, NormalizedStreamKind::Started));
+            client
+                .write_all(&encode_gateway_cancel(&request_id).unwrap())
+                .unwrap();
+            let cancelled = decode_gateway_event(&reader.read_one(&mut client)).unwrap();
+            assert!(matches!(cancelled.event, NormalizedStreamKind::Cancelled));
+            assert_eq!(server_thread.join().unwrap(), Ok(()));
+        }
+
+        #[test]
+        fn pipelined_second_frame_starts_no_inference() {
+            let (mut client, server) = UnixStream::pair().unwrap();
+            client
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let called = Arc::new(AtomicBool::new(false));
+            let server_called = called.clone();
+            let server_thread = std::thread::spawn(move || {
+                serve_authorized_private_connection(
+                    server,
+                    GatewayProfile::LlamaCppCpuV1,
+                    ModelProviderKind::LlamaCpp,
+                    ModelProfile::parse("fixture-model:1".into()).unwrap(),
+                    &"c".repeat(64),
+                    "private-pipeline-1",
+                    move |_, _, _| {
+                        server_called.store(true, Ordering::Release);
+                        Ok(())
+                    },
+                )
+            });
+            let mut reader = ClientReader::new();
+            let _ = reader.read_one(&mut client);
+            let request_id = InferenceRequestId::parse("private-pipeline-1".into()).unwrap();
+            let frame = private_frame(&request_id);
+            let mut pipelined = frame.clone();
+            pipelined.extend_from_slice(&frame);
+            client.write_all(&pipelined).unwrap();
+            assert_eq!(
+                server_thread.join().unwrap(),
+                Err(GatewayProcessError::PrivateConnectionUnavailable)
+            );
+            assert!(!called.load(Ordering::Acquire));
+            assert_eq!(GATEWAY_PROTOCOL_VERSION, 1);
+        }
     }
 }

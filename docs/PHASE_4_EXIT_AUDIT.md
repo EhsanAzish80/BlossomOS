@@ -22,6 +22,9 @@ controls from evidence that does not yet exist.
 - The private-inference frame omits provider, model, endpoint, path and
   classification authority; its decoder injects those values from the admitted
   profile. The production listener remains disabled.
+- The authorized-stream handler enforces one request, rejects pipelining,
+  watches cancellation concurrently, and emits only validated events. It is
+  tested through Unix socket pairs but is not yet reachable from production.
 - Linux peer-credential primitives and a separate-process synthetic Unix
   gateway are tested.
 - Both real adapter implementations are exercised through authenticated
@@ -43,7 +46,8 @@ controls from evidence that does not yet exist.
   path and the listener remains deliberately disabled.
 - ADR-0017 fixes the private admission and cancellation contract. Retained
   account-snapshot membership checks and their negative tests are implemented,
-  but the production listener and cancellation path are not yet implemented.
+  and the isolated one-request/cancellation handler is implemented, but the
+  production listener and installed-service path are not yet implemented.
 - No test has started the packaged services under the intended distinct users
   and verified namespace identity, loopback-only networking, socket ownership,
   peer authorization, filesystem denial and lifecycle failure behavior.
