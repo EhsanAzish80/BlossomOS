@@ -136,9 +136,10 @@ protected CI and merged to `main` as `0662e51`.
 ## Phase 4: Replaceable local AI runtime
 
 Status: active. ADR-0011 defines the accepted provider-neutral local inference
-boundary, and ADR-0012 defines the accepted endpoint-identity and packaging
-boundary. Controlled synthetic implementation is substantial; private inputs
-remain blocked pending the complete ADR-0012 production and evidence gates.
+boundary, ADR-0012 defines the endpoint-identity and packaging boundary, and
+ADR-0017 fixes production admission and cancellation semantics. Controlled
+synthetic implementation is substantial; private inputs remain blocked pending
+the complete production and evidence gates.
 
 - [x] Accept the provider-neutral inference, proposed-tool-intent, cancellation,
   streaming, locality, privacy, and conformance contract.
@@ -191,6 +192,9 @@ remain blocked pending the complete ADR-0012 production and evidence gates.
   - [x] Make supported-Linux release startup select the sole embedded profile,
     consume installed readiness, and match its effective service UID/GID before
     returning fail-closed without a listener.
+  - [x] Accept ADR-0017 for retained-account client eligibility,
+    server-derived private request identity, one-request connections,
+    cancellation races, and redacted production evidence.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.
