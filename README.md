@@ -139,9 +139,10 @@ not been moved or restructured.
 
 Phases 0 through 3 are complete. Their exit evidence is recorded in
 `docs/PHASE_0_BASELINE.md`, `docs/PHASE_1_SECURITY_CORE.md`,
-`docs/PHASE_2_BASELINE.md`, and `docs/PHASE_3_BASELINE.md`. Phase 4 begins with
-an ADR for a provider-neutral local model boundary; no real model runtime is
-implemented yet.
+`docs/PHASE_2_BASELINE.md`, and `docs/PHASE_3_BASELINE.md`. Phase 4 is active
+under accepted ADR-0011, beginning with provider-neutral types and synthetic
+conformance fixtures. No real model runtime is implemented yet, and private
+inputs remain blocked pending a separately reviewed provider-identity boundary.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.

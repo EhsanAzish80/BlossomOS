@@ -59,6 +59,14 @@ Adapters expose a common interface for llama.cpp, Ollama, and future local or
 explicitly enabled external providers. Provider selection must not alter policy
 or executor behavior.
 
+ADR-0011 treats providers and their output as untrusted. The model sees an empty
+tool catalogue by default and only a minimal code-owned intent allowlist for an
+eligible turn. Returned calls are proposals, never executable requests. Fixed
+loopback HTTP is development transport only: real adapters are restricted to
+synthetic prompts until a reviewed endpoint-identity boundary binds the actual
+connection to the expected provider service. Mixed text-and-action completions
+fail closed.
+
 ### Capability Broker and Policy Engine
 
 The broker is the only route from a tool request to execution. Tools declare

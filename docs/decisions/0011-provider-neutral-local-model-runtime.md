@@ -1,7 +1,8 @@
 # ADR-0011: Provider-neutral local model runtime boundary
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-03
+- Accepted: 2026-09-03 after explicit project review
 - Owners: Project maintainers
 
 ## Context
@@ -49,7 +50,10 @@ versioned types cover:
 
 - a bounded request identifier and conversation messages;
 - the user-selected provider and model profile;
-- code-owned tool-intent schemas derived from the registered Blossom tools;
+- a per-turn allowlist of code-owned tool-intent schemas derived from the
+  registered Blossom tools;
+- an input data classification that the trusted runtime derives rather than
+  accepting from the model or provider;
 - output mode: user-facing text or a strict Blossom turn schema;
 - deterministic generation limits and a total deadline;
 - ordered stream events for start, bounded text delta, completed proposed tool
@@ -62,7 +66,7 @@ tool-call count, argument size, text delta, accumulated output, metadata, and
 provider error detail all have code-owned bounds. Unknown enum variants or JSON
 fields are rejected at every provider boundary.
 
-The normalized completion is either:
+The normalized completion is exactly one of:
 
 1. bounded assistant text;
 2. one or more bounded proposed tool intents; or
@@ -74,12 +78,25 @@ arguments are buffered privately and are not emitted as a valid intent. A tool
 intent becomes visible to the runtime only after the complete provider payload
 passes the closed Blossom schema.
 
+Mixed assistant text and tool intents are rejected in the initial contract. A
+provider may not hide an action inside text while also returning a structured
+call, and a caller may not infer authority from prose. Supporting a mixed turn
+later requires a versioned contract change and an ambiguity review.
+
 ### Tool-intent boundary
 
 Provider tool definitions are projections of Blossom's code-owned intent
-registry, not provider authority. A proposed call contains only a registered
-intent name and its public intent arguments. The runtime assigns correlation and
-request identifiers itself.
+registry, not provider authority. The default catalogue is empty. For each
+inference turn, trusted runtime code constructs the smallest explicit allowlist
+of intents relevant and eligible for that turn. It does not expose every
+registered capability merely because it exists. A proposed call contains only
+an allowlisted intent name and its public intent arguments. The runtime assigns
+correlation and request identifiers itself.
+
+Tool schemas never contain a selected path, file identity, retained descriptor,
+approval state, current capability grant, privileged operation internals, or a
+list of sensitive resources available on the machine. An intent that is valid
+in the global registry but absent from the current turn allowlist is rejected.
 
 Resource selection remains outside the model:
 
@@ -97,35 +114,56 @@ execution is disabled and unsupported.
 
 ### Local transport and privacy
 
-The first adapters connect only to literal loopback addresses and exact paths:
+The development adapters connect only to literal loopback addresses and exact
+paths:
 
 - Ollama: `127.0.0.1:11434`, `POST /api/chat`;
 - llama.cpp: `127.0.0.1:8080`, `POST /v1/chat/completions`.
 
-Production requests cannot supply a scheme, host, port, path, redirect target,
+Requests cannot supply a scheme, host, port, path, redirect target,
 proxy, Unix command, or executable. HTTP redirects, environment proxy discovery,
 and cleartext non-loopback destinations are disabled. Test-only constructors may
 use an ephemeral loopback port for controlled protocol services.
 
-The initial runtime connects to an already-running, user-managed local provider.
-It does not spawn a provider, download a binary or model, discover LAN servers,
-or fall back to a remote/cloud endpoint. Provider and model profile selection is
-an explicit local user setting; model output cannot change it. A later
-configurable endpoint or provider lifecycle manager requires a separate threat
-review and ADR.
+The initial development runtime connects to an already-running, user-managed
+local provider. It does not spawn a provider, download a binary or model,
+discover LAN servers, or fall back to a remote/cloud endpoint. Provider and
+model profile selection is an explicit local user setting; model output cannot
+change it. A later configurable endpoint or provider lifecycle manager requires
+a separate threat review and ADR.
 
-Conversation content and tool results are private local data. Requests are sent
-only to the selected local provider. Audit records contain correlation,
+Every inference input is classified by trusted code. Until the endpoint identity
+gate below is implemented, a real adapter accepts only synthetic conformance and
+developer-authored test prompts. It must reject private or ambient user data,
+including file contents, tool results, clipboard data, notifications, desktop
+context, conversation history, credentials, and personal identifiers. Marking
+data `synthetic` is not a caller- or model-controlled escape hatch.
+
+After endpoint identity is established, private conversation content and tool
+results may be sent only to the selected local provider under their later
+phase-specific disclosure policy. Audit records contain correlation,
 provider kind, a bounded model-profile identifier or digest, request/result
 digests, timing, token counts when trustworthy, finish category, schema result,
 and cancellation state. Prompts, generated text, reasoning text, tool-result
 content, credentials, and raw provider errors are omitted by default.
 
 Loopback is not an authentication boundary against another process running as
-the same user. Provider responses therefore remain untrusted even after a
-successful connection. Initial packaging must bind provider services to
-loopback only and should prefer a private authenticated transport when both
-supported providers can satisfy one without weakening replaceability.
+the same user. A process can impersonate an offline service on a familiar port
+and receive prompts before response validation occurs. Therefore a fixed
+loopback URL is a development transport, not the production privacy boundary.
+
+Before any private input is permitted, Blossom must implement and adversarially
+test a provider endpoint identity mechanism. The mechanism must bind the
+connection actually used for the request to the expected provider instance and
+code-owned service profile, without a pathname-only or check-then-connect race.
+It must fail closed across provider absence, restart, port occupation, PID reuse,
+executable replacement, connection replacement, and identity-service failure.
+The exact mechanism and packaging—such as a Blossom-managed provider gateway in
+a private network namespace with authenticated local IPC—requires a focused ADR
+before implementation. Merely checking that an address is loopback, a process
+name matches, or a port was previously owned is insufficient.
+
+Provider responses remain untrusted even after endpoint authentication.
 
 ### Streaming, cancellation, and failure
 
@@ -152,9 +190,13 @@ Implementation proceeds in protected checkpoints:
 
 1. provider-neutral types, validator, stream state machine, cancellation, audit
    projection, and scripted conformance suite;
-2. Ollama adapter for the fixed local `/api/chat` surface;
-3. llama.cpp adapter for the fixed local `/v1/chat/completions` surface;
-4. cross-provider conformance and offline target-Linux evidence.
+2. Ollama development adapter for the fixed local `/api/chat` surface, accepting
+   synthetic inputs only;
+3. llama.cpp development adapter for the fixed local `/v1/chat/completions`
+   surface, accepting synthetic inputs only;
+4. a separate accepted provider-identity/packaging ADR and its implementation;
+5. cross-provider conformance, private-input gating, and offline target-Linux
+   evidence.
 
 Ollama is first because its documented chat API directly exposes streaming,
 JSON-schema output, and tool-call objects. llama.cpp is second because its
@@ -172,6 +214,9 @@ loopback protocol service. Evidence includes:
 
 - byte-for-byte request and normalized-event fixtures;
 - text, structured output, one and multiple proposed tool intents;
+- rejection of mixed text-and-intent completions;
+- an empty default tool catalogue, per-turn minimal allowlists, and rejection of
+  globally registered but turn-ineligible intents;
 - unknown tool/field/role/finish reason and malformed argument rejection;
 - fragmented frames, invalid UTF-8, truncated JSON, duplicate/out-of-order or
   post-terminal events, and oversized input/output;
@@ -179,13 +224,16 @@ loopback protocol service. Evidence includes:
   completed intent, proving zero tool executions;
 - disconnect, unavailable provider, non-success HTTP status, redirect, proxy,
   and non-loopback rejection;
+- synthetic/private input classification, proof that unverified endpoints
+  receive no private bytes, and fail-closed endpoint identity tests before any
+  private-input path is enabled;
 - provider error redaction and audit omission of prompts and generated content;
 - proof that provider payloads cannot select internal request IDs, approvals,
   capabilities, file identities, descriptors, sandbox profiles, privileged
   actions, or transport endpoints; and
 - deterministic equivalence of normalized Ollama and llama.cpp fixture results.
 
-Before Phase 4 completes, opt-in target-Linux tests must also run each supported
+Before Phase 4 completes, target-Linux tests must also run each supported
 adapter against a real local provider and small local model with external
 network access disabled. Model artifacts and provider binaries must be pinned
 and integrity-checked by the test environment; they are not committed to Git.
@@ -231,13 +279,13 @@ narrower intent projection.
 
 The design keeps inference replaceable and local while preserving the existing
 capability boundary. It prevents a provider response from becoming execution by
-construction and makes malformed, late, or oversized streams fail closed.
+construction, blocks private inputs until the connected provider is identified,
+and makes malformed, mixed, late, or oversized streams fail closed.
 
 It does not make model output trustworthy, prevent all prompt injection, prove
-that a third-party provider binary is benign, authenticate an unauthenticated
-loopback provider, or protect data after the same user or root account is
-compromised. Supply-chain review, provider sandboxing, signed packages, model
-provenance, and hardware sizing remain separate work.
+that a third-party provider binary is benign, or protect data after the same
+user or root account is compromised. Supply-chain review, provider sandboxing,
+signed packages, model provenance, and hardware sizing remain separate work.
 
 ## Migration and rollback
 
