@@ -5,7 +5,7 @@ controls from evidence that does not yet exist.
 
 ## Satisfied repository gates
 
-- ADR-0011 through ADR-0016 are accepted. ADR-0014 removes guessed numeric
+- ADR-0011 through ADR-0017 are accepted. ADR-0014 removes guessed numeric
   service IDs from canonical profiles and binds installed IDs at readiness.
 - Canonical profiles and readiness bind the complete provider runtime artifact
   set, including bundled dynamic libraries; unknown entries fail closed.
@@ -38,6 +38,9 @@ controls from evidence that does not yet exist.
 - Production startup consumes readiness evidence and retains its descriptors
   through the admission decision, but no packaged service has exercised that
   path and the listener remains deliberately disabled.
+- ADR-0017 fixes the private admission and cancellation contract, but its
+  production listener, membership checks and adversarial tests are not yet
+  implemented.
 - No test has started the packaged services under the intended distinct users
   and verified namespace identity, loopback-only networking, socket ownership,
   peer authorization, filesystem denial and lifecycle failure behavior.
