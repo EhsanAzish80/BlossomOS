@@ -25,7 +25,7 @@ evidence, and reject missing, root, shared, or changed identities.
 | gateway binary | `/usr/lib/blossom-os/blossom-model-gateway` | `root:root 0755` |
 | manifests | `/etc/blossom-os/model-profiles/` | `root:root 0755`; files `0644` |
 | gateway socket | `/run/blossom-model-gateway/inference.sock` | `blossom-model-gateway:blossom-ai 0660` |
-| provider binary | rendered absolute package path under `/usr/lib/blossom-os/providers/` | `root:root 0755` |
+| provider runtime set | rendered package directory under `/usr/lib/blossom-os/providers/` | root-owned, non-writable; executable `0755` |
 | models | rendered absolute package path under `/usr/lib/blossom-os/models/` | `root:root 0644` |
 | disposable provider state | `/var/lib/blossom/model-provider/<profile>/` | `blossom-model-provider:blossom-model-provider 0700` |
 
@@ -48,8 +48,8 @@ The units have no `[Install]` section, so this checkpoint cannot enable them.
 The templates are CPU-only and expose no device. Both provider templates allow
 only loopback inside the shared private namespace; neither has a route, DNS,
 proxy, host network, Unix-socket, home-directory, shell, tool, or broker path.
-The Blossom package tree is otherwise inaccessible and only the selected binary
-and model are rebound read-only; ordinary dynamic-loader and system-library
+The Blossom package tree is otherwise inaccessible and only the complete
+measured provider runtime directory and model are rebound read-only; ordinary dynamic-loader and system-library
 paths remain visible because the provider cannot start without them.
 
 ## Not implemented

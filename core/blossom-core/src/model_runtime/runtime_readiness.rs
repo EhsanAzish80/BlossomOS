@@ -21,7 +21,7 @@ const PROVIDER_USER: &str = "blossom-model-provider";
 const ACCESS_GROUP: &str = "blossom-ai";
 const NOLOGIN_SHELL: &str = "/usr/bin/nologin";
 const MAX_ACCOUNT_DATABASE_BYTES: u64 = 1024 * 1024;
-const MAX_BINARY_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_RUNTIME_BYTES: u64 = 64 * 1024 * 1024 * 1024;
 const MAX_MODEL_BYTES: u64 = 64 * 1024 * 1024 * 1024;
 const MAX_UNIT_BYTES: u64 = 256 * 1024;
 
@@ -99,12 +99,13 @@ pub struct RuntimeReadinessEvidence {
     profile: ValidatedProviderProfile,
     accounts: ResolvedModelIdentities,
     account_databases: AccountDatabaseEvidence,
-    binary: RuntimeFileEvidence,
+    runtime_files: Vec<RuntimeFileEvidence>,
+    binary_index: usize,
     model_files: Vec<RuntimeFileEvidence>,
     unit: RuntimeFileEvidence,
     // Retained so a future launcher can consume the exact validated files
     // instead of reopening attacker-replaceable paths.
-    binary_descriptor: File,
+    runtime_descriptors: Vec<File>,
     model_descriptors: Vec<File>,
     unit_descriptor: File,
 }
@@ -120,7 +121,10 @@ impl RuntimeReadinessEvidence {
         &self.account_databases
     }
     pub fn binary(&self) -> &RuntimeFileEvidence {
-        &self.binary
+        &self.runtime_files[self.binary_index]
+    }
+    pub fn runtime_files(&self) -> &[RuntimeFileEvidence] {
+        &self.runtime_files
     }
     pub fn model_files(&self) -> &[RuntimeFileEvidence] {
         &self.model_files
@@ -132,7 +136,12 @@ impl RuntimeReadinessEvidence {
     #[cfg(unix)]
     pub fn binary_descriptor(&self) -> std::os::fd::BorrowedFd<'_> {
         use std::os::fd::AsFd;
-        self.binary_descriptor.as_fd()
+        self.runtime_descriptors[self.binary_index].as_fd()
+    }
+    #[cfg(unix)]
+    pub fn runtime_descriptors(&self) -> impl Iterator<Item = std::os::fd::BorrowedFd<'_>> {
+        use std::os::fd::AsFd;
+        self.runtime_descriptors.iter().map(File::as_fd)
     }
     #[cfg(unix)]
     pub fn model_descriptors(&self) -> impl Iterator<Item = std::os::fd::BorrowedFd<'_>> {
@@ -168,6 +177,7 @@ pub enum RuntimeReadinessError {
     IdentityMismatch,
     UnsafeModelDirectory,
     UnexpectedModelEntry,
+    UnexpectedRuntimeEntry,
 }
 
 impl From<ProviderProfileError> for RuntimeReadinessError {
@@ -223,16 +233,41 @@ pub(super) fn load_runtime_readiness(
         return Err(RuntimeReadinessError::IdentityMismatch);
     }
     let accounts = resolve_accounts(&passwd_bytes, &group_bytes)?;
-    let (binary, binary_descriptor) = read_digest_bound(
-        profile.binary().path(),
+    validate_artifact_inventory(
+        profile.runtime_mount(),
+        profile.runtime_files(),
         expected_owner,
-        MAX_BINARY_BYTES,
-        profile.binary().sha256(),
-        true,
+        RuntimeReadinessError::UnexpectedRuntimeEntry,
     )?;
-    if binary.bytes() != profile.binary().bytes() {
-        return Err(RuntimeReadinessError::SizeMismatch);
+    let mut runtime_files = Vec::with_capacity(profile.runtime_files().len());
+    let mut runtime_descriptors = Vec::with_capacity(profile.runtime_files().len());
+    let mut runtime_total = 0_u64;
+    let mut binary_index = None;
+    for artifact in profile.runtime_files() {
+        let remaining = MAX_RUNTIME_BYTES
+            .checked_sub(runtime_total)
+            .ok_or(RuntimeReadinessError::TooLarge)?;
+        let is_binary = artifact.path() == profile.binary().path();
+        let (evidence, descriptor) = read_digest_bound(
+            artifact.path(),
+            expected_owner,
+            remaining,
+            artifact.sha256(),
+            is_binary,
+        )?;
+        if evidence.bytes() != artifact.bytes() {
+            return Err(RuntimeReadinessError::SizeMismatch);
+        }
+        if is_binary {
+            binary_index = Some(runtime_files.len());
+        }
+        runtime_total = runtime_total
+            .checked_add(evidence.bytes())
+            .ok_or(RuntimeReadinessError::TooLarge)?;
+        runtime_files.push(evidence);
+        runtime_descriptors.push(descriptor);
     }
+    let binary_index = binary_index.ok_or(RuntimeReadinessError::UnexpectedRuntimeEntry)?;
     validate_model_inventory(&profile, expected_owner)?;
     let mut model_files = Vec::with_capacity(profile.model_files().len());
     let mut model_descriptors = Vec::with_capacity(profile.model_files().len());
@@ -268,10 +303,11 @@ pub(super) fn load_runtime_readiness(
         profile,
         accounts,
         account_databases: AccountDatabaseEvidence { passwd, group },
-        binary,
+        runtime_files,
+        binary_index,
         model_files,
         unit,
-        binary_descriptor,
+        runtime_descriptors,
         model_descriptors,
         unit_descriptor,
     })
@@ -284,24 +320,41 @@ pub(super) fn validate_model_inventory(
     if profile.profile() == super::GatewayProfile::LlamaCppCpuV1 {
         return Ok(());
     }
+    validate_artifact_inventory(
+        profile.model_mount(),
+        profile.model_files(),
+        expected_owner,
+        RuntimeReadinessError::UnexpectedModelEntry,
+    )
+}
+
+fn validate_artifact_inventory(
+    mount: &Path,
+    artifacts: &[super::provider_profile::ProviderArtifact],
+    expected_owner: u32,
+    unexpected: RuntimeReadinessError,
+) -> Result<(), RuntimeReadinessError> {
+    if mount.is_file() && artifacts.len() == 1 && artifacts[0].path() == mount {
+        return Ok(());
+    }
     let mut observed = Vec::new();
-    collect_model_files(profile.model_mount(), expected_owner, &mut observed)?;
+    collect_artifact_files(mount, expected_owner, &mut observed, unexpected)?;
     observed.sort();
-    let expected = profile
-        .model_files()
+    let expected = artifacts
         .iter()
         .map(|artifact| artifact.path().to_path_buf())
         .collect::<Vec<_>>();
     if observed != expected {
-        return Err(RuntimeReadinessError::UnexpectedModelEntry);
+        return Err(unexpected);
     }
     Ok(())
 }
 
-fn collect_model_files(
+fn collect_artifact_files(
     directory: &Path,
     expected_owner: u32,
     files: &mut Vec<PathBuf>,
+    unexpected: RuntimeReadinessError,
 ) -> Result<(), RuntimeReadinessError> {
     if files.len() > 4_096 {
         return Err(RuntimeReadinessError::TooLarge);
@@ -316,17 +369,17 @@ fn collect_model_files(
         let metadata =
             std::fs::symlink_metadata(&path).map_err(|_| RuntimeReadinessError::MetadataFailed)?;
         if metadata.file_type().is_symlink() {
-            return Err(RuntimeReadinessError::UnexpectedModelEntry);
+            return Err(unexpected);
         }
         if metadata.is_dir() {
-            collect_model_files(&path, expected_owner, files)?;
+            collect_artifact_files(&path, expected_owner, files, unexpected)?;
         } else if metadata.is_file() {
             files.push(path);
             if files.len() > 4_096 {
                 return Err(RuntimeReadinessError::TooLarge);
             }
         } else {
-            return Err(RuntimeReadinessError::UnexpectedModelEntry);
+            return Err(unexpected);
         }
     }
     let after =

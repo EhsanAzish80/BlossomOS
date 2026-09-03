@@ -54,3 +54,5 @@ compatibility, packaging, or contributor obligations.
 - Installed service identity binding: accepted in ADR-0014. It corrects the
   numeric identity fields from ADR-0012 by placing fixed account names in the
   canonical profile and resolved target-system IDs only in readiness evidence.
+- Closed provider runtime artifact sets: accepted in ADR-0015. It binds the
+  executable and every bundled runtime library as one immutable, measured set.
