@@ -1,0 +1,5 @@
+# Type Name                      ID GECOS                              Home Shell
+g blossom-ai                    -  -                                  -    -
+u blossom-model-gateway         -  "Blossom local model gateway"      /    /usr/bin/nologin
+u blossom-model-provider        -  "Blossom local model provider"     /    /usr/bin/nologin
+m blossom-model-gateway blossom-ai

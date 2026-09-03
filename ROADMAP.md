@@ -157,9 +157,12 @@ private inputs remain blocked pending an accepted endpoint-identity ADR.
     manifest format, canonical expected bytes, artifact/unit digests, fixed
     endpoints, identities, filesystem scope, and resource bounds using only
     synthetic filesystem fixtures.
+  - [x] Define the inactive package boundary for persistent non-login identities,
+    fixed paths, private namespace anchor, gateway unit, and closed CPU-provider
+    unit templates, with repository drift checks and systemd verification.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
-    hardened services, closed production profile registry, installed manifests,
-    and runtime identity evidence.
+    hardened rendered services, closed production profile registry, installed
+    manifests, and runtime identity evidence.
   - [ ] Pass adversarial production-path Linux evidence before enabling private
     input.
 - [ ] Validate every model output and proposed tool intent against strict,
@@ -187,7 +190,9 @@ documented in `docs/PHASE_4_GATEWAY_PROTOCOL.md`; the synthetic process boundary
 is documented in `docs/PHASE_4_GATEWAY_FIXTURE.md`. The closed manifest validator
 and synthetic filesystem evidence are documented in
 `docs/PHASE_4_PROVIDER_MANIFEST.md`. No production manifest, registry, identity,
-or service is installed, and private input remains blocked.
+or service is installed, and private input remains blocked. The inactive
+sysusers and systemd template boundary is documented in
+`docs/PHASE_4_SYSTEMD_BOUNDARY.md`; it creates no accounts or runtime state.
 
 ## Phase 5: Planning and verification
 

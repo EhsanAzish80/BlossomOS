@@ -172,6 +172,12 @@ synthetic user-owned files; no root-owned production manifest, compiled profile
 registry, package, service, model, or private-input path exists. See
 `docs/PHASE_4_PROVIDER_MANIFEST.md`.
 
+A fourth, inactive packaging checkpoint defines persistent non-login service
+account declarations, fixed paths, a private-network namespace anchor, a
+hardened gateway unit, and closed CPU-provider unit templates. CI checks this
+surface and verifies the concrete units, but the repository does not install,
+render, enable, or start them. See `docs/PHASE_4_SYSTEMD_BOUNDARY.md`.
+
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.
 

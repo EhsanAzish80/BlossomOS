@@ -56,7 +56,8 @@ also reject a symlinked parent component.
 
 ## Next checkpoint
 
-Define the package-owned static identities, filesystem locations, namespace
-anchor, and hardened systemd unit templates. Then bind a small closed registry to
-the real package artifact and unit digests before any production listener or
-private input is enabled.
+The package-owned identity, filesystem, namespace-anchor, and hardened systemd
+template boundary is now defined in `PHASE_4_SYSTEMD_BOUNDARY.md`. Next,
+implement the small gateway process for synthetic input only. A later package
+checkpoint must bind a closed registry to real artifact and rendered-unit
+digests before any production listener or private input is enabled.
