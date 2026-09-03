@@ -202,6 +202,9 @@ the complete production and evidence gates.
     cannot select a provider, model, endpoint, classification, path or runtime
     setting; its decoder injects provider/model/private identity from admitted
     code-owned inputs.
+  - [x] Bind logical model identity into canonical provider-profile schema v5,
+    making the selected embedded and installed-manifest-verified profile the
+    only production source for private request decoding.
   - [x] Implement the already-authorized one-request connection state machine,
     including hello-before-input, pipelining rejection, concurrent bound
     cancellation, validated event encoding, bounded I/O and fail-closed

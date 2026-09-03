@@ -6,10 +6,10 @@ is not a packaged provider, an installed manifest, or the Phase 4 exit baseline.
 ## Implemented boundary
 
 The core now defines a versioned, deny-unknown-fields provider profile covering
-the provider/profile pair, protocol versions, exact runtime and model artifact
-sets and SHA-256 digests, service-unit digest, executable arguments, environment-name
-allowlist, fixed endpoint and inference path, filesystem visibility, resource
-bounds, and static service identities.
+the provider/profile pair, its logical model identity, protocol versions, exact
+runtime and model artifact sets and SHA-256 digests, service-unit digest,
+executable arguments, environment-name allowlist, fixed endpoint and inference
+path, filesystem visibility, resource bounds, and static service identities.
 
 The installed-manifest loader requires an absolute path and, on Linux, opens it
 relative to `/` with `openat2`, `RESOLVE_BENEATH`, `RESOLVE_NO_MAGICLINKS`, and
@@ -41,6 +41,9 @@ turn arbitrary manifest data into an accepted specification.
   values, invalid identities, and out-of-range resources are rejected.
 - The manifest cannot contain its own digest; the expected specification derives
   it from canonical bytes.
+- Schema v5 requires the logical model identity, validates it with the core
+  `ModelProfile` grammar, and binds it into the canonical expected bytes. A
+  gateway client cannot select or override it.
 
 ## Evidence
 
@@ -59,6 +62,9 @@ tests also reject a symlinked parent component.
 - systemd units, namespace creation, provider lifecycle, or real provider I/O;
 - GPU access, private or ambient input, shell access, or broker authority; and
 - a claim that ADR-0012 or Phase 4 is complete.
+
+The schema-v5 identity binding closes a prerequisite for production
+private-frame decoding. It does not enable the listener or private inference.
 
 ## Next checkpoint
 
