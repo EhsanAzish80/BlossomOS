@@ -64,6 +64,9 @@ controls from evidence that does not yet exist.
   yet produced target-Linux runtime evidence.
 - No real local-model inference has been recorded with external networking
   disabled on the supported target Linux baseline.
+- A manually dispatched installed-service workflow and content-free probe now
+  exist, but no successful merged-commit run is recorded yet; harness presence
+  is not runtime evidence.
 
 ## Exit decision
 

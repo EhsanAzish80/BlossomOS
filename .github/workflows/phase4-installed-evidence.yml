@@ -1,0 +1,155 @@
+name: Phase 4 installed evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase4-installed-evidence
+  cancel-in-progress: false
+
+jobs:
+  llama-cpp-x86-64:
+    name: Installed llama.cpp boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825a76410c181273ba90b1 # v7.0.1
+
+      - name: Require the disposable supported runner
+        run: |
+          test "$RUNNER_OS" = Linux
+          test "$(uname -m)" = x86_64
+          test -n "$RUNNER_TEMP"
+          systemctl --version
+
+      - name: Build the gated gateway and evidence probe
+        run: |
+          cargo build --locked --release --package blossom-model-gateway \
+            --features production-private-inference
+          cargo build --locked --release --package blossom-model-gateway \
+            --example installed_gateway_probe
+
+      - name: Fetch immutable package inputs
+        env:
+          LOCK: system/model-runtime/registry/llama-cpp-cpu-x86_64.lock.json
+        run: |
+          mkdir -m 0700 "$RUNNER_TEMP/blossom-inputs"
+          runtime_url=$(jq -r .runtime.url "$LOCK")
+          model_url=$(jq -r .model.url "$LOCK")
+          license_url=$(jq -r .model.license.url "$LOCK")
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/blossom-inputs/runtime.tar.gz" "$runtime_url"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/blossom-inputs/model.gguf" "$model_url"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/blossom-inputs/model.LICENSE" "$license_url"
+
+      - name: Assemble the closed package tree
+        run: |
+          python3 scripts/package_llama_cpp_runtime.py \
+            --runtime-archive "$RUNNER_TEMP/blossom-inputs/runtime.tar.gz" \
+            --model "$RUNNER_TEMP/blossom-inputs/model.gguf" \
+            --model-license "$RUNNER_TEMP/blossom-inputs/model.LICENSE" \
+            --gateway-binary "$GITHUB_WORKSPACE/target/release/blossom-model-gateway" \
+            --output "$RUNNER_TEMP/blossom-package-root"
+
+      - name: Install into the disposable runner
+        run: |
+          sudo systemctl stop blossom-model-gateway.service \
+            blossom-model-llama-cpp.service blossom-model-netns.service || true
+          sudo cp -a "$RUNNER_TEMP/blossom-package-root/usr/." /usr/
+          sudo cp -a "$RUNNER_TEMP/blossom-package-root/etc/." /etc/
+          sudo systemd-sysusers \
+            /usr/lib/sysusers.d/blossom-model-runtime.conf
+          sudo useradd --system --no-create-home --shell /usr/sbin/nologin \
+            blossom-evidence-allowed
+          sudo useradd --system --no-create-home --shell /usr/sbin/nologin \
+            blossom-evidence-unlisted
+          sudo usermod --append --groups blossom-ai blossom-evidence-allowed
+          sudo systemctl daemon-reload
+
+      - name: Start the installed distinct-identity services
+        run: |
+          sudo systemctl start blossom-model-netns.service
+          sudo systemctl start blossom-model-llama-cpp.service
+          sudo systemctl start blossom-model-gateway.service
+          systemctl is-active --quiet blossom-model-netns.service
+          systemctl is-active --quiet blossom-model-llama-cpp.service
+          systemctl is-active --quiet blossom-model-gateway.service
+          for attempt in $(seq 1 60); do
+            test -S /run/blossom-model-gateway/inference.sock && break
+            sleep 1
+          done
+          test -S /run/blossom-model-gateway/inference.sock
+
+      - name: Verify identities socket namespaces and limits
+        run: |
+          gateway_uid=$(id -u blossom-model-gateway)
+          provider_uid=$(id -u blossom-model-provider)
+          test "$gateway_uid" -ne 0
+          test "$provider_uid" -ne 0
+          test "$gateway_uid" -ne "$provider_uid"
+          test "$(stat -c %U /run/blossom-model-gateway/inference.sock)" = \
+            blossom-model-gateway
+          test "$(stat -c %G /run/blossom-model-gateway/inference.sock)" = blossom-ai
+          test "$(stat -c %a /run/blossom-model-gateway/inference.sock)" = 660
+          gateway_pid=$(systemctl show --property MainPID --value blossom-model-gateway.service)
+          provider_pid=$(systemctl show --property MainPID --value blossom-model-llama-cpp.service)
+          test "$(stat -Lc %i /proc/$gateway_pid/ns/net)" = \
+            "$(stat -Lc %i /proc/$provider_pid/ns/net)"
+          test "$(stat -Lc %i /proc/1/ns/net)" != \
+            "$(stat -Lc %i /proc/$provider_pid/ns/net)"
+          test "$(systemctl show --property TasksMax --value blossom-model-gateway.service)" = 32
+          test "$(systemctl show --property MemoryMax --value blossom-model-gateway.service)" = 268435456
+          test "$(systemctl show --property TasksMax --value blossom-model-llama-cpp.service)" = 64
+          sudo nsenter --target "$provider_pid" --net \
+            sh -c '! curl --fail --max-time 3 https://example.com/'
+
+      - name: Verify admission and real offline inference
+        run: |
+          target/release/examples/installed_gateway_probe expect-rejected
+          sudo -u blossom-evidence-unlisted \
+            target/release/examples/installed_gateway_probe expect-rejected
+          sudo -u blossom-model-provider \
+            target/release/examples/installed_gateway_probe expect-rejected
+          sudo -u blossom-evidence-allowed \
+            target/release/examples/installed_gateway_probe infer
+
+      - name: Verify audit isolation and redaction
+        run: |
+          audit=/run/blossom-model-gateway/audit/audit.jsonl
+          sudo test -f "$audit"
+          sudo test "$(stat -c %U "$audit")" = blossom-model-gateway
+          sudo test "$(stat -c %a "$audit")" = 600
+          sudo -u blossom-evidence-allowed test ! -r "$audit"
+          sudo -u blossom-model-provider test ! -r "$audit"
+          sudo grep -Eq '"kind":"request_terminal"' "$audit"
+          sudo grep -Eq '"outcome":"completed_text"' "$audit"
+          if sudo grep -Eq \
+            'Reply with one short greeting|blossom-evidence|blossom-ai|reasoning_text|tool_arguments|/home/' \
+            "$audit"; then
+            exit 1
+          fi
+
+      - name: Verify provider loss is non-success
+        run: |
+          sudo systemctl stop blossom-model-llama-cpp.service
+          if sudo -u blossom-evidence-allowed \
+            target/release/examples/installed_gateway_probe infer; then
+            exit 1
+          fi
+          sudo grep -Eq '"outcome":"provider_failed"' \
+            /run/blossom-model-gateway/audit/audit.jsonl
+
+      - name: Capture content-free failure diagnostics
+        if: failure()
+        run: |
+          for unit in blossom-model-netns.service \
+            blossom-model-llama-cpp.service blossom-model-gateway.service; do
+            systemctl show "$unit" \
+              --property ActiveState,SubState,Result,ExecMainStatus || true
+          done
