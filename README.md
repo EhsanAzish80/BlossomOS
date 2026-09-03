@@ -96,7 +96,7 @@ behavior has not yet been claimed. See `docs/PHASE_3_BASELINE.md`.
 The following are architectural goals only:
 
 - Hyprland integration and a Quickshell-based Blossom Shell.
-- A provider-neutral local AI runtime with replaceable model backends.
+- An authenticated, packaged, user-ready local AI runtime and model lifecycle.
 - A typed Blossom Bus and structured desktop/system context.
 - A complete user-facing, persistent and manageable audit service beyond the
   current security-core and privileged-helper audit backends.
@@ -143,10 +143,13 @@ Phases 0 through 3 are complete. Their exit evidence is recorded in
 under accepted ADR-0011, beginning with provider-neutral types and synthetic
 conformance fixtures. The closed core contract is implemented and documented in
 `docs/PHASE_4_CORE_CONTRACT.md`. A fixed-loopback, synthetic-only Ollama
-development adapter is documented in `docs/PHASE_4_OLLAMA_ADAPTER.md`; it is not
-an authenticated or production model runtime. No private input, model download,
-provider lifecycle, or real-model evidence exists, pending a separately
-reviewed provider-identity boundary.
+development adapter is documented in `docs/PHASE_4_OLLAMA_ADAPTER.md`, and an
+equally constrained llama.cpp adapter is documented in
+`docs/PHASE_4_LLAMA_CPP_ADAPTER.md`. These two adapters demonstrate a replaceable
+provider boundary against controlled protocol fixtures; they are not an
+authenticated or production model runtime. No private input, model download,
+provider lifecycle, cross-provider real-model proof, or offline real-model
+evidence exists, pending a separately reviewed provider-identity boundary.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.

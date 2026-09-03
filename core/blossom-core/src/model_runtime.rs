@@ -14,8 +14,10 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+mod llama_cpp;
 mod ollama;
 
+pub use llama_cpp::{LLAMA_CPP_ENDPOINT, LlamaCppAdapter, LlamaCppAdapterError};
 pub use ollama::{OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError};
 
 pub const MODEL_PROTOCOL_VERSION: u16 = 1;

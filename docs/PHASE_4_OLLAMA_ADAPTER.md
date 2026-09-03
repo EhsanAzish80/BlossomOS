@@ -61,11 +61,12 @@ provider identity proof.
 - authenticated provider identity or Blossom-managed provider packaging;
 - provider-native or Blossom tool execution;
 - model installation, selection UI, lifecycle management, or real-model tests;
-- llama.cpp support; and
+- llama.cpp support in this adapter; and
 - planning, Bash, sudo, or graphical-shell integration.
 
 ## Next checkpoint
 
-Implement the fixed-loopback llama.cpp development adapter against the same
-provider-neutral contract and conformance semantics. Phase 4 remains active
-until every exit criterion in `ROADMAP.md` is satisfied.
+The fixed-loopback llama.cpp development adapter is now implemented separately
+in `docs/PHASE_4_LLAMA_CPP_ADAPTER.md`. The next checkpoint is the provider
+endpoint-identity and packaging boundary. Phase 4 remains active until every
+exit criterion in `ROADMAP.md` is satisfied.
