@@ -6,6 +6,7 @@ pub mod engine;
 pub mod executor;
 pub mod file_read;
 pub mod memory_summary;
+pub mod model_runtime;
 pub mod os_identity;
 pub mod policy;
 pub mod privileged;
@@ -33,6 +34,14 @@ pub use memory_summary::{
     MAX_PROC_MEMINFO_BYTES, MAX_PROC_MEMINFO_LINES, MemorySummary, MemorySummaryError,
     MemorySummaryProvider, PROC_MEMINFO_PATH, ProcMeminfoReader, UnavailableMemorySummaryProvider,
     parse_proc_meminfo,
+};
+pub use model_runtime::{
+    ConversationMessage, ConversationRole, InferenceAuditOutcome, InferenceAuditProjection,
+    InferenceCancellation, InferenceOutputMode, InferenceRequest, InferenceRequestId,
+    MODEL_PROTOCOL_VERSION, ModelContractError, ModelIntentDefinition, ModelIntentKind,
+    ModelProfile, ModelProviderKind, ModelStreamState, NormalizedCompletion, NormalizedStreamEvent,
+    NormalizedStreamKind, ProposedToolIntent, ProviderFailureCategory, ProviderStreamInput,
+    TurnIntentCatalogue, validate_provider_completion,
 };
 pub use os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, OsReleaseReader, OsReleaseSource,

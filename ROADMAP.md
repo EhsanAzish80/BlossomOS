@@ -141,7 +141,7 @@ private inputs remain blocked pending an accepted endpoint-identity ADR.
 
 - [x] Accept the provider-neutral inference, proposed-tool-intent, cancellation,
   streaming, locality, privacy, and conformance contract.
-- [ ] Implement closed core types, validation, cancellation, normalized stream
+- [x] Implement closed core types, validation, cancellation, normalized stream
   state, redacted audit projection, and scripted conformance tests.
 - [ ] Implement the fixed-local Ollama adapter.
 - [ ] Implement the fixed-local llama.cpp adapter to prove replaceability.
@@ -159,6 +159,9 @@ Exit: deterministic conformance tests pass for both providers, real local-model
 operation is verified offline on target Linux, and no provider path bypasses the
 broker, policy, approval, verification, or audit boundary. Unauthenticated
 loopback endpoints receive no private input.
+
+Checkpoint evidence: `docs/PHASE_4_CORE_CONTRACT.md`. Phase 4 remains active;
+the checked core-contract item does not claim either adapter or a real model.
 
 ## Phase 5: Planning and verification
 
