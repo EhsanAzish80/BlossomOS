@@ -221,6 +221,10 @@ the complete production and evidence gates.
     manifests, and runtime identity evidence.
   - [ ] Pass adversarial production-path Linux evidence before enabling private
     input.
+    - [x] Add a manually dispatched, pinned-input installed-service harness and
+      content-free gateway probe.
+    - [ ] Record a successful run for the merged commit and close every
+      remaining ADR-0017/0018 adversarial case.
 - [x] Validate every model output and proposed tool intent against strict,
   code-owned schemas before it reaches the broker.
 - [ ] Produce controlled-protocol and real-model target-Linux evidence with
