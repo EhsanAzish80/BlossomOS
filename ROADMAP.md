@@ -208,7 +208,11 @@ the complete production and evidence gates.
   - [x] Implement the already-authorized one-request connection state machine,
     including hello-before-input, pipelining rejection, concurrent bound
     cancellation, validated event encoding, bounded I/O and fail-closed
-    disconnect/write behavior. It is not yet wired to the production listener.
+    disconnect/write behavior.
+  - [x] Wire that handler into an explicitly package-feature-gated target-Linux
+    listener with stale-path refusal, exact socket metadata, boot/process
+    identity, peer credentials and retained-snapshot authorization. Default
+    builds remain fail closed until installed adversarial evidence enables it.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.

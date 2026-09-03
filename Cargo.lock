@@ -213,7 +213,9 @@ name = "blossom-model-gateway"
 version = "0.1.0"
 dependencies = [
  "blossom-core",
+ "getrandom 0.3.4",
  "nix",
+ "sha2",
 ]
 
 [[package]]
