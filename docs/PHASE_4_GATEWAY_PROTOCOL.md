@@ -60,7 +60,8 @@ real kernel credentials from a connected Unix socket pair.
 
 ## Next checkpoint
 
-Implement the smallest synthetic-only gateway process and client connector over
-an ephemeral test Unix socket, ensuring credential validation occurs before any
-request write. Production paths, packages, static identities, private input,
-and provider lifecycle remain absent until their later ADR-0012 checkpoints.
+The smallest synthetic-only gateway process and client connector are now
+implemented separately in `docs/PHASE_4_GATEWAY_FIXTURE.md`. The next checkpoint
+defines and validates root-owned provider manifests before adding production
+services. Production paths, packages, static identities, private input, and
+provider lifecycle remain absent.

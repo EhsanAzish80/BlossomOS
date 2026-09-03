@@ -15,6 +15,8 @@ use std::sync::{
 };
 
 mod gateway;
+#[cfg(unix)]
+mod gateway_fixture;
 mod llama_cpp;
 mod ollama;
 
@@ -24,6 +26,10 @@ pub use gateway::{
     MAX_GATEWAY_FRAME_BYTES, decode_gateway_cancel, decode_gateway_event, decode_gateway_hello,
     decode_gateway_synthetic_request, encode_gateway_cancel, encode_gateway_event,
     encode_gateway_hello, encode_gateway_synthetic_request, validate_gateway_peer,
+};
+#[cfg(unix)]
+pub use gateway_fixture::{
+    GatewayFixtureError, SyntheticGatewayClient, serve_synthetic_gateway_once,
 };
 pub use llama_cpp::{LLAMA_CPP_ENDPOINT, LlamaCppAdapter, LlamaCppAdapterError};
 pub use ollama::{OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError};
