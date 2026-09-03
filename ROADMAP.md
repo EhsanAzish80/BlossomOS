@@ -175,6 +175,10 @@ remain blocked pending the complete ADR-0012 production and evidence gates.
     bounded Ollama and llama.cpp adapters, with Linux end-to-end framing,
     credential, request, provider-response, normalization and terminal-event
     evidence.
+  - [x] Accept ADR-0013 and migrate the manifest/readiness boundary to closed,
+    canonical model artifact sets so every llama.cpp GGUF or Ollama
+    manifest/blob consumed by a profile is measured and unknown entries fail
+    closed.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.

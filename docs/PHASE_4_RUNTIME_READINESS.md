@@ -20,14 +20,17 @@ The resolved gateway/provider numeric IDs must exactly match the canonical
 manifest. Account-database digests, sizes, devices and inodes are retained as
 evidence; the access-group ID is also recorded.
 
-The validator then opens the exact provider binary, model and rendered provider
-unit beneath `/` with no symlink or magic-link traversal on Linux. Every file
+The validator then opens the exact provider binary, every model-set file and
+rendered provider unit beneath `/` with no symlink or magic-link traversal on
+Linux. For Ollama it first enumerates the root-owned, non-writable store and
+requires exact equality with the canonical artifact list; unknown files,
+symlinks and special entries fail closed. Every measured file
 must be regular, root-owned, not group/world writable, within a code-owned size
 limit and unchanged throughout its descriptor read. The binary must have an
 execute bit. Streaming SHA-256 must match the canonical manifest's artifact and
 unit digests.
 
-The validated binary, model and unit descriptors remain owned by the readiness
+The validated binary, model-set and unit descriptors remain owned by the readiness
 object. A future launcher must consume these pinned descriptors; reopening the
 paths would reintroduce a path-replacement TOCTOU race and is not authorized by
 this checkpoint.
@@ -36,8 +39,8 @@ this checkpoint.
 
 Portable tests cover valid account resolution and reject root, shared, login,
 duplicate and over-broad access-group identities. An end-to-end synthetic
-filesystem test binds account records, the canonical manifest, executable,
-model and rendered unit, checks their digests and retains descriptor identity.
+filesystem tests bind account records, the canonical manifest, executable,
+model set and rendered unit, check their digests and retain descriptor identity.
 Linux CI supplies the `openat2` path-containment evidence; the ordinary test and
 lint matrix continues to validate other supported build hosts.
 

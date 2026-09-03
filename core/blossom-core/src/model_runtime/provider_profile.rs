@@ -15,18 +15,20 @@ use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 pub const MAX_PROVIDER_MANIFEST_BYTES: usize = 32 * 1024;
-const PROVIDER_PROFILE_VERSION: u16 = 1;
+const PROVIDER_PROFILE_VERSION: u16 = 2;
 const MAX_PATH_BYTES: usize = 4096;
 const MAX_ARGUMENTS: usize = 64;
 const MAX_ARGUMENT_BYTES: usize = 4096;
 const MAX_ENVIRONMENT_NAMES: usize = 32;
 const MAX_FILESYSTEM_PATHS: usize = 16;
+const MAX_MODEL_FILES: usize = 4_096;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProviderArtifact {
     path: PathBuf,
     sha256: String,
+    bytes: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,7 +73,9 @@ pub struct ProviderProfileManifest {
     gateway_protocol_version: u16,
     model_protocol_version: u16,
     binary: ProviderArtifact,
-    model: ProviderArtifact,
+    model_mount: PathBuf,
+    model_files: Vec<ProviderArtifact>,
+    model_set_sha256: String,
     unit_sha256: String,
     executable_arguments: Vec<String>,
     environment_names: Vec<String>,
@@ -162,7 +166,12 @@ pub fn fixed_synthetic_provider_package(
         GatewayProfile::OllamaCpuV1 => SyntheticPackageFields {
             template: OLLAMA_TEMPLATE,
             binary: "/usr/lib/blossom-os/providers/ollama/ollama",
-            model: "/usr/lib/blossom-os/models/ollama/evidence-model",
+            model: "/usr/lib/blossom-os/models/ollama",
+            model_mount: "/usr/lib/blossom-os/models/ollama",
+            model_files: vec![
+                "/usr/lib/blossom-os/models/ollama/blobs/sha256-fixture",
+                "/usr/lib/blossom-os/models/ollama/manifests/fixture-model",
+            ],
             model_directory: Some("/usr/lib/blossom-os/models/ollama"),
             writable: "/var/lib/blossom/model-provider/ollama",
             arguments: vec![
@@ -178,6 +187,8 @@ pub fn fixed_synthetic_provider_package(
             template: LLAMA_CPP_TEMPLATE,
             binary: "/usr/lib/blossom-os/providers/llama-cpp/llama-server",
             model: "/usr/lib/blossom-os/models/llama-cpp/evidence.gguf",
+            model_mount: "/usr/lib/blossom-os/models/llama-cpp/evidence.gguf",
+            model_files: vec!["/usr/lib/blossom-os/models/llama-cpp/evidence.gguf"],
             model_directory: None,
             writable: "/var/lib/blossom/model-provider/llama-cpp",
             arguments: vec![
@@ -193,7 +204,7 @@ pub fn fixed_synthetic_provider_package(
         },
     };
     let rendered = render_synthetic_unit(&fixture)?;
-    let manifest = ProviderProfileManifest {
+    let mut manifest = ProviderProfileManifest {
         profile_version: PROVIDER_PROFILE_VERSION,
         profile,
         provider: profile.provider(),
@@ -202,18 +213,26 @@ pub fn fixed_synthetic_provider_package(
         binary: ProviderArtifact {
             path: fixture.binary.into(),
             sha256: "a".repeat(64),
+            bytes: 1,
         },
-        model: ProviderArtifact {
-            path: fixture.model.into(),
-            sha256: "b".repeat(64),
-        },
+        model_mount: fixture.model_mount.into(),
+        model_files: fixture
+            .model_files
+            .iter()
+            .map(|path| ProviderArtifact {
+                path: (*path).into(),
+                sha256: "b".repeat(64),
+                bytes: 1,
+            })
+            .collect(),
+        model_set_sha256: String::new(),
         unit_sha256: hex_digest(&rendered),
         executable_arguments: fixture.arguments,
         environment_names: fixture.environment_names,
         endpoint: fixture.endpoint.into(),
         inference_path: fixture.inference_path.into(),
         filesystem: ProviderFilesystemPolicy {
-            read_only_paths: vec![fixture.binary.into(), fixture.model.into()],
+            read_only_paths: vec![fixture.binary.into(), fixture.model_mount.into()],
             writable_paths: vec![fixture.writable.into()],
             devices: vec![],
         },
@@ -237,6 +256,7 @@ pub fn fixed_synthetic_provider_package(
             namespace_unit: "blossom-model-netns.service".into(),
         },
     };
+    manifest.model_set_sha256 = model_set_digest(&manifest.model_files)?;
     Ok(SyntheticProviderPackage {
         profile,
         spec: ProviderProfileSpec::compile(manifest)?,
@@ -249,6 +269,8 @@ struct SyntheticPackageFields {
     template: &'static str,
     binary: &'static str,
     model: &'static str,
+    model_mount: &'static str,
+    model_files: Vec<&'static str>,
     model_directory: Option<&'static str>,
     writable: &'static str,
     arguments: Vec<String>,
@@ -332,8 +354,16 @@ impl ValidatedProviderProfile {
         &self.manifest.binary
     }
 
-    pub(crate) fn model(&self) -> &ProviderArtifact {
-        &self.manifest.model
+    pub(crate) fn model_files(&self) -> &[ProviderArtifact] {
+        &self.manifest.model_files
+    }
+
+    pub(crate) fn model_mount(&self) -> &Path {
+        &self.manifest.model_mount
+    }
+
+    pub(crate) fn profile(&self) -> GatewayProfile {
+        self.manifest.profile
     }
 
     pub(crate) fn identity(&self) -> &ProviderServiceIdentity {
@@ -352,6 +382,10 @@ impl ProviderArtifact {
 
     pub(crate) fn sha256(&self) -> &str {
         &self.sha256
+    }
+
+    pub(crate) fn bytes(&self) -> u64 {
+        self.bytes
     }
 }
 
@@ -474,7 +508,7 @@ fn validate_manifest(manifest: &ProviderProfileManifest) -> Result<(), ProviderP
     }
 
     validate_artifact(&manifest.binary)?;
-    validate_artifact(&manifest.model)?;
+    validate_model_set(manifest)?;
     validate_digest(&manifest.unit_sha256)?;
     validate_arguments(manifest)?;
     validate_environment(&manifest.environment_names)?;
@@ -486,7 +520,11 @@ fn validate_manifest(manifest: &ProviderProfileManifest) -> Result<(), ProviderP
 
 fn validate_artifact(artifact: &ProviderArtifact) -> Result<(), ProviderProfileError> {
     validate_absolute_path(&artifact.path)?;
-    validate_digest(&artifact.sha256)
+    validate_digest(&artifact.sha256)?;
+    if artifact.bytes == 0 || artifact.bytes > 64 * 1024 * 1024 * 1024 {
+        return Err(ProviderProfileError::InvalidManifest);
+    }
+    Ok(())
 }
 
 fn validate_arguments(manifest: &ProviderProfileManifest) -> Result<(), ProviderProfileError> {
@@ -511,7 +549,7 @@ fn validate_arguments(manifest: &ProviderProfileManifest) -> Result<(), Provider
         GatewayProfile::OllamaCpuV1 => arguments.len() == 2 && arguments[1] == "serve",
         GatewayProfile::LlamaCppCpuV1 => arguments
             .iter()
-            .any(|argument| Path::new(argument) == manifest.model.path),
+            .any(|argument| Path::new(argument) == manifest.model_mount),
     };
     if Path::new(&arguments[0]) != manifest.binary.path || !provider_arguments_valid {
         return Err(ProviderProfileError::InvalidManifest);
@@ -550,7 +588,7 @@ fn validate_filesystem(manifest: &ProviderProfileManifest) -> Result<(), Provide
     let filesystem = &manifest.filesystem;
     if filesystem.read_only_paths.len() != 2
         || filesystem.read_only_paths[0] != manifest.binary.path
-        || filesystem.read_only_paths[1] != manifest.model.path
+        || filesystem.read_only_paths[1] != manifest.model_mount
         || filesystem.writable_paths.len() > MAX_FILESYSTEM_PATHS
         || !filesystem.devices.is_empty()
     {
@@ -581,6 +619,45 @@ fn validate_filesystem(manifest: &ProviderProfileManifest) -> Result<(), Provide
         }
     }
     Ok(())
+}
+
+fn validate_model_set(manifest: &ProviderProfileManifest) -> Result<(), ProviderProfileError> {
+    validate_absolute_path(&manifest.model_mount)?;
+    if manifest.model_files.is_empty() || manifest.model_files.len() > MAX_MODEL_FILES {
+        return Err(ProviderProfileError::InvalidManifest);
+    }
+    let mut previous: Option<&Path> = None;
+    for artifact in &manifest.model_files {
+        validate_artifact(artifact)?;
+        if previous.is_some_and(|path| path >= artifact.path.as_path()) {
+            return Err(ProviderProfileError::InvalidManifest);
+        }
+        match manifest.profile {
+            GatewayProfile::OllamaCpuV1 => {
+                if artifact.path == manifest.model_mount
+                    || !artifact.path.starts_with(&manifest.model_mount)
+                {
+                    return Err(ProviderProfileError::InvalidManifest);
+                }
+            }
+            GatewayProfile::LlamaCppCpuV1 => {
+                if manifest.model_files.len() != 1 || artifact.path != manifest.model_mount {
+                    return Err(ProviderProfileError::InvalidManifest);
+                }
+            }
+        }
+        previous = Some(&artifact.path);
+    }
+    validate_digest(&manifest.model_set_sha256)?;
+    if model_set_digest(&manifest.model_files)? != manifest.model_set_sha256 {
+        return Err(ProviderProfileError::InvalidManifest);
+    }
+    Ok(())
+}
+
+fn model_set_digest(files: &[ProviderArtifact]) -> Result<String, ProviderProfileError> {
+    let canonical = serde_json::to_vec(files).map_err(|_| ProviderProfileError::InvalidManifest)?;
+    Ok(hex_digest(&canonical))
 }
 
 fn validate_identity(identity: &ProviderServiceIdentity) -> Result<(), ProviderProfileError> {
@@ -775,8 +852,8 @@ mod tests {
     }
 
     fn fixture() -> ProviderProfileManifest {
-        ProviderProfileManifest {
-            profile_version: 1,
+        let mut manifest = ProviderProfileManifest {
+            profile_version: PROVIDER_PROFILE_VERSION,
             profile: GatewayProfile::LlamaCppCpuV1,
             provider: ModelProviderKind::LlamaCpp,
             gateway_protocol_version: GATEWAY_PROTOCOL_VERSION,
@@ -784,11 +861,15 @@ mod tests {
             binary: ProviderArtifact {
                 path: "/usr/bin/llama-server".into(),
                 sha256: "a".repeat(64),
+                bytes: 1,
             },
-            model: ProviderArtifact {
+            model_mount: "/usr/lib/blossom/models/evidence.gguf".into(),
+            model_files: vec![ProviderArtifact {
                 path: "/usr/lib/blossom/models/evidence.gguf".into(),
                 sha256: "b".repeat(64),
-            },
+                bytes: 1,
+            }],
+            model_set_sha256: String::new(),
             unit_sha256: "c".repeat(64),
             executable_arguments: vec![
                 "/usr/bin/llama-server".into(),
@@ -826,7 +907,9 @@ mod tests {
                 provider_unit: "blossom-model-llama-cpp.service".into(),
                 namespace_unit: "blossom-model-netns.service".into(),
             },
-        }
+        };
+        manifest.model_set_sha256 = model_set_digest(&manifest.model_files).unwrap();
+        manifest
     }
 
     fn write_fixture(
@@ -926,6 +1009,39 @@ mod tests {
     }
 
     #[test]
+    fn model_artifact_set_rejects_reordering_duplicates_escape_and_digest_drift() {
+        let package = fixed_synthetic_provider_package(GatewayProfile::OllamaCpuV1).unwrap();
+        let baseline = package.spec.expected.clone();
+        let mut cases = Vec::new();
+
+        let mut reordered = baseline.clone();
+        reordered.model_files.reverse();
+        reordered.model_set_sha256 = model_set_digest(&reordered.model_files).unwrap();
+        cases.push(reordered);
+
+        let mut duplicate = baseline.clone();
+        duplicate.model_files.push(duplicate.model_files[0].clone());
+        duplicate.model_set_sha256 = model_set_digest(&duplicate.model_files).unwrap();
+        cases.push(duplicate);
+
+        let mut escaped = baseline.clone();
+        escaped.model_files[0].path = "/usr/lib/blossom-os/models/outside".into();
+        escaped.model_set_sha256 = model_set_digest(&escaped.model_files).unwrap();
+        cases.push(escaped);
+
+        let mut drifted = baseline;
+        drifted.model_files[0].sha256 = "d".repeat(64);
+        cases.push(drifted);
+
+        for manifest in cases {
+            assert_eq!(
+                ProviderProfileSpec::compile(manifest).unwrap_err(),
+                ProviderProfileError::InvalidManifest
+            );
+        }
+    }
+
+    #[test]
     fn closed_synthetic_packages_bind_manifest_to_rendered_unit() {
         for profile in [GatewayProfile::OllamaCpuV1, GatewayProfile::LlamaCppCpuV1] {
             let first = fixed_synthetic_provider_package(profile)
@@ -974,7 +1090,7 @@ mod tests {
             assert!(rendered.contains(&format!(
                 "BindReadOnlyPaths={} {}\n",
                 manifest["binary"]["path"].as_str().unwrap(),
-                manifest["model"]["path"].as_str().unwrap()
+                manifest["model_mount"].as_str().unwrap()
             )));
             assert!(rendered.contains(&format!(
                 "ReadWritePaths={}\n",
@@ -1102,8 +1218,14 @@ mod tests {
         let mut manifest = fixture();
         manifest.binary.path = binary_path.clone();
         manifest.binary.sha256 = hex_digest(binary);
-        manifest.model.path = model_path.clone();
-        manifest.model.sha256 = hex_digest(model);
+        manifest.binary.bytes = binary.len() as u64;
+        manifest.model_mount = model_path.clone();
+        manifest.model_files = vec![ProviderArtifact {
+            path: model_path.clone(),
+            sha256: hex_digest(model),
+            bytes: model.len() as u64,
+        }];
+        manifest.model_set_sha256 = model_set_digest(&manifest.model_files).unwrap();
         manifest.unit_sha256 = hex_digest(unit);
         manifest.executable_arguments[0] = binary_path.to_string_lossy().into_owned();
         manifest.executable_arguments[2] = model_path.to_string_lossy().into_owned();
@@ -1115,11 +1237,74 @@ mod tests {
             load_runtime_readiness(profile, &passwd_path, &group_path, &unit_path, uid).unwrap();
         assert_eq!(readiness.accounts().access_gid(), 982);
         assert_eq!(readiness.binary().sha256(), hex_digest(binary));
-        assert_eq!(readiness.model().sha256(), hex_digest(model));
+        assert_eq!(readiness.model_files()[0].sha256(), hex_digest(model));
         assert_eq!(readiness.unit().sha256(), hex_digest(unit));
         assert_eq!(
             readiness.binary().device(),
             fs::metadata(readiness.binary().path()).unwrap().dev()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ollama_inventory_rejects_unknown_and_symlinked_store_entries() {
+        use super::super::runtime_readiness::{RuntimeReadinessError, validate_model_inventory};
+        use std::os::unix::fs::MetadataExt;
+
+        let directory = TestDirectory::new();
+        let root = directory.path().join("models");
+        let blobs = root.join("blobs");
+        let manifests = root.join("manifests");
+        fs::create_dir_all(&blobs).unwrap();
+        fs::create_dir_all(&manifests).unwrap();
+        let blob = blobs.join("sha256-fixture");
+        let model_manifest = manifests.join("fixture-model");
+        fs::write(&blob, b"blob").unwrap();
+        fs::write(&model_manifest, b"manifest").unwrap();
+        for path in [&root, &blobs, &manifests] {
+            fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        for path in [&blob, &model_manifest] {
+            fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        let uid = fs::metadata(&root).unwrap().uid();
+
+        let package = fixed_synthetic_provider_package(GatewayProfile::OllamaCpuV1).unwrap();
+        let mut manifest = package.spec.expected.clone();
+        manifest.model_mount = root.clone();
+        manifest.model_files = vec![
+            ProviderArtifact {
+                path: blob.clone(),
+                sha256: hex_digest(b"blob"),
+                bytes: 4,
+            },
+            ProviderArtifact {
+                path: model_manifest.clone(),
+                sha256: hex_digest(b"manifest"),
+                bytes: 8,
+            },
+        ];
+        manifest.model_set_sha256 = model_set_digest(&manifest.model_files).unwrap();
+        manifest.filesystem.read_only_paths = vec![manifest.binary.path.clone(), root];
+        let spec = ProviderProfileSpec::compile(manifest).unwrap();
+        let (profile_path, _, _) = write_fixture(&directory, spec.canonical_bytes());
+        let profile = load_provider_profile(&profile_path, &spec, uid).unwrap();
+        assert_eq!(validate_model_inventory(&profile, uid), Ok(()));
+
+        let unknown = blobs.join("unknown");
+        fs::write(&unknown, b"unknown").unwrap();
+        fs::set_permissions(&unknown, fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(
+            validate_model_inventory(&profile, uid),
+            Err(RuntimeReadinessError::UnexpectedModelEntry)
+        );
+        fs::remove_file(&unknown).unwrap();
+
+        let link = blobs.join("linked");
+        symlink(&blob, &link).unwrap();
+        assert_eq!(
+            validate_model_inventory(&profile, uid),
+            Err(RuntimeReadinessError::UnexpectedModelEntry)
         );
     }
 }
