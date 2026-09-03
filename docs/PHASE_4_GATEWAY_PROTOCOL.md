@@ -18,10 +18,13 @@ profile, or private-input path.
   digest mismatch, truncation, and all input after a decoder failure.
 - Payloads are canonical, closed JSON schemas. Unknown or duplicate fields,
   noncanonical encodings, invalid UTF-8, and schema expansion fail closed.
-- The only request message is explicitly `synthetic_inference`. Decoding
-  reconstructs and revalidates the existing provider-neutral request and binds
-  its provider kind to the selected CPU evidence profile. There is no private
-  classification variant.
+- The development request message remains explicitly `synthetic_inference`.
+  ADR-0017 adds a distinct `private_inference` frame whose canonical wire
+  payload contains only version, request ID, bounded messages, minimized intent
+  catalogue, output mode and deadline. Provider, model, endpoint, path,
+  classification and isolation settings are not representable; its decoder
+  injects provider/model/private identity from separately admitted code-owned
+  inputs.
 - Hello messages bind both protocol versions, one closed profile, a lowercase
   SHA-256 boot correlation, and one bounded process-instance nonce. These are
   correlation fields, not secrets and not substitutes for peer credentials.
@@ -41,11 +44,12 @@ Enabling the already-used `nix` crate's socket feature adds its locked
 ## Controlled-fixture coverage
 
 The fixture suite covers fragmented deterministic framing, digest tampering,
-profile mismatch, attempted private-classification expansion, canonical
-synthetic request reconstruction, closed cancellation, normalized event round
-trips, final-output substitution, post-terminal reuse, cancellation winning at
-sequence zero, and peer-credential mismatch. Target-Linux CI additionally reads
-real kernel credentials from a connected Unix socket pair.
+profile mismatch, attempted synthetic-classification expansion, authority-free
+private request reconstruction and injection, authority-field rejection,
+closed cancellation, normalized event round trips, final-output substitution,
+post-terminal reuse, cancellation winning at sequence zero, and peer-credential
+mismatch. Target-Linux CI additionally reads real kernel credentials from a
+connected Unix socket pair.
 
 ## Deliberately absent
 
@@ -60,8 +64,7 @@ real kernel credentials from a connected Unix socket pair.
 
 ## Next checkpoint
 
-The smallest synthetic-only gateway process and client connector are now
-implemented separately in `docs/PHASE_4_GATEWAY_FIXTURE.md`. The next checkpoint
-defines and validates root-owned provider manifests before adding production
-services. Production paths, packages, static identities, private input, and
-provider lifecycle remain absent.
+The next checkpoint binds this parser and retained-account authorization into a
+one-request production listener with concurrent cancellation. Installed service
+and real-model target-Linux evidence remains mandatory before private input is
+enabled.
