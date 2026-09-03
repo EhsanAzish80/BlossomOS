@@ -159,6 +159,12 @@ primitives. It does not create or install the gateway service, authenticate a
 production provider, or permit private input. See
 `docs/PHASE_4_GATEWAY_PROTOCOL.md`.
 
+A second synthetic-only checkpoint connects a bounded client to a one-request
+fixture gateway over an ephemeral Unix socket. Target-Linux tests run the
+gateway in a separate process and prove that a peer-identity mismatch closes the
+connection before any request byte is written. This remains test infrastructure,
+not the packaged production gateway. See `docs/PHASE_4_GATEWAY_FIXTURE.md`.
+
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.
 

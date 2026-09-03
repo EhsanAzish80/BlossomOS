@@ -112,6 +112,10 @@ impl GatewayFrameDecoder {
         Ok(())
     }
 
+    pub fn is_idle(&self) -> bool {
+        self.buffer.is_empty() && !self.failed
+    }
+
     fn decode_available(&mut self) -> Result<Vec<GatewayFrame>, GatewayProtocolError> {
         let mut frames = Vec::new();
         while self.buffer.len() >= HEADER_BYTES {

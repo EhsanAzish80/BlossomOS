@@ -49,6 +49,10 @@ pub use model_runtime::{
     encode_gateway_event, encode_gateway_hello, encode_gateway_synthetic_request,
     validate_gateway_peer, validate_provider_completion,
 };
+#[cfg(unix)]
+pub use model_runtime::{
+    GatewayFixtureError, SyntheticGatewayClient, serve_synthetic_gateway_once,
+};
 pub use os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, OsReleaseReader, OsReleaseSource,
     UnavailableOsIdentityProvider, parse_os_release,
