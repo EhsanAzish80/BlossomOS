@@ -135,15 +135,18 @@ protected CI and merged to `main` as `0662e51`.
 
 ## Phase 4: Replaceable local AI runtime
 
-Status: active. ADR-0011 proposes the provider-neutral local inference boundary
-and must be accepted before runtime implementation begins.
+Status: active. ADR-0011 defines the accepted provider-neutral local inference
+boundary. Implementation begins with closed core types and synthetic fixtures;
+private inputs remain blocked pending an accepted endpoint-identity ADR.
 
-- [ ] Accept the provider-neutral inference, proposed-tool-intent, cancellation,
+- [x] Accept the provider-neutral inference, proposed-tool-intent, cancellation,
   streaming, locality, privacy, and conformance contract.
 - [ ] Implement closed core types, validation, cancellation, normalized stream
   state, redacted audit projection, and scripted conformance tests.
 - [ ] Implement the fixed-local Ollama adapter.
 - [ ] Implement the fixed-local llama.cpp adapter to prove replaceability.
+- [ ] Accept and implement a provider endpoint-identity and packaging boundary
+  before either real adapter may receive private or ambient user data.
 - [ ] Validate every model output and proposed tool intent against strict,
   code-owned schemas before it reaches the broker.
 - [ ] Produce controlled-protocol and real-model target-Linux evidence with
@@ -154,7 +157,8 @@ security model; Phase 4 does not implement or expose it.
 
 Exit: deterministic conformance tests pass for both providers, real local-model
 operation is verified offline on target Linux, and no provider path bypasses the
-broker, policy, approval, verification, or audit boundary.
+broker, policy, approval, verification, or audit boundary. Unauthenticated
+loopback endpoints receive no private input.
 
 ## Phase 5: Planning and verification
 

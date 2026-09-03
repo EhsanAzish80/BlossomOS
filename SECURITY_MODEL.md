@@ -30,6 +30,13 @@ account, firmware, or physical machine is already compromised.
 Model text, plans, external content, repository files, and tool output are
 untrusted data. They are never authorization.
 
+ADR-0011 also treats a local model provider as untrusted. A loopback address is
+not provider authentication. Until the connected provider instance is bound to
+a reviewed code-owned service identity, real adapters may receive synthetic
+test prompts only and must reject private or ambient user data. Model-visible
+tool catalogues are empty by default and minimized per turn; model calls remain
+untrusted proposals outside the internal request and approval types.
+
 The shell may collect approval but may not forge policy decisions. The broker and
 policy engine run without root. The executor receives only an approved,
 normalized request. The privileged helper independently validates a narrow typed
