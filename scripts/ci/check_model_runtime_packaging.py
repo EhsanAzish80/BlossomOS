@@ -12,6 +12,7 @@ PROVIDER = "blossom-model-provider"
 ACCESS_GROUP = "blossom-ai"
 NAMESPACE_UNIT = "blossom-model-netns.service"
 GATEWAY_UNIT = "blossom-model-gateway.service"
+GATEWAY_TEMPLATE = f"{GATEWAY_UNIT}.in"
 
 
 def require(condition: bool, message: str) -> None:
@@ -81,7 +82,7 @@ def check_namespace_and_gateway() -> None:
     require("ExecStart=/usr/bin/true" in namespace, "namespace anchor executable drift")
     require("RemainAfterExit=yes" in namespace, "namespace must remain active")
 
-    gateway = check_unit(GATEWAY_UNIT, GATEWAY)
+    gateway = check_unit(GATEWAY_TEMPLATE, GATEWAY)
     for value in [
         f"Requires={NAMESPACE_UNIT}",
         f"JoinsNamespaceOf={NAMESPACE_UNIT}",
@@ -90,13 +91,18 @@ def check_namespace_and_gateway() -> None:
         "DynamicUser=no",
         "RuntimeDirectory=blossom-model-gateway",
         "InaccessiblePaths=/boot /etc /home /media /mnt /opt /root /srv /run/user /usr/lib/blossom-os",
-        "BindReadOnlyPaths=/usr/lib/blossom-os/blossom-model-gateway /etc/blossom-os/model-profiles /etc/passwd /etc/group /proc/sys/kernel/random/boot_id",
+        "BindReadOnlyPaths=/usr/lib/blossom-os/blossom-model-gateway @PROFILE_PATH@ @PROVIDER_DIRECTORY@ @MODEL_PATH@ /etc/passwd /etc/group /proc/sys/kernel/random/boot_id",
         "ReadWritePaths=/run/blossom-model-gateway",
         "RestrictAddressFamilies=AF_UNIX AF_INET",
         "IPAddressAllow=localhost",
         "Restart=no",
     ]:
         require(value in gateway, f"gateway boundary drift: {value}")
+    tokens = set(re.findall(r"@[A-Za-z0-9_-]+@?", gateway))
+    require(
+        tokens <= {"@PROFILE_PATH@", "@PROVIDER_DIRECTORY@", "@MODEL_PATH@", "@system-service"},
+        "gateway: unknown render token",
+    )
 
 
 def check_provider(name: str, kind: str) -> None:
@@ -138,7 +144,7 @@ def main() -> None:
         "README.md",
         "blossom-model-runtime.sysusers",
         NAMESPACE_UNIT,
-        GATEWAY_UNIT,
+        GATEWAY_TEMPLATE,
         "blossom-model-ollama.service.in",
         "blossom-model-llama-cpp.service.in",
     }

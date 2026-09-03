@@ -185,6 +185,9 @@ remain blocked pending the complete ADR-0012 production and evidence gates.
   - [x] Accept ADR-0016 and add the first release-constructible x86-64 llama.cpp
     registry entry plus an offline, deterministic, hash-pinned package-tree
     recipe. This is not installed-service or target-Linux inference evidence.
+  - [x] Render the gateway service per closed package profile so its sandbox
+    exposes only the selected manifest, measured runtime set, and model needed
+    for readiness validation; keep the production listener disabled.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.

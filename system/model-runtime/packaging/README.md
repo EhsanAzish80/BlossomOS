@@ -37,11 +37,13 @@ part of this boundary.
 ## Units
 
 - `blossom-model-netns.service` anchors a private network namespace.
-- `blossom-model-gateway.service` joins it and is the only private-input ingress.
-- The two `.service.in` files are provider-specific render templates. A future
-  package step must replace every allowlisted token with reviewed profile data,
-  verify the rendered unit, hash it, and bind that digest into the closed
-  registry and installed manifest.
+- `blossom-model-gateway.service.in` renders the selected profile's exact
+  manifest, runtime directory, and model path into read-only binds, joins the
+  namespace, and is the only private-input ingress.
+- The provider `.service.in` files and gateway template are profile-specific.
+  The llama.cpp package recipe replaces every allowlisted token with its closed
+  registry data; future provider recipes must apply the same rule. The provider
+  unit is hashed and bound into the registry and installed manifest.
 
 There is intentionally no generic instance unit and no caller-controlled `%i`.
 The units have no `[Install]` section, so this checkpoint cannot enable them.

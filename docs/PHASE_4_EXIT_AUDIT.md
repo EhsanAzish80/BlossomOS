@@ -12,6 +12,9 @@ controls from evidence that does not yet exist.
 - One x86-64 llama.cpp profile is embedded into release builds from canonical
   bytes, with immutable runtime/model/license pins and a deterministic offline
   package-tree recipe.
+- The package recipe renders a profile-specific gateway unit whose exact
+  read-only binds make the selected manifest, runtime set and model visible to
+  readiness without exposing the wider Blossom package tree.
 - Both provider adapters accept only synthetic crate-owned requests and fixed
   numeric loopback endpoints.
 - Request, provider output, proposed intent, gateway frame and normalized event
