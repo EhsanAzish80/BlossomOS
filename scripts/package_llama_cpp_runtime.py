@@ -121,7 +121,7 @@ def artifact_set_digest(files: list[dict]) -> str:
     return digest_bytes(json.dumps(files, separators=(",", ":")).encode())
 
 
-def render_unit() -> bytes:
+def render_provider_unit() -> bytes:
     template = (PACKAGE / "blossom-model-llama-cpp.service.in").read_text(encoding="utf-8")
     replacements = {
         "@PROVIDER_BINARY@": str(RUNTIME_ROOT / "llama-server"),
@@ -143,6 +143,22 @@ def render_unit() -> bytes:
     return template.encode()
 
 
+def render_gateway_unit() -> bytes:
+    template = (PACKAGE / "blossom-model-gateway.service.in").read_text(encoding="utf-8")
+    replacements = {
+        "@PROFILE_PATH@": str(PROFILE_PATH),
+        "@PROVIDER_DIRECTORY@": str(RUNTIME_ROOT),
+        "@MODEL_PATH@": str(MODEL_PATH),
+    }
+    for token, value in replacements.items():
+        if token not in template:
+            fail(f"gateway template token drift: {token}")
+        template = template.replace(token, value)
+    if "@" in template.replace("@system-service", ""):
+        fail("unresolved gateway template token")
+    return template.encode()
+
+
 def registry_bytes(lock: dict) -> bytes:
     runtime_files = []
     for member in lock["runtime"]["members"]:
@@ -153,7 +169,7 @@ def registry_bytes(lock: dict) -> bytes:
     runtime_files.sort(key=lambda item: item["path"])
     model_file = artifact(MODEL_PATH, lock["model"]["sha256"], lock["model"]["bytes"])
     binary = next(item for item in runtime_files if item["path"] == str(RUNTIME_ROOT / "llama-server"))
-    unit = render_unit()
+    unit = render_provider_unit()
     manifest = {
         "profile_version": 4,
         "profile": "llama_cpp_cpu_v1",
@@ -287,14 +303,17 @@ def build(
         copy_exact(gateway, output / "usr/lib/blossom-os/blossom-model-gateway", 0o755)
         fixed_files = {
             "usr/lib/systemd/system/blossom-model-netns.service": PACKAGE / "blossom-model-netns.service",
-            "usr/lib/systemd/system/blossom-model-gateway.service": PACKAGE / "blossom-model-gateway.service",
             "usr/lib/sysusers.d/blossom-model-runtime.conf": PACKAGE / "blossom-model-runtime.sysusers",
         }
         for relative, source in fixed_files.items():
             copy_exact(source, output / relative, 0o644)
+        gateway_unit_path = output / "usr/lib/systemd/system/blossom-model-gateway.service"
+        gateway_unit_path.parent.mkdir(parents=True, exist_ok=True)
+        gateway_unit_path.write_bytes(render_gateway_unit())
+        gateway_unit_path.chmod(0o644)
         unit_path = output / "usr/lib/systemd/system/blossom-model-llama-cpp.service"
         unit_path.parent.mkdir(parents=True, exist_ok=True)
-        unit_path.write_bytes(render_unit())
+        unit_path.write_bytes(render_provider_unit())
         unit_path.chmod(0o644)
         profile_path = output / str(PROFILE_PATH).lstrip("/")
         profile_path.parent.mkdir(parents=True, exist_ok=True)

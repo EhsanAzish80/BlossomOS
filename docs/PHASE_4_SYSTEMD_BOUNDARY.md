@@ -38,7 +38,11 @@ path is profile-specific disposable state under `/var/lib/blossom/`. The wider
 Blossom package tree is inaccessible and the complete measured provider runtime
 directory and selected model are exposed through exact read-only binds.
 Dynamic-loader and ordinary system-library paths remain readable; this
-checkpoint does not claim a hermetic provider root.
+checkpoint does not claim a hermetic provider root. The gateway is now also a
+profile-rendered template: the package recipe exposes only the selected
+manifest, complete measured runtime directory, and selected model through exact
+read-only binds. This closes the earlier mismatch where readiness was required
+to hash those artifacts while the gateway sandbox made them inaccessible.
 
 Ollama's endpoint and model-store environment values are literal code-owned
 unit data; the manifest schema allowlists their names but never accepts values
@@ -49,8 +53,9 @@ from callers or models. The future rendered unit digest binds those values.
 `scripts/ci/check_model_runtime_packaging.py` requires the exact package-file
 surface, identities, dependency graph, paths, hardening directives, provider
 templates, render-token vocabulary, lack of generic instances/devices, and
-absence of `[Install]` sections. Linux CI also runs `systemd-analyze verify` on
-the concrete namespace and gateway units. Provider templates cannot be systemd
+absence of `[Install]` sections. Linux CI renders a concrete gateway unit with
+fixed fixture paths and runs `systemd-analyze verify` on it and the namespace.
+Provider templates cannot be systemd
 verified until a later checkpoint renders reviewed artifact paths and resource
 values; the checker validates their closed syntax and tokens meanwhile.
 
@@ -64,7 +69,8 @@ the runtime isolation works; adversarial production-path Linux evidence remains
 mandatory before private bytes can be admitted.
 
 ADR-0016 later adds the first pinned llama.cpp registry and offline package-tree
-recipe; it does not add installed runtime evidence.
+recipe. That recipe now renders the gateway's exact read-only admission view;
+it does not add installed runtime evidence.
 
 ## Next checkpoint
 

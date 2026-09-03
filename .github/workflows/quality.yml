@@ -57,10 +57,13 @@ jobs:
           sudo install -m 0644 /dev/null /usr/lib/blossom-os/models/llama-cpp/evidence.gguf
           fixture_units=/tmp/blossom-model-runtime-units
           install -d -m 0755 "$fixture_units"
-          install -m 0644 \
-            system/model-runtime/packaging/blossom-model-netns.service \
-            system/model-runtime/packaging/blossom-model-gateway.service \
-            "$fixture_units"
+          install -m 0644 system/model-runtime/packaging/blossom-model-netns.service "$fixture_units"
+          sed \
+            -e 's|@PROFILE_PATH@|/etc/blossom-os/model-profiles/llama-cpp-cpu-x86_64.json|g' \
+            -e 's|@PROVIDER_DIRECTORY@|/usr/lib/blossom-os/providers/llama-cpp|g' \
+            -e 's|@MODEL_PATH@|/usr/lib/blossom-os/models/llama-cpp/evidence.gguf|g' \
+            system/model-runtime/packaging/blossom-model-gateway.service.in \
+            > "$fixture_units"/blossom-model-gateway.service
           cargo run --quiet --package blossom-core \
             --example render_synthetic_provider_units -- "$fixture_units"
           systemd-analyze verify \
