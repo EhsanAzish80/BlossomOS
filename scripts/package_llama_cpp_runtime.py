@@ -171,9 +171,10 @@ def registry_bytes(lock: dict) -> bytes:
     binary = next(item for item in runtime_files if item["path"] == str(RUNTIME_ROOT / "llama-server"))
     unit = render_provider_unit()
     manifest = {
-        "profile_version": 4,
+        "profile_version": 5,
         "profile": "llama_cpp_cpu_v1",
         "provider": "llama_cpp",
+        "logical_model": "qwen2.5-0.5b-instruct:q4_k_m",
         "gateway_protocol_version": 1,
         "model_protocol_version": 1,
         "binary": binary,

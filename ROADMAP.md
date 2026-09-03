@@ -136,9 +136,10 @@ protected CI and merged to `main` as `0662e51`.
 ## Phase 4: Replaceable local AI runtime
 
 Status: active. ADR-0011 defines the accepted provider-neutral local inference
-boundary, and ADR-0012 defines the accepted endpoint-identity and packaging
-boundary. Controlled synthetic implementation is substantial; private inputs
-remain blocked pending the complete ADR-0012 production and evidence gates.
+boundary, ADR-0012 defines the endpoint-identity and packaging boundary, and
+ADR-0017 fixes production admission and cancellation semantics. Controlled
+synthetic implementation is substantial; private inputs remain blocked pending
+the complete production and evidence gates.
 
 - [x] Accept the provider-neutral inference, proposed-tool-intent, cancellation,
   streaming, locality, privacy, and conformance contract.
@@ -188,11 +189,42 @@ remain blocked pending the complete ADR-0012 production and evidence gates.
   - [x] Render the gateway service per closed package profile so its sandbox
     exposes only the selected manifest, measured runtime set, and model needed
     for readiness validation; keep the production listener disabled.
+  - [x] Make supported-Linux release startup select the sole embedded profile,
+    consume installed readiness, and match its effective service UID/GID before
+    returning fail-closed without a listener.
+  - [x] Accept ADR-0017 for retained-account client eligibility,
+    server-derived private request identity, one-request connections,
+    cancellation races, and redacted production evidence.
+  - [x] Retain the exact account-database bytes used by readiness and authorize
+    connected non-root clients by kernel UID plus primary or unique
+    supplementary `blossom-ai` membership without reopening account paths.
+  - [x] Add the distinct canonical private-inference frame whose wire payload
+    cannot select a provider, model, endpoint, classification, path or runtime
+    setting; its decoder injects provider/model/private identity from admitted
+    code-owned inputs.
+  - [x] Bind logical model identity into canonical provider-profile schema v5,
+    making the selected embedded and installed-manifest-verified profile the
+    only production source for private request decoding.
+  - [x] Implement the already-authorized one-request connection state machine,
+    including hello-before-input, pipelining rejection, concurrent bound
+    cancellation, validated event encoding, bounded I/O and fail-closed
+    disconnect/write behavior.
+  - [x] Wire that handler into an explicitly package-feature-gated target-Linux
+    listener with stale-path refusal, exact socket metadata, boot/process
+    identity, peer credentials and retained-snapshot authorization. Default
+    builds remain fail closed until installed adversarial evidence enables it.
+  - [x] Accept ADR-0018 and implement the boot-scoped, synced, hash-chained,
+    content-free operational journal so request-start evidence precedes
+    inference and terminal evidence precedes terminal delivery.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.
   - [ ] Pass adversarial production-path Linux evidence before enabling private
     input.
+    - [x] Add a manually dispatched, pinned-input installed-service harness and
+      content-free gateway probe.
+    - [ ] Record a successful run for the merged commit and close every
+      remaining ADR-0017/0018 adversarial case.
 - [x] Validate every model output and proposed tool intent against strict,
   code-owned schemas before it reaches the broker.
 - [ ] Produce controlled-protocol and real-model target-Linux evidence with

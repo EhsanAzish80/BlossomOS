@@ -213,7 +213,12 @@ name = "blossom-model-gateway"
 version = "0.1.0"
 dependencies = [
  "blossom-core",
+ "getrandom 0.3.4",
+ "libc",
  "nix",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]
