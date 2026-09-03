@@ -19,6 +19,9 @@ controls from evidence that does not yet exist.
   numeric loopback endpoints.
 - Request, provider output, proposed intent, gateway frame and normalized event
   schemas are closed, bounded and fail closed before any broker integration.
+- The private-inference frame omits provider, model, endpoint, path and
+  classification authority; its decoder injects those values from the admitted
+  profile. The production listener remains disabled.
 - Linux peer-credential primitives and a separate-process synthetic Unix
   gateway are tested.
 - Both real adapter implementations are exercised through authenticated

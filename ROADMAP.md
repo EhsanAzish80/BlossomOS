@@ -198,6 +198,10 @@ the complete production and evidence gates.
   - [x] Retain the exact account-database bytes used by readiness and authorize
     connected non-root clients by kernel UID plus primary or unique
     supplementary `blossom-ai` membership without reopening account paths.
+  - [x] Add the distinct canonical private-inference frame whose wire payload
+    cannot select a provider, model, endpoint, classification, path or runtime
+    setting; its decoder injects provider/model/private identity from admitted
+    code-owned inputs.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.

@@ -30,6 +30,7 @@ pub enum GatewayMessageKind {
     SyntheticInference = 2,
     Cancel = 3,
     Event = 4,
+    PrivateInference = 5,
 }
 
 impl GatewayMessageKind {
@@ -39,6 +40,7 @@ impl GatewayMessageKind {
             2 => Ok(Self::SyntheticInference),
             3 => Ok(Self::Cancel),
             4 => Ok(Self::Event),
+            5 => Ok(Self::PrivateInference),
             _ => Err(GatewayProtocolError::UnknownMessageKind),
         }
     }
@@ -243,7 +245,65 @@ pub fn decode_gateway_synthetic_request(
     wire.into_request(&frame.payload)
 }
 
-#[derive(Deserialize)]
+/// Decode an authority-free production payload and inject provider, model and
+/// private classification from the already admitted code-owned profile.
+pub fn decode_gateway_private_request(
+    frame: &GatewayFrame,
+    provider: ModelProviderKind,
+    model: ModelProfile,
+) -> Result<InferenceRequest, GatewayProtocolError> {
+    require_kind(frame, GatewayMessageKind::PrivateInference)?;
+    let wire: WirePrivateInferenceRequest = decode_json(&frame.payload)?;
+    wire.into_request(&frame.payload, provider, model)
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WirePrivateInferenceRequest {
+    version: u16,
+    request_id: String,
+    messages: Vec<WireMessage>,
+    intents: WireCatalogue,
+    output_mode: WireOutputMode,
+    deadline_ms: u64,
+}
+
+impl WirePrivateInferenceRequest {
+    fn into_request(
+        self,
+        original: &[u8],
+        provider: ModelProviderKind,
+        model: ModelProfile,
+    ) -> Result<InferenceRequest, GatewayProtocolError> {
+        if self.version != MODEL_PROTOCOL_VERSION
+            || self.messages.is_empty()
+            || self.messages.len() > MAX_MESSAGES
+        {
+            return Err(GatewayProtocolError::InvalidRequest);
+        }
+        let canonical =
+            serde_json::to_vec(&self).map_err(|_| GatewayProtocolError::EncodingFailed)?;
+        if canonical != original {
+            return Err(GatewayProtocolError::NonCanonicalPayload);
+        }
+        let messages = decode_wire_messages(self.messages)?;
+        let intents = TurnIntentCatalogue::from_eligible(self.intents.eligible)
+            .map_err(|_| GatewayProtocolError::InvalidRequest)?;
+        InferenceRequest::private(
+            InferenceRequestId::parse(self.request_id)
+                .map_err(|_| GatewayProtocolError::InvalidRequest)?,
+            provider,
+            model,
+            messages,
+            intents,
+            decode_output_mode(self.output_mode),
+            self.deadline_ms,
+        )
+        .map_err(|_| GatewayProtocolError::InvalidRequest)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WireInferenceRequest {
     version: u16,
@@ -257,20 +317,20 @@ struct WireInferenceRequest {
     deadline_ms: u64,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum WireInputClassification {
     Synthetic,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WireMessage {
     role: WireRole,
     content: String,
 }
 
-#[derive(Clone, Copy, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum WireRole {
     System,
@@ -279,13 +339,13 @@ enum WireRole {
     Tool,
 }
 
-#[derive(Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WireCatalogue {
     eligible: BTreeSet<ModelIntentKind>,
 }
 
-#[derive(Clone, Copy, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum WireOutputMode {
     Text,
@@ -304,26 +364,10 @@ impl WireInferenceRequest {
         {
             return Err(GatewayProtocolError::InvalidRequest);
         }
-        let messages = self
-            .messages
-            .into_iter()
-            .map(|message| {
-                let role = match message.role {
-                    WireRole::System => ConversationRole::System,
-                    WireRole::User => ConversationRole::User,
-                    WireRole::Assistant => ConversationRole::Assistant,
-                    WireRole::Tool => ConversationRole::Tool,
-                };
-                ConversationMessage::new(role, message.content)
-                    .map_err(|_| GatewayProtocolError::InvalidRequest)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+        let messages = decode_wire_messages(self.messages)?;
         let intents = TurnIntentCatalogue::from_eligible(self.intents.eligible)
             .map_err(|_| GatewayProtocolError::InvalidRequest)?;
-        let output_mode = match self.output_mode {
-            WireOutputMode::Text => InferenceOutputMode::Text,
-            WireOutputMode::BlossomTurn => InferenceOutputMode::BlossomTurn,
-        };
+        let output_mode = decode_output_mode(self.output_mode);
         let request = InferenceRequest::synthetic(
             InferenceRequestId::parse(self.request_id)
                 .map_err(|_| GatewayProtocolError::InvalidRequest)?,
@@ -341,6 +385,31 @@ impl WireInferenceRequest {
             return Err(GatewayProtocolError::NonCanonicalPayload);
         }
         Ok(request)
+    }
+}
+
+fn decode_wire_messages(
+    messages: Vec<WireMessage>,
+) -> Result<Vec<ConversationMessage>, GatewayProtocolError> {
+    messages
+        .into_iter()
+        .map(|message| {
+            let role = match message.role {
+                WireRole::System => ConversationRole::System,
+                WireRole::User => ConversationRole::User,
+                WireRole::Assistant => ConversationRole::Assistant,
+                WireRole::Tool => ConversationRole::Tool,
+            };
+            ConversationMessage::new(role, message.content)
+                .map_err(|_| GatewayProtocolError::InvalidRequest)
+        })
+        .collect()
+}
+
+fn decode_output_mode(mode: WireOutputMode) -> InferenceOutputMode {
+    match mode {
+        WireOutputMode::Text => InferenceOutputMode::Text,
+        WireOutputMode::BlossomTurn => InferenceOutputMode::BlossomTurn,
     }
 }
 
@@ -824,6 +893,52 @@ mod tests {
         assert_eq!(
             decode_gateway_synthetic_request(&frame, GatewayProfile::OllamaCpuV1),
             Err(GatewayProtocolError::IdentityMismatch)
+        );
+    }
+
+    #[test]
+    fn private_frame_contains_no_provider_authority_and_gateway_injects_it() {
+        let payload = br#"{"version":1,"request_id":"private-1","messages":[{"role":"user","content":"private content"}],"intents":{"eligible":[]},"output_mode":"text","deadline_ms":2000}"#.to_vec();
+        assert!(
+            !payload
+                .windows(b"provider".len())
+                .any(|part| part == b"provider")
+        );
+        assert!(!payload.windows(b"model".len()).any(|part| part == b"model"));
+        assert!(
+            !payload
+                .windows(b"classification".len())
+                .any(|part| part == b"classification")
+        );
+        let frame = one_frame(
+            &GatewayFrame::encode(GatewayMessageKind::PrivateInference, payload).unwrap(),
+        );
+        let request = decode_gateway_private_request(
+            &frame,
+            ModelProviderKind::LlamaCpp,
+            ModelProfile::parse("qwen2.5:0.5b".into()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(request.provider(), ModelProviderKind::LlamaCpp);
+        assert_eq!(request.model().as_str(), "qwen2.5:0.5b");
+        let encoded = serde_json::to_string(&request).unwrap();
+        assert!(encoded.contains(r#""input_classification":"private""#));
+
+        let expanded = GatewayFrame {
+            kind: GatewayMessageKind::PrivateInference,
+            payload: br#"{"version":1,"request_id":"private-1","provider":"llama_cpp","messages":[{"role":"user","content":"private content"}],"intents":{"eligible":[]},"output_mode":"text","deadline_ms":2000}"#.to_vec(),
+        };
+        assert_eq!(
+            decode_gateway_private_request(
+                &expanded,
+                ModelProviderKind::LlamaCpp,
+                ModelProfile::parse("qwen2.5:0.5b".into()).unwrap(),
+            ),
+            Err(GatewayProtocolError::MalformedPayload)
+        );
+        assert_eq!(
+            decode_gateway_synthetic_request(&frame, GatewayProfile::LlamaCppCpuV1),
+            Err(GatewayProtocolError::WrongMessageKind)
         );
     }
 
