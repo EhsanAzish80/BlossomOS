@@ -149,7 +149,15 @@ equally constrained llama.cpp adapter is documented in
 provider boundary against controlled protocol fixtures; they are not an
 authenticated or production model runtime. No private input, model download,
 provider lifecycle, cross-provider real-model proof, or offline real-model
-evidence exists, pending a separately reviewed provider-identity boundary.
+evidence exists, pending complete implementation and validation of the accepted
+provider-identity boundary.
+
+ADR-0012 now defines that provider-identity boundary. Its first implementation
+checkpoint adds only closed, synthetic gateway framing, strict request/event
+validation, cancellation binding, and Linux Unix-socket peer-credential
+primitives. It does not create or install the gateway service, authenticate a
+production provider, or permit private input. See
+`docs/PHASE_4_GATEWAY_PROTOCOL.md`.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.

@@ -145,8 +145,16 @@ private inputs remain blocked pending an accepted endpoint-identity ADR.
   state, redacted audit projection, and scripted conformance tests.
 - [x] Implement the fixed-local, synthetic-only Ollama development adapter.
 - [x] Implement the fixed-local, synthetic-only llama.cpp development adapter.
-- [ ] Accept and implement a provider endpoint-identity and packaging boundary
-  before either real adapter may receive private or ambient user data.
+- [ ] Implement the accepted ADR-0012 provider endpoint-identity and packaging
+  boundary before either real adapter may receive private or ambient user data.
+  - [x] Accept the distinct-UID gateway, Unix peer-credential, isolated-provider,
+    and root-owned profile design.
+  - [x] Implement the closed synthetic-only gateway framing, request/event
+    validation, cancellation binding, and Linux peer-credential primitives.
+  - [ ] Implement and package the gateway, static identities, namespace anchor,
+    hardened services, profile manifests, and runtime identity evidence.
+  - [ ] Pass adversarial production-path Linux evidence before enabling private
+    input.
 - [ ] Validate every model output and proposed tool intent against strict,
   code-owned schemas before it reaches the broker.
 - [ ] Produce controlled-protocol and real-model target-Linux evidence with
@@ -167,7 +175,9 @@ claim neither an authenticated provider endpoint, private-input support, nor a
 real-model test. Cross-provider fixture equivalence, offline real-model
 target-Linux evidence, and the endpoint-identity boundary remain unresolved.
 ADR-0012 accepts the endpoint-identity and packaging boundary; it is not yet
-implemented.
+fully implemented. The closed protocol and credential-primitives checkpoint is
+documented in `docs/PHASE_4_GATEWAY_PROTOCOL.md`; no service is installed and
+private input remains blocked.
 
 ## Phase 5: Planning and verification
 
