@@ -5,7 +5,6 @@ Requires=blossom-model-netns.service
 After=blossom-model-netns.service
 Before=blossom-model-gateway.service
 JoinsNamespaceOf=blossom-model-netns.service
-StopWhenUnneeded=yes
 
 [Service]
 Type=simple
@@ -24,7 +23,8 @@ PrivateTmp=yes
 PrivateDevices=yes
 ProtectSystem=strict
 ProtectHome=yes
-InaccessiblePaths=/boot /etc /home /media /mnt /opt /root /run /srv /usr/lib/blossom-os
+InaccessiblePaths=-/boot -/etc -/home -/media -/mnt -/opt -/root -/run/user -/srv
+TemporaryFileSystem=/usr/lib/blossom-os:ro
 BindReadOnlyPaths=@PROVIDER_DIRECTORY@ @MODEL_PATH@
 ReadWritePaths=/var/lib/blossom/model-provider/ollama
 ProtectKernelTunables=yes

@@ -26,8 +26,9 @@ pub use gateway::{
     GATEWAY_PROTOCOL_VERSION, GatewayEventValidator, GatewayFrame, GatewayFrameDecoder,
     GatewayMessageKind, GatewayPeerCredentials, GatewayProfile, GatewayProtocolError,
     MAX_GATEWAY_FRAME_BYTES, decode_gateway_cancel, decode_gateway_event, decode_gateway_hello,
-    decode_gateway_synthetic_request, encode_gateway_cancel, encode_gateway_event,
-    encode_gateway_hello, encode_gateway_synthetic_request, validate_gateway_peer,
+    decode_gateway_private_request, decode_gateway_synthetic_request, encode_gateway_cancel,
+    encode_gateway_event, encode_gateway_hello, encode_gateway_private_request,
+    encode_gateway_synthetic_request, validate_gateway_peer,
 };
 #[cfg(all(unix, debug_assertions))]
 pub use gateway_fixture::serve_synthetic_gateway_via_adapter_once;
@@ -47,8 +48,8 @@ pub use provider_profile::{
 #[cfg(debug_assertions)]
 pub use provider_profile::{SyntheticProviderPackage, fixed_synthetic_provider_package};
 pub use runtime_readiness::{
-    AccountDatabaseEvidence, ResolvedModelIdentities, RuntimeFileEvidence, RuntimeReadinessError,
-    RuntimeReadinessEvidence, load_installed_runtime_readiness,
+    AccountDatabaseEvidence, AuthorizedGatewayClient, ResolvedModelIdentities, RuntimeFileEvidence,
+    RuntimeReadinessError, RuntimeReadinessEvidence, load_installed_runtime_readiness,
 };
 
 pub const MODEL_PROTOCOL_VERSION: u16 = 1;
@@ -274,6 +275,7 @@ enum InputClassification {
         reason = "construction stays internal until a provider adapter exists"
     )]
     Synthetic,
+    Private,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -310,6 +312,30 @@ impl InferenceRequest {
             provider,
             model,
             input_classification: InputClassification::Synthetic,
+            messages,
+            intents,
+            output_mode,
+            deadline_ms,
+        };
+        request.validate()?;
+        Ok(request)
+    }
+
+    pub(crate) fn private(
+        request_id: InferenceRequestId,
+        provider: ModelProviderKind,
+        model: ModelProfile,
+        messages: Vec<ConversationMessage>,
+        intents: TurnIntentCatalogue,
+        output_mode: InferenceOutputMode,
+        deadline_ms: u64,
+    ) -> Result<Self, ModelContractError> {
+        let request = Self {
+            version: MODEL_PROTOCOL_VERSION,
+            request_id,
+            provider,
+            model,
+            input_classification: InputClassification::Private,
             messages,
             intents,
             output_mode,

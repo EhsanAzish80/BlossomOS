@@ -38,21 +38,24 @@ pub use memory_summary::{
 #[cfg(all(unix, debug_assertions))]
 pub use model_runtime::serve_synthetic_gateway_via_adapter_once;
 pub use model_runtime::{
-    ConversationMessage, ConversationRole, GATEWAY_PROTOCOL_VERSION, GatewayEventValidator,
-    GatewayFrame, GatewayFrameDecoder, GatewayMessageKind, GatewayPeerCredentials, GatewayProfile,
-    GatewayProtocolError, InferenceAuditOutcome, InferenceAuditProjection, InferenceCancellation,
-    InferenceOutputMode, InferenceRequest, InferenceRequestId, LLAMA_CPP_ENDPOINT, LlamaCppAdapter,
-    LlamaCppAdapterError, MAX_GATEWAY_FRAME_BYTES, MAX_PROVIDER_MANIFEST_BYTES,
-    MODEL_PROTOCOL_VERSION, ModelContractError, ModelIntentDefinition, ModelIntentKind,
-    ModelProfile, ModelProviderKind, ModelStreamState, NormalizedCompletion, NormalizedStreamEvent,
-    NormalizedStreamKind, OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError, ProposedToolIntent,
-    ProviderArtifact, ProviderFailureCategory, ProviderFilesystemPolicy, ProviderProfileError,
+    AuthorizedGatewayClient, ConversationMessage, ConversationRole, GATEWAY_PROTOCOL_VERSION,
+    GatewayEventValidator, GatewayFrame, GatewayFrameDecoder, GatewayMessageKind,
+    GatewayPeerCredentials, GatewayProfile, GatewayProtocolError, InferenceAuditOutcome,
+    InferenceAuditProjection, InferenceCancellation, InferenceOutputMode, InferenceRequest,
+    InferenceRequestId, LLAMA_CPP_ENDPOINT, LlamaCppAdapter, LlamaCppAdapterError,
+    MAX_GATEWAY_FRAME_BYTES, MAX_PROVIDER_MANIFEST_BYTES, MODEL_PROTOCOL_VERSION,
+    ModelContractError, ModelIntentDefinition, ModelIntentKind, ModelProfile, ModelProviderKind,
+    ModelStreamState, NormalizedCompletion, NormalizedStreamEvent, NormalizedStreamKind,
+    OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError, ProposedToolIntent, ProviderArtifact,
+    ProviderFailureCategory, ProviderFilesystemPolicy, ProviderProfileError,
     ProviderProfileManifest, ProviderProfileResources, ProviderProfileSpec,
     ProviderServiceIdentity, ProviderStreamInput, TurnIntentCatalogue, ValidatedProviderProfile,
     decode_gateway_cancel, decode_gateway_event, decode_gateway_hello,
-    decode_gateway_synthetic_request, encode_gateway_cancel, encode_gateway_event,
-    encode_gateway_hello, encode_gateway_synthetic_request, load_installed_provider_profile,
-    production_provider_profile, validate_gateway_peer, validate_provider_completion,
+    decode_gateway_private_request, decode_gateway_synthetic_request, encode_gateway_cancel,
+    encode_gateway_event, encode_gateway_hello, encode_gateway_private_request,
+    encode_gateway_synthetic_request, load_installed_provider_profile,
+    load_installed_runtime_readiness, production_provider_profile, validate_gateway_peer,
+    validate_provider_completion,
 };
 #[cfg(unix)]
 pub use model_runtime::{
