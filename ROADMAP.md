@@ -166,6 +166,10 @@ private inputs remain blocked pending an accepted endpoint-identity ADR.
   - [x] Add the debug/test-only closed synthetic profile registry and
     deterministic provider-unit renderer, binding exact manifest command,
     environment, filesystem, resource, identity, and rendered-unit digest data.
+  - [x] Add fail-closed installed-account resolution and runtime-readiness
+    validation that binds the canonical manifest to root-owned binary, model,
+    rendered-unit and account-database descriptor evidence while retaining the
+    validated artifact descriptors against path-replacement TOCTOU.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.
@@ -205,6 +209,9 @@ not-ready before opening a socket.
 The closed synthetic registry and renderer evidence is documented in
 `docs/PHASE_4_PROFILE_RENDERER.md`; release builds still contain no constructible
 profile specification or provider-unit renderer.
+The runtime-readiness checkpoint is documented in
+`docs/PHASE_4_RUNTIME_READINESS.md`; it validates but does not install or start
+the package, and the production gateway remains closed.
 
 ## Phase 5: Planning and verification
 
