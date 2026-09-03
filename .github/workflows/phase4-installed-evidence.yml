@@ -158,3 +158,37 @@ jobs:
           # expose when diagnosing pre-inference sandbox setup failures.
           sudo journalctl --unit blossom-model-netns.service \
             --boot --no-pager --output short-monotonic || true
+          # Identify the first incompatible namespace/hardening directive on
+          # this disposable host without starting either inference process.
+          properties=(
+            "User=blossom-model-gateway"
+            "Group=blossom-model-gateway"
+            "PrivateNetwork=yes"
+            "PrivateTmp=yes"
+            "PrivateDevices=yes"
+            "ProtectSystem=strict"
+            "ProtectHome=yes"
+            "InaccessiblePaths=/boot /etc /home /media /mnt /opt /root /run /srv /var"
+            "ProtectKernelTunables=yes"
+            "ProtectKernelModules=yes"
+            "ProtectKernelLogs=yes"
+            "ProtectControlGroups=yes"
+            "ProtectClock=yes"
+            "ProtectHostname=yes"
+            "ProtectProc=invisible"
+            "ProcSubset=pid"
+          )
+          property_args=()
+          probe_index=0
+          for property in "${properties[@]}"; do
+            property_args+=(--property "$property")
+            probe_index=$((probe_index + 1))
+            if sudo systemd-run --wait --collect --quiet \
+              --unit "blossom-netns-probe-$probe_index" \
+              "${property_args[@]}" /usr/bin/true; then
+              echo "namespace-probe-pass=$property"
+            else
+              echo "namespace-probe-fail=$property"
+              break
+            fi
+          done
