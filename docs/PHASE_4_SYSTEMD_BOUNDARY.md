@@ -56,12 +56,15 @@ values; the checker validates their closed syntax and tokens meanwhile.
 
 ## Deliberately absent
 
-No package recipe, production renderer, compiled profile registry, provider or
-model artifact, installed manifest, account creation, socket creation, service
+At this checkpoint there was no package recipe, production renderer, compiled
+profile registry, provider or model artifact, installed manifest, account creation, socket creation, service
 enablement/start, namespace execution, gateway process, provider process,
-private input, or real-model inference is added. These files are not proof that
+private input, or real-model inference. These files are not proof that
 the runtime isolation works; adversarial production-path Linux evidence remains
 mandatory before private bytes can be admitted.
+
+ADR-0016 later adds the first pinned llama.cpp registry and offline package-tree
+recipe; it does not add installed runtime evidence.
 
 ## Next checkpoint
 

@@ -57,9 +57,10 @@ paths remain visible because the provider cannot start without them.
 The gateway process source now exists, but its production entry point exits
 not-ready before creating a listener. A debug/test-only renderer produces fixed
 synthetic units for CI; it is not a production renderer or installed tool. The
-core now has a fail-closed validator for installed account and artifact evidence,
-but no package invokes it because the production registry remains absent. A
-package recipe, installed release binary/manifests, provider/model artifacts,
+core now has a fail-closed validator for installed account and artifact evidence.
+ADR-0016 adds one offline llama.cpp package-tree recipe and embedded registry,
+but no installed package invokes readiness or opens the gateway. Ollama package
+artifacts,
 account creation, socket creation, service activation, private input, and real
-model execution remain absent. Template and synthetic readiness validation are
-not production isolation evidence and do not complete ADR-0012 or Phase 4.
+model execution remain absent. Template and local package-tree validation are
+not production isolation evidence and do not complete Phase 4.

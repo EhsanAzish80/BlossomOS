@@ -42,6 +42,7 @@ pub use provider_profile::{
     MAX_PROVIDER_MANIFEST_BYTES, ProviderArtifact, ProviderFilesystemPolicy, ProviderProfileError,
     ProviderProfileManifest, ProviderProfileResources, ProviderProfileSpec,
     ProviderServiceIdentity, ValidatedProviderProfile, load_installed_provider_profile,
+    production_provider_profile,
 };
 #[cfg(debug_assertions)]
 pub use provider_profile::{SyntheticProviderPackage, fixed_synthetic_provider_package};

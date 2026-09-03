@@ -56,3 +56,6 @@ compatibility, packaging, or contributor obligations.
   canonical profile and resolved target-system IDs only in readiness evidence.
 - Closed provider runtime artifact sets: accepted in ADR-0015. It binds the
   executable and every bundled runtime library as one immutable, measured set.
+- Pinned offline llama.cpp evidence package: accepted in ADR-0016. It fixes the
+  first x86-64 runtime/model/license inputs and deterministic package-root
+  recipe without activating the production gateway.
