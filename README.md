@@ -178,6 +178,12 @@ hardened gateway unit, and closed CPU-provider unit templates. CI checks this
 surface and verifies the concrete units, but the repository does not install,
 render, enable, or start them. See `docs/PHASE_4_SYSTEMD_BOUNDARY.md`.
 
+A fifth checkpoint adds the `blossom-model-gateway` process scaffold. Its normal
+and release entry point exits not-ready before creating a listener because no
+production profile registry or readiness proof exists. Debug builds expose only
+one fixed, argument-free synthetic request through an explicit fixture mode for
+Linux separate-process testing. See `docs/PHASE_4_GATEWAY_PROCESS.md`.
+
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.
 

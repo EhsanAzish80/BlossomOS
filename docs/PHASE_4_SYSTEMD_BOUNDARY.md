@@ -64,8 +64,9 @@ mandatory before private bytes can be admitted.
 
 ## Next checkpoint
 
-Implement the small gateway process around the already closed protocol and
-synthetic provider adapters, still admitting synthetic data only. Package
-rendering and runtime readiness must then bind actual identities, unit and
-artifact digests, filesystem state, namespace membership, and provider health
-before private input is considered.
+The fail-closed gateway process scaffold and its synthetic-only Linux evidence
+are now documented in `PHASE_4_GATEWAY_PROCESS.md`. Next, define the closed
+production profile registry and deterministic provider-unit rendering. Runtime
+readiness must then bind actual identities, unit and artifact digests,
+filesystem state, namespace membership, and provider health before private input
+is considered.

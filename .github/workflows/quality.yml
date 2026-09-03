@@ -66,3 +66,15 @@ jobs:
 
       - name: Test Rust
         run: cargo test --all-targets
+
+      - name: Verify release gateway remains fail closed
+        run: |
+          cargo build --release --package blossom-model-gateway
+          set +e
+          target/release/blossom-model-gateway
+          default_status=$?
+          target/release/blossom-model-gateway --synthetic-fixture
+          fixture_status=$?
+          set -e
+          test "$default_status" -eq 78
+          test "$fixture_status" -eq 64

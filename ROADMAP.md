@@ -160,6 +160,9 @@ private inputs remain blocked pending an accepted endpoint-identity ADR.
   - [x] Define the inactive package boundary for persistent non-login identities,
     fixed paths, private namespace anchor, gateway unit, and closed CPU-provider
     unit templates, with repository drift checks and systemd verification.
+  - [x] Add the fail-closed gateway process scaffold and Linux separate-process
+    evidence for the one fixed synthetic request; release/default startup creates
+    no listener while the production registry and readiness proof are absent.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.
@@ -193,6 +196,9 @@ and synthetic filesystem evidence are documented in
 or service is installed, and private input remains blocked. The inactive
 sysusers and systemd template boundary is documented in
 `docs/PHASE_4_SYSTEMD_BOUNDARY.md`; it creates no accounts or runtime state.
+The synthetic-only process scaffold is documented in
+`docs/PHASE_4_GATEWAY_PROCESS.md`; its production entry point deliberately exits
+not-ready before opening a socket.
 
 ## Phase 5: Planning and verification
 
