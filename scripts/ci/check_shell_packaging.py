@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SHELL = ROOT / "system" / "shell"
 PACKAGE = SHELL / "packaging"
 LOCK = SHELL / "registry" / "arch-x86_64.lock.json"
-EVIDENCE_LOCK = SHELL / "evidence" / "weston-arch-x86_64.lock.json"
+EVIDENCE_LOCK = SHELL / "evidence" / "parent-compositors-arch-x86_64.lock.json"
 BUS_NAME = "org.blossomos.Shell1"
 BINARY = "/usr/lib/blossom-os/blossom-shell-service"
 UNIT = "blossom-shell-service.service"
@@ -43,14 +43,19 @@ def check_lock() -> None:
 def check_evidence_lock() -> None:
     require(EVIDENCE_LOCK.is_file() and not EVIDENCE_LOCK.is_symlink(), "missing regular evidence lock")
     data = json.loads(EVIDENCE_LOCK.read_text())
-    require(set(data) == {"schema_version", "purpose", "architecture", "name", "version", "source", "size", "sha256"}, "evidence lock schema drift")
+    require(set(data) == {"schema_version", "purpose", "architecture", "packages"}, "evidence lock schema drift")
     require(data["schema_version"] == 1, "evidence lock version drift")
-    require(data["purpose"] == "ci-parent-compositor-only", "evidence lock purpose drift")
+    require(data["purpose"] == "ci-parent-compositors-only", "evidence lock purpose drift")
     require(data["architecture"] == "x86_64", "unsupported evidence architecture")
-    require(data["name"] == "weston" and data["version"] == "11.0.1-1", "evidence parent pin drift")
-    require(data["source"] == "https://archive.archlinux.org/packages/w/weston/weston-11.0.1-1-x86_64.pkg.tar.zst", "evidence source drift")
-    require(data["size"] == 1222894, "evidence package size drift")
-    require(data["sha256"] == "ef2c2bb49389487fde286153ae775f7153661182ea3270ecd248d21202a61d9d", "evidence digest drift")
+    expected = {"cage": "0.3.1-1", "weston": "15.0.1-3"}
+    packages = data["packages"]
+    require(len(packages) == len(expected), "evidence parent set drift")
+    for item in packages:
+        require(set(item) == {"name", "version", "repository", "source"}, "evidence package schema drift")
+        name = item["name"]
+        require(name in expected and item["version"] == expected[name], "evidence parent pin drift")
+        require(item["repository"] == "extra", "evidence parent repository drift")
+        require(item["source"] == f"https://archlinux.org/packages/extra/x86_64/{name}/", "evidence source drift")
 
 
 def check_activation() -> None:

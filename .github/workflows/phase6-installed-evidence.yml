@@ -31,26 +31,22 @@ jobs:
           grep -qx 'ID=arch' /etc/os-release
           test "$(uname -m)" = x86_64
           pacman -Syu --noconfirm \
-            base-devel bubblewrap cmake dbus-broker hyprland jq mesa ninja \
+            base-devel bubblewrap cage cmake dbus-broker hyprland jq mesa ninja \
             python qt6-base qt6-declarative quickshell rust weston
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Pin the evidence-only parent compositor
+      - name: Require the evidence-only parent compositor versions
         run: |
-          lock=system/shell/evidence/weston-arch-x86_64.lock.json
-          weston_url=$(jq -r .source "$lock")
-          weston_package="$RUNNER_TEMP/weston.pkg.tar.zst"
-          curl --fail --silent --show-error --location \
-            "$weston_url" --output "$weston_package"
-          curl --fail --silent --show-error --location \
-            "$weston_url.sig" --output "$weston_package.sig"
-          printf '%s  %s\n' "$(jq -r .sha256 "$lock")" "$weston_package" \
-            | sha256sum --check --strict
-          test "$(stat --format=%s "$weston_package")" = "$(jq -r .size "$lock")"
-          pacman -U --noconfirm "$weston_package"
-          test "$(pacman -Q weston | cut -d ' ' -f 2)" = "$(jq -r .version "$lock")"
+          lock=system/shell/evidence/parent-compositors-arch-x86_64.lock.json
+          for package in cage weston; do
+            expected=$(jq -r --arg package "$package" \
+              '.packages[] | select(.name == $package) | .version' "$lock")
+            actual=$(pacman -Q "$package" | cut -d ' ' -f 2)
+            test -n "$expected"
+            test "$actual" = "$expected"
+          done
 
       - name: Require the reviewed package versions
         run: |
@@ -118,17 +114,20 @@ jobs:
             XDG_RUNTIME_DIR=/run/user/1000 \
             dbus-run-session -- bash -eo pipefail -c '
               LIBGL_ALWAYS_SOFTWARE=1 weston \
-                --backend=headless-backend.so --use-gl \
+                --backend=headless-backend.so --renderer=gl \
                 --socket=wayland-parent \
                 --idle-time=0 --log="$XDG_RUNTIME_DIR/weston.log" &
               weston_pid=$!
-              hyprland_pid=""
+              cage_pid=""
               cleanup() {
                 status=$?
-                kill $weston_pid $hyprland_pid 2>/dev/null || true
+                kill $weston_pid $cage_pid 2>/dev/null || true
                 if test "$status" -ne 0; then
                   echo "::group::Weston log"
                   cat "$XDG_RUNTIME_DIR/weston.log" 2>/dev/null || true
+                  echo "::endgroup::"
+                  echo "::group::Cage and nested Hyprland log"
+                  cat "$XDG_RUNTIME_DIR/cage.log" 2>/dev/null || true
                   echo "::endgroup::"
                   echo "::group::Hyprland launcher log"
                   cat "$XDG_RUNTIME_DIR/hyprland.log" 2>/dev/null || true
@@ -147,12 +146,13 @@ jobs:
                 sleep 0.1
               done
               test -S "$XDG_RUNTIME_DIR/wayland-parent"
-              LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY=wayland-parent Hyprland \
-                --config "'$RUNNER_TEMP'/hyprland.conf" >"$XDG_RUNTIME_DIR/hyprland.log" 2>&1 &
-              hyprland_pid=$!
+              LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY=wayland-parent cage -D -- \
+                Hyprland --config "'$RUNNER_TEMP'/hyprland.conf" \
+                >"$XDG_RUNTIME_DIR/cage.log" 2>&1 &
+              cage_pid=$!
               for attempt in $(seq 1 200); do
                 if pgrep -u "$(id -u)" -x quickshell >/dev/null; then break; fi
-                kill -0 "$hyprland_pid"
+                kill -0 "$cage_pid"
                 sleep 0.1
               done
               pgrep -u "$(id -u)" -x quickshell >/dev/null
