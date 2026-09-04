@@ -164,12 +164,22 @@ jobs:
         run: |
           socket=/run/blossom-model-gateway/inference.sock
           drop_in=/run/systemd/system/blossom-model-gateway.service.d
+          wrapper=/run/blossom-model-gateway-stale-wrapper
           sudo systemctl stop blossom-model-gateway.service
           test ! -e "$socket"
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'set -eu' \
+            'install -m 0660 /dev/null /run/blossom-model-gateway/inference.sock' \
+            'exec /usr/lib/blossom-os/blossom-model-gateway' \
+            | sudo tee "$wrapper" >/dev/null
+          sudo chown root:root "$wrapper"
+          sudo chmod 0755 "$wrapper"
           sudo install -d -o root -g root -m 0755 "$drop_in"
           printf '%s\n' \
             '[Service]' \
-            'ExecStartPre=/usr/bin/install -m 0660 /dev/null /run/blossom-model-gateway/inference.sock' \
+            'ExecStart=' \
+            'ExecStart=/bin/sh /run/blossom-model-gateway-stale-wrapper' \
             | sudo tee "$drop_in/stale-socket.conf" >/dev/null
           sudo systemctl daemon-reload
           if sudo systemctl start blossom-model-gateway.service; then
