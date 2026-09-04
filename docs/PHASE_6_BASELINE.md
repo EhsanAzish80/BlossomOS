@@ -34,6 +34,8 @@ file access, privileged operation, or graphical implementation.
    activity projection now exposes only correlated lifecycle categories. Real
    transport remains pending.
 3. Prove hostile-client, replay, expiry, disconnect, and service-loss behavior.
+   A Linux-only same-UID session D-Bus adapter is now implemented behind an
+   inactive production feature; private-bus integration evidence remains.
 4. Add a minimal Quickshell approval and activity surface for the fixed slice.
 5. Package the pinned Hyprland, Quickshell, D-Bus, and Blossom service boundary.
 6. Produce installed Arch userspace evidence and an independent exit audit.

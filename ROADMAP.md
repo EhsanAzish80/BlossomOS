@@ -318,7 +318,9 @@ currently implemented.
   token custody, execution, verification, or audit authority into QML. The
   connection-bound pending state and fixed-diagnostic engine bridge are
   implemented with a bounded redacted projection of authoritative audit stages.
-  The service process and real transport remain pending.
+  A Linux-only session D-Bus service adapter now exists behind an inactive
+  production feature; this item remains open until private-bus and installed
+  evidence pass.
 - [ ] Prove hostile same-user caller, replay, mutation, expiry, disconnect,
   restart, cancellation, schema, and service-loss behavior fails closed.
 - [ ] Establish the pinned Arch + Hyprland + Quickshell development and package

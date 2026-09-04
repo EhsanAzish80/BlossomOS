@@ -4,6 +4,7 @@ use crate::{
     ShellPeerId, ShellSessionApprovals, ShellSessionError, ToolRequest,
 };
 use crate::{Capability, CompletionOutcome};
+use serde::Serialize;
 use std::fmt;
 
 pub const SHELL_APPROVAL_TTL_MS: u64 = 30_000;
@@ -185,7 +186,8 @@ fn completion_outcome(completion: CompletionOutcome) -> ShellServiceOutcome {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "status", content = "preview", rename_all = "snake_case")]
 pub enum ShellServiceOutcome {
     AwaitingApproval(Box<ShellApprovalPreview>),
     Denied,

@@ -4,6 +4,7 @@ members = [
     "apps/blossom-cli",
     "system/model-gateway",
     "system/privileged-helper",
+    "system/shell-service",
 ]
 resolver = "3"
 
