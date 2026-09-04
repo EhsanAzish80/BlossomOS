@@ -66,3 +66,6 @@ compatibility, packaging, or contributor obligations.
 - Boot-scoped gateway operational audit: accepted in ADR-0018. It fixes the
   bounded, synced, hash-chained, content-free production evidence journal and
   makes audit availability a prerequisite for successful private inference.
+- Pinned offline Ollama package and active profile selection: accepted in
+  ADR-0019. It fixes an x86-64 CPU-only Ollama/runtime/store package and replaces
+  caller selection with exactly one root-owned canonical active profile.
