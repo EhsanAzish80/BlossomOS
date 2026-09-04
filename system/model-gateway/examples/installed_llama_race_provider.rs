@@ -64,7 +64,7 @@ fn serve(mode: &str) -> Result<(), String> {
         "headers" => {
             std::thread::sleep(Duration::from_secs(5));
         }
-        "completion" => {
+        "completion" | "terminal-write" => {
             let delta = format!(
                 "data: {{\"id\":\"installed-race\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"{MODEL}\",\"choices\":[{{\"index\":0,\"delta\":{{\"role\":\"assistant\",\"content\":\"x\"}},\"finish_reason\":null}}]}}\n\n"
             );
@@ -81,7 +81,7 @@ fn serve(mode: &str) -> Result<(), String> {
             std::thread::sleep(Duration::from_secs(5));
             let _ = stream.write_all(terminal.as_bytes());
         }
-        _ => return Err("expected headers or completion".into()),
+        _ => return Err("expected headers, completion, or terminal-write".into()),
     }
     Ok(())
 }
@@ -89,7 +89,7 @@ fn serve(mode: &str) -> Result<(), String> {
 fn main() {
     let result = std::env::args()
         .nth(1)
-        .ok_or_else(|| "expected headers or completion".into())
+        .ok_or_else(|| "expected headers, completion, or terminal-write".into())
         .and_then(|mode: String| serve(&mode));
     if let Err(error) = result {
         eprintln!("installed race fixture failed: {error}");

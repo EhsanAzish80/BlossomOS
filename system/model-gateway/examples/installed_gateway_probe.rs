@@ -10,6 +10,7 @@ use blossom_core::{
 use blossom_model_gateway::PRODUCTION_SOCKET_PATH;
 use std::collections::VecDeque;
 use std::io::{Read, Write};
+use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
@@ -268,6 +269,59 @@ fn cancel(point: CancelPoint) -> Result<(), String> {
     Err("request ended without cancellation".into())
 }
 
+fn refuse_terminal_write() -> Result<(), String> {
+    let mut stream = UnixStream::connect(PRODUCTION_SOCKET_PATH).map_err(|_| "connect failed")?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(15)))
+        .map_err(|_| "timeout setup failed")?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(2)))
+        .map_err(|_| "timeout setup failed")?;
+    let mut reader = Reader::new();
+    let hello = reader.read_one(&mut stream)?;
+    decode_gateway_hello(&hello, GatewayProfile::LlamaCppCpuV1).map_err(|_| "invalid hello")?;
+    let request_id = InferenceRequestId::parse("installed-terminal-write-refusal".into())
+        .map_err(|_| "request id rejected")?;
+    let messages = [ConversationMessage::new(
+        ConversationRole::User,
+        "Write the numbers from one to one hundred, one per line.".into(),
+    )
+    .map_err(|_| "message rejected")?];
+    let request = encode_gateway_private_request(
+        &request_id,
+        &messages,
+        &TurnIntentCatalogue::empty(),
+        InferenceOutputMode::Text,
+        25_000,
+    )
+    .map_err(|_| "request encoding failed")?;
+    stream
+        .write_all(&request)
+        .map_err(|_| "request write failed")?;
+
+    let mut validator = GatewayEventValidator::new(&request_id);
+    loop {
+        let event =
+            decode_gateway_event(&reader.read_one(&mut stream)?).map_err(|_| "invalid event")?;
+        validator.accept(&event).map_err(|_| "invalid sequence")?;
+        match event.event {
+            NormalizedStreamKind::TextDelta { .. } => break,
+            NormalizedStreamKind::Finished { .. } => {
+                return Err("terminal arrived before refusal point".into());
+            }
+            NormalizedStreamKind::Failed { .. } | NormalizedStreamKind::Cancelled => {
+                return Err("request ended before refusal point".into());
+            }
+            _ => {}
+        }
+    }
+    stream
+        .shutdown(Shutdown::Read)
+        .map_err(|_| "read shutdown failed")?;
+    std::thread::sleep(Duration::from_secs(7));
+    Ok(())
+}
+
 fn main() {
     let result = match std::env::args().nth(1).as_deref() {
         Some("expect-rejected") => expect_rejected(),
@@ -276,8 +330,9 @@ fn main() {
         Some("cancel") => cancel(CancelPoint::Immediate),
         Some("cancel-delayed") => cancel(CancelPoint::Delayed),
         Some("cancel-after-delta") => cancel(CancelPoint::FirstDelta),
+        Some("refuse-terminal-write") => refuse_terminal_write(),
         _ => Err(
-            "expected expect-rejected, exhaust-audit, infer, cancel, cancel-delayed, or cancel-after-delta"
+            "expected expect-rejected, exhaust-audit, infer, cancel, cancel-delayed, cancel-after-delta, or refuse-terminal-write"
                 .into(),
         ),
     };
