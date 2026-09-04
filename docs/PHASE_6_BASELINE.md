@@ -25,7 +25,9 @@ file access, privileged operation, or graphical implementation.
 
 ## Implementation order after ADR acceptance
 
-1. Freeze the versioned session IPC schema and test bindings.
+1. Freeze the versioned session IPC schema and test bindings. The first closed
+   Rust schema is implemented on the Phase 6 IPC branch; D-Bus transport and
+   installed evidence remain pending.
 2. Implement the unprivileged Rust session service over the existing engine.
 3. Prove hostile-client, replay, expiry, disconnect, and service-loss behavior.
 4. Add a minimal Quickshell approval and activity surface for the fixed slice.

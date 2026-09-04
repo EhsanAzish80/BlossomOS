@@ -15,6 +15,7 @@ pub mod process_list;
 pub mod process_self;
 pub mod request;
 pub mod service_status;
+pub mod shell_ipc;
 pub mod storage_summary;
 pub mod uptime;
 pub mod verification;
@@ -94,6 +95,12 @@ pub use service_status::{
     SYSTEMD_MANAGER_INTERFACE, SYSTEMD_MANAGER_PATH, SYSTEMD_UNIT_INTERFACE, ServiceSelection,
     ServiceStatus, ServiceStatusError, ServiceStatusProvider, SystemdServiceStatusProvider,
     UnavailableServiceStatusProvider, validate_service_status, validate_service_unit,
+};
+pub use shell_ipc::{
+    MAX_ACTIVITY_BATCH, MAX_SHELL_MESSAGE_BYTES, SHELL_BUS_NAME, SHELL_INTERFACE,
+    SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellActivityCategory, ShellActivityKind,
+    ShellActivityProjection, ShellApprovalPreview, ShellClientRequest, ShellDecision,
+    ShellProtocolError, decode_shell_client_request,
 };
 pub use storage_summary::{
     ROOT_FILESYSTEM_PATH, RootStorageReader, StorageSummary, StorageSummaryError,
