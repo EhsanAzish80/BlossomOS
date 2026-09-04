@@ -798,21 +798,7 @@ fn metadata_inode(_: &Metadata) -> u64 {
 
 #[cfg(target_os = "linux")]
 fn open_beneath_root(path: &Path) -> Result<File, RuntimeReadinessError> {
-    use nix::fcntl::{OFlag, OpenHow, ResolveFlag, openat2};
-    let relative = path
-        .strip_prefix("/")
-        .map_err(|_| RuntimeReadinessError::InvalidPath)?;
-    let root = File::open("/").map_err(|_| RuntimeReadinessError::OpenFailed)?;
-    let how = OpenHow::new()
-        .flags(OFlag::O_RDONLY | OFlag::O_CLOEXEC | OFlag::O_NOFOLLOW)
-        .resolve(
-            ResolveFlag::RESOLVE_BENEATH
-                | ResolveFlag::RESOLVE_NO_MAGICLINKS
-                | ResolveFlag::RESOLVE_NO_SYMLINKS,
-        );
-    openat2(root, relative, how)
-        .map(File::from)
-        .map_err(|_| RuntimeReadinessError::OpenFailed)
+    super::open_absolute_file_no_symlinks(path).map_err(|_| RuntimeReadinessError::OpenFailed)
 }
 
 #[cfg(all(unix, not(target_os = "linux")))]

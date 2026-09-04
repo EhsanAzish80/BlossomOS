@@ -97,7 +97,6 @@ def check_namespace_and_gateway() -> None:
         "ProtectProc=invisible",
         "ProcSubset=all",
         "RestrictAddressFamilies=AF_UNIX AF_INET",
-        "SystemCallFilter=@system-service openat2",
         "IPAddressAllow=localhost",
         "Restart=no",
     ]:

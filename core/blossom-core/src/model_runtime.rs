@@ -9,6 +9,10 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::fmt;
+#[cfg(target_os = "linux")]
+use std::fs::File;
+#[cfg(target_os = "linux")]
+use std::path::{Component, Path};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -21,6 +25,36 @@ mod llama_cpp;
 mod ollama;
 mod provider_profile;
 mod runtime_readiness;
+
+#[cfg(target_os = "linux")]
+fn open_absolute_file_no_symlinks(path: &Path) -> Result<File, nix::errno::Errno> {
+    use nix::fcntl::{OFlag, openat};
+    use nix::sys::stat::Mode;
+
+    let mut directory = File::open("/")
+        .map_err(|error| nix::errno::Errno::from_raw(error.raw_os_error().unwrap_or(libc::EIO)))?;
+    let mut components = path.components().peekable();
+    if components.next() != Some(Component::RootDir) {
+        return Err(nix::errno::Errno::EINVAL);
+    }
+    while let Some(component) = components.next() {
+        let Component::Normal(name) = component else {
+            return Err(nix::errno::Errno::EINVAL);
+        };
+        let final_component = components.peek().is_none();
+        let flags = if final_component {
+            OFlag::O_RDONLY | OFlag::O_CLOEXEC | OFlag::O_NOFOLLOW
+        } else {
+            OFlag::O_RDONLY | OFlag::O_CLOEXEC | OFlag::O_NOFOLLOW | OFlag::O_DIRECTORY
+        };
+        let descriptor = openat(&directory, name, flags, Mode::empty())?;
+        if final_component {
+            return Ok(File::from(descriptor));
+        }
+        directory = File::from(descriptor);
+    }
+    Err(nix::errno::Errno::EINVAL)
+}
 
 pub use gateway::{
     GATEWAY_PROTOCOL_VERSION, GatewayEventValidator, GatewayFrame, GatewayFrameDecoder,
@@ -1020,5 +1054,29 @@ mod tests {
             serde_json::to_string(&ModelIntentKind::ProcessList.definition()).unwrap(),
             r#"{"name":"process.list","description":"Propose reading a bounded process list.","parameters":{"type":"object","properties":{},"additionalProperties":false}}"#
         );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn descriptor_walk_opens_regular_files_and_rejects_intermediate_symlinks() {
+        use std::os::unix::fs::symlink;
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(1);
+        let root = std::env::temp_dir().join(format!(
+            "blossom-model-path-walk-{}-{}",
+            std::process::id(),
+            NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed)
+        ));
+        let real = root.join("real");
+        std::fs::create_dir_all(&real).unwrap();
+        std::fs::write(real.join("manifest.json"), b"fixture").unwrap();
+        symlink(&real, root.join("alias")).unwrap();
+
+        let opened = open_absolute_file_no_symlinks(&real.join("manifest.json")).unwrap();
+        assert_eq!(opened.metadata().unwrap().len(), 7);
+        assert!(open_absolute_file_no_symlinks(&root.join("alias/manifest.json")).is_err());
+
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
