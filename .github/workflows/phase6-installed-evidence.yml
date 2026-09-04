@@ -55,6 +55,8 @@ jobs:
           runuser -u blossom-ci -- env HOME=/home/blossom-ci \
             cargo build --locked --release --package blossom-shell-service \
             --features production-dbus-service
+          install -d -o blossom-ci -g blossom-ci -m 0755 \
+            "$RUNNER_TEMP/blossom-shell-client-build"
           runuser -u blossom-ci -- env HOME=/home/blossom-ci \
             cmake -S system/shell/client-plugin \
             -B "$RUNNER_TEMP/blossom-shell-client-build" -G Ninja
