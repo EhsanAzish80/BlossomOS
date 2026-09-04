@@ -202,6 +202,25 @@ jobs:
           sudo grep -Eq '"outcome":"provider_failed"' \
             /run/blossom-model-gateway/audit/audit.jsonl
 
+      - name: Verify audit capacity fails the gateway closed
+        run: |
+          target/release/examples/installed_gateway_probe exhaust-audit
+          for attempt in $(seq 1 30); do
+            systemctl is-failed --quiet blossom-model-gateway.service && break
+            sleep 1
+          done
+          systemctl is-failed --quiet blossom-model-gateway.service
+          systemctl is-active --quiet blossom-model-netns.service
+          test ! -e /run/blossom-model-gateway/inference.sock
+          audit=/run/blossom-model-gateway/audit/audit.jsonl
+          test "$(sudo wc -l "$audit" | awk '{print $1}')" -ge 1000
+          test "$(sudo stat -c %s "$audit")" -le 1048576
+          if sudo grep -Eq \
+            'Reply with one short greeting|Write the numbers from one to one hundred|blossom-evidence|blossom-ai|reasoning_text|tool_arguments|/home/' \
+            "$audit"; then
+            exit 1
+          fi
+
       - name: Verify orderly cleanup and stale socket refusal
         run: |
           socket=/run/blossom-model-gateway/inference.sock

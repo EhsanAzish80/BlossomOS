@@ -65,6 +65,29 @@ fn expect_rejected() -> Result<(), String> {
     }
 }
 
+fn exhaust_audit() -> Result<(), String> {
+    const MIN_REJECTIONS: usize = 1_000;
+    const MAX_REJECTIONS: usize = 5_000;
+
+    for completed in 0..MAX_REJECTIONS {
+        let mut stream = match UnixStream::connect(PRODUCTION_SOCKET_PATH) {
+            Ok(stream) => stream,
+            Err(_) if completed >= MIN_REJECTIONS => return Ok(()),
+            Err(_) => return Err("gateway stopped before capacity evidence".into()),
+        };
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .map_err(|_| "timeout setup failed")?;
+        let mut byte = [0_u8; 1];
+        match stream.read(&mut byte) {
+            Ok(0) => {}
+            Ok(_) => return Err("rejected client received gateway bytes".into()),
+            Err(_) => return Err("rejection was not observable".into()),
+        }
+    }
+    Err("gateway exceeded the closed audit capacity".into())
+}
+
 fn infer() -> Result<(), String> {
     let mut stream = UnixStream::connect(PRODUCTION_SOCKET_PATH).map_err(|_| "connect failed")?;
     stream
@@ -196,9 +219,10 @@ fn cancel() -> Result<(), String> {
 fn main() {
     let result = match std::env::args().nth(1).as_deref() {
         Some("expect-rejected") => expect_rejected(),
+        Some("exhaust-audit") => exhaust_audit(),
         Some("infer") => infer(),
         Some("cancel") => cancel(),
-        _ => Err("expected expect-rejected, infer, or cancel".into()),
+        _ => Err("expected expect-rejected, exhaust-audit, infer, or cancel".into()),
     };
     if let Err(error) = result {
         eprintln!("installed gateway probe failed: {error}");
