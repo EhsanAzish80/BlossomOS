@@ -67,19 +67,35 @@ fn expect_rejected() -> Result<(), String> {
 
 fn exhaust_audit() -> Result<(), String> {
     const MAX_REJECTIONS: usize = 5_000;
+    const STOPPED_RETRIES: usize = 100;
 
-    for completed in 0..MAX_REJECTIONS {
+    let mut completed = 0_usize;
+    let mut unavailable = 0_usize;
+    while completed < MAX_REJECTIONS {
         let mut stream = match UnixStream::connect(PRODUCTION_SOCKET_PATH) {
-            Ok(stream) => stream,
-            Err(_) if completed > 0 => return Ok(()),
-            Err(_) => return Err("gateway was unavailable before exhaustion".into()),
+            Ok(stream) => {
+                unavailable = 0;
+                stream
+            }
+            Err(_) => {
+                unavailable += 1;
+                if unavailable == STOPPED_RETRIES {
+                    return if completed > 0 {
+                        Ok(())
+                    } else {
+                        Err("gateway was unavailable before exhaustion".into())
+                    };
+                }
+                std::thread::sleep(Duration::from_millis(10));
+                continue;
+            }
         };
         stream
             .set_read_timeout(Some(Duration::from_secs(2)))
             .map_err(|_| "timeout setup failed")?;
         let mut byte = [0_u8; 1];
         match stream.read(&mut byte) {
-            Ok(0) => {}
+            Ok(0) => completed += 1,
             Ok(_) => return Err("rejected client received gateway bytes".into()),
             Err(_) => return Err("rejection was not observable".into()),
         }
