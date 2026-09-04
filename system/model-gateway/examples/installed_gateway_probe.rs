@@ -4,7 +4,8 @@ use blossom_core::{
     ConversationMessage, ConversationRole, GatewayEventValidator, GatewayFrame,
     GatewayFrameDecoder, GatewayProfile, InferenceOutputMode, InferenceRequestId,
     NormalizedCompletion, NormalizedStreamKind, ProviderFailureCategory, TurnIntentCatalogue,
-    decode_gateway_event, decode_gateway_hello, encode_gateway_private_request,
+    decode_gateway_event, decode_gateway_hello, encode_gateway_cancel,
+    encode_gateway_private_request,
 };
 use blossom_model_gateway::PRODUCTION_SOCKET_PATH;
 use std::collections::VecDeque;
@@ -131,11 +132,73 @@ fn infer() -> Result<(), String> {
     }
 }
 
+fn cancel() -> Result<(), String> {
+    let mut stream = UnixStream::connect(PRODUCTION_SOCKET_PATH).map_err(|_| "connect failed")?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .map_err(|_| "timeout setup failed")?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(2)))
+        .map_err(|_| "timeout setup failed")?;
+    let mut reader = Reader::new();
+    let hello = reader.read_one(&mut stream)?;
+    decode_gateway_hello(&hello, GatewayProfile::LlamaCppCpuV1).map_err(|_| "invalid hello")?;
+    let request_id = InferenceRequestId::parse("installed-cancel-1".into())
+        .map_err(|_| "request id rejected")?;
+    let messages = [ConversationMessage::new(
+        ConversationRole::User,
+        "Write the numbers from one to one hundred, one per line.".into(),
+    )
+    .map_err(|_| "message rejected")?];
+    let request = encode_gateway_private_request(
+        &request_id,
+        &messages,
+        &TurnIntentCatalogue::empty(),
+        InferenceOutputMode::Text,
+        25_000,
+    )
+    .map_err(|_| "request encoding failed")?;
+    stream
+        .write_all(&request)
+        .map_err(|_| "request write failed")?;
+
+    let mut validator = GatewayEventValidator::new(&request_id);
+    let started =
+        decode_gateway_event(&reader.read_one(&mut stream)?).map_err(|_| "invalid event")?;
+    validator.accept(&started).map_err(|_| "invalid sequence")?;
+    if !matches!(started.event, NormalizedStreamKind::Started) {
+        return Err("request did not start before cancellation".into());
+    }
+
+    let cancellation = encode_gateway_cancel(&request_id).map_err(|_| "cancel encoding failed")?;
+    stream
+        .write_all(&cancellation)
+        .map_err(|_| "cancel write failed")?;
+
+    while !validator.is_terminal() {
+        let event =
+            decode_gateway_event(&reader.read_one(&mut stream)?).map_err(|_| "invalid event")?;
+        validator.accept(&event).map_err(|_| "invalid sequence")?;
+        match event.event {
+            NormalizedStreamKind::Cancelled => return Ok(()),
+            NormalizedStreamKind::Finished { .. } => {
+                return Err("request completed after cancellation".into());
+            }
+            NormalizedStreamKind::Failed { .. } => {
+                return Err("request failed instead of cancelling".into());
+            }
+            _ => {}
+        }
+    }
+    Err("request ended without cancellation".into())
+}
+
 fn main() {
     let result = match std::env::args().nth(1).as_deref() {
         Some("expect-rejected") => expect_rejected(),
         Some("infer") => infer(),
-        _ => Err("expected expect-rejected or infer".into()),
+        Some("cancel") => cancel(),
+        _ => Err("expected expect-rejected, infer, or cancel".into()),
     };
     if let Err(error) = result {
         eprintln!("installed gateway probe failed: {error}");
