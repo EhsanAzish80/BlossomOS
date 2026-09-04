@@ -68,8 +68,9 @@ pub use model_runtime::{
 pub use model_runtime::{SyntheticProviderPackage, fixed_synthetic_provider_package};
 pub use orchestration::{
     MAX_PLAN_STEPS, OrchestrationError, OrchestrationEvent, PlanError, PlanId, PlanOrchestrator,
-    PlanOutcome, ProposedPlanStep, StateError, StepId, StepLifecycle, StepPhase,
-    StepTerminalOutcome, SummaryError, TruthfulPlanSummary, TypedRequestEngine, ValidatedPlan,
+    PlanOutcome, ProposedPlanStep, RecoveryDisposition, RetryDisposition, RollbackDisposition,
+    StateError, StepId, StepLifecycle, StepPhase, StepTerminalOutcome, SummaryError,
+    TruthfulPlanReport, TruthfulPlanSummary, TruthfulStepReport, TypedRequestEngine, ValidatedPlan,
     ValidatedPlanStep,
 };
 pub use os_identity::{

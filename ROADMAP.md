@@ -270,8 +270,9 @@ than as current unresolved-gate statements.
 
 ## Phase 5: Planning and verification
 
-Status: active. Implementation begins with an accepted ADR defining the closed
-orchestration state machine and truthful terminal outcomes.
+Status: complete. ADR-0020 defines the closed orchestration state machine and
+truthful terminal outcomes; `docs/PHASE_5_EXIT_AUDIT.md` records the evidence
+and explicit recovery/cancellation limits.
 
 - [x] Accept ADR-0020 for the closed plan schema, monotonic state machine,
   per-step authority checks, cancellation, partial/indeterminate outcomes,
@@ -282,17 +283,24 @@ orchestration state machine and truthful terminal outcomes.
   the engine's hash-chained, content-redacted audit log.
 - [x] Translate only normalized, per-turn-eligible Phase 4 native-read intents
   into conservatively chained typed steps with runtime-derived identifiers.
-- [ ] Integrate intent, per-step policy, approval, execution, verification, and
+- [x] Integrate intent, per-step policy, approval, execution, verification, and
   truthful-summary states over existing typed operations.
-- [ ] Handle dependency blocking, partial completion, rollback opportunities,
+- [x] Handle dependency blocking, partial completion, rollback opportunities,
   cancellation, retry representation, and recovery limits.
-- [ ] Treat model, tool, and retrieved content as untrusted across adversarial
+- [x] Treat model, tool, and retrieved content as untrusted across adversarial
   end-to-end orchestration tests and record the exit audit.
 
 Protected checkpoints: `docs/PHASE_5_PLAN_CORE.md` and
 `docs/PHASE_5_TYPED_ORCHESTRATOR.md`, plus
 `docs/PHASE_5_ORCHESTRATION_AUDIT.md` and
-`docs/PHASE_5_INTENT_PLAN_BRIDGE.md`.
+`docs/PHASE_5_INTENT_PLAN_BRIDGE.md`. Truthful reporting and the final decision
+are recorded in `docs/PHASE_5_TRUTHFUL_REPORT.md` and
+`docs/PHASE_5_EXIT_AUDIT.md`.
+
+Exit satisfied: a plan reaches `completed` only when every required step has a
+code-owned successful verification. Dispatch, exit status, provider output, or
+tool return alone cannot produce success. Partial and indeterminate effects,
+retry/rollback limits, and unsupported durable recovery remain explicit.
 
 Exit: Blossom never reports success solely because a command was issued.
 
