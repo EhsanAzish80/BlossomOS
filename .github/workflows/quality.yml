@@ -45,6 +45,7 @@ jobs:
         run: |
           python3 scripts/ci/check_model_runtime_packaging.py
           python3 scripts/package_llama_cpp_runtime.py --verify-lock
+          python3 scripts/package_ollama_runtime.py --verify-lock
           sudo install -d -m 0755 \
             /usr/lib/blossom-os/providers/ollama \
             /usr/lib/blossom-os/providers/llama-cpp \
@@ -59,7 +60,7 @@ jobs:
           install -d -m 0755 "$fixture_units"
           install -m 0644 system/model-runtime/packaging/blossom-model-netns.service "$fixture_units"
           sed \
-            -e 's|@PROFILE_PATH@|/etc/blossom-os/model-profiles/llama-cpp-cpu-x86_64.json|g' \
+            -e 's|@PROFILE_ROOT@|/etc/blossom-os/model-profiles|g' \
             -e 's|@PROVIDER_DIRECTORY@|/usr/lib/blossom-os/providers/llama-cpp|g' \
             -e 's|@MODEL_PATH@|/usr/lib/blossom-os/models/llama-cpp/evidence.gguf|g' \
             system/model-runtime/packaging/blossom-model-gateway.service.in \

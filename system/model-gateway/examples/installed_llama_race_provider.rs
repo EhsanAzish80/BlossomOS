@@ -6,6 +6,7 @@ use std::time::Duration;
 
 const MAX_REQUEST_BYTES: usize = 128 * 1024;
 const MODEL: &str = "qwen2.5-0.5b-instruct:q4_k_m";
+const OLLAMA_MODEL: &str = "qwen2.5:0.5b-instruct-q4_K_M";
 
 fn read_request(stream: &mut TcpStream) -> Result<(), String> {
     stream
@@ -55,9 +56,14 @@ fn read_request(stream: &mut TcpStream) -> Result<(), String> {
     Ok(())
 }
 
-fn serve(mode: &str) -> Result<(), String> {
+fn serve(mode: &str, provider: &str) -> Result<(), String> {
+    let port = match provider {
+        "llama-cpp" => 8080,
+        "ollama" => 11434,
+        _ => return Err("unknown provider profile".into()),
+    };
     let listener =
-        TcpListener::bind((Ipv4Addr::LOCALHOST, 8080)).map_err(|_| "fixture bind failed")?;
+        TcpListener::bind((Ipv4Addr::LOCALHOST, port)).map_err(|_| "fixture bind failed")?;
     let (mut stream, _) = listener.accept().map_err(|_| "fixture accept failed")?;
     read_request(&mut stream)?;
     match mode {
@@ -65,16 +71,31 @@ fn serve(mode: &str) -> Result<(), String> {
             std::thread::sleep(Duration::from_secs(5));
         }
         "completion" | "terminal-write" => {
-            let delta = format!(
-                "data: {{\"id\":\"installed-race\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"{MODEL}\",\"choices\":[{{\"index\":0,\"delta\":{{\"role\":\"assistant\",\"content\":\"x\"}},\"finish_reason\":null}}]}}\n\n"
-            );
-            let terminal = format!(
-                "data: {{\"id\":\"installed-race\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"{MODEL}\",\"choices\":[{{\"index\":0,\"delta\":{{}},\"finish_reason\":\"stop\"}}]}}\n\ndata: [DONE]\n\n"
-            );
+            let (content_type, delta, terminal) = if provider == "ollama" {
+                (
+                    "application/x-ndjson",
+                    format!(
+                        "{{\"model\":\"{OLLAMA_MODEL}\",\"created_at\":\"2026-09-04T00:00:00Z\",\"message\":{{\"role\":\"assistant\",\"content\":\"x\"}},\"done\":false}}\n"
+                    ),
+                    format!(
+                        "{{\"model\":\"{OLLAMA_MODEL}\",\"created_at\":\"2026-09-04T00:00:01Z\",\"message\":{{\"role\":\"assistant\",\"content\":\"\"}},\"done\":true,\"done_reason\":\"stop\"}}\n"
+                    ),
+                )
+            } else {
+                (
+                    "text/event-stream",
+                    format!(
+                        "data: {{\"id\":\"installed-race\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"{MODEL}\",\"choices\":[{{\"index\":0,\"delta\":{{\"role\":\"assistant\",\"content\":\"x\"}},\"finish_reason\":null}}]}}\n\n"
+                    ),
+                    format!(
+                        "data: {{\"id\":\"installed-race\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"{MODEL}\",\"choices\":[{{\"index\":0,\"delta\":{{}},\"finish_reason\":\"stop\"}}]}}\n\ndata: [DONE]\n\n"
+                    ),
+                )
+            };
             let length = delta.len() + terminal.len();
             write!(
                 stream,
-                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n{delta}"
+                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n{delta}"
             )
             .map_err(|_| "fixture response write failed")?;
             stream.flush().map_err(|_| "fixture flush failed")?;
@@ -87,10 +108,13 @@ fn serve(mode: &str) -> Result<(), String> {
 }
 
 fn main() {
-    let result = std::env::args()
-        .nth(1)
+    let mode = std::env::args().nth(1);
+    let provider = std::env::args()
+        .nth(2)
+        .unwrap_or_else(|| "llama-cpp".into());
+    let result = mode
         .ok_or_else(|| "expected headers, completion, or terminal-write".into())
-        .and_then(|mode: String| serve(&mode));
+        .and_then(|mode| serve(&mode, &provider));
     if let Err(error) = result {
         eprintln!("installed race fixture failed: {error}");
         std::process::exit(1);

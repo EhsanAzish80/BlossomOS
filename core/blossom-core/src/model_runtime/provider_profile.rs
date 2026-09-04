@@ -142,6 +142,14 @@ impl ProviderProfileSpec {
 }
 
 impl ProviderProfileManifest {
+    pub fn profile(&self) -> GatewayProfile {
+        self.profile
+    }
+
+    pub fn provider(&self) -> ModelProviderKind {
+        self.provider.clone()
+    }
+
     /// Return the validated, code-owned logical model identity carried by this
     /// closed profile. This is never sourced from a gateway client.
     pub fn logical_model(&self) -> &str {
@@ -161,11 +169,17 @@ pub fn production_provider_profile(
     const LLAMA_CPP_X86_64: &[u8] = include_bytes!(
         "../../../../system/model-runtime/registry/llama-cpp-cpu-x86_64.profile.json"
     );
+    const OLLAMA_X86_64: &[u8] =
+        include_bytes!("../../../../system/model-runtime/registry/ollama-cpu-x86_64.profile.json");
     match profile {
-        GatewayProfile::LlamaCppCpuV1 if cfg!(target_arch = "x86_64") => {
-            let bytes = LLAMA_CPP_X86_64
-                .strip_suffix(b"\n")
-                .unwrap_or(LLAMA_CPP_X86_64);
+        GatewayProfile::LlamaCppCpuV1 | GatewayProfile::OllamaCpuV1
+            if cfg!(target_arch = "x86_64") =>
+        {
+            let embedded = match profile {
+                GatewayProfile::LlamaCppCpuV1 => LLAMA_CPP_X86_64,
+                GatewayProfile::OllamaCpuV1 => OLLAMA_X86_64,
+            };
+            let bytes = embedded.strip_suffix(b"\n").unwrap_or(embedded);
             ProviderProfileSpec::from_embedded(bytes).map(Some)
         }
         GatewayProfile::LlamaCppCpuV1 | GatewayProfile::OllamaCpuV1 => Ok(None),
@@ -227,7 +241,17 @@ pub fn fixed_synthetic_provider_package(
                 "/usr/lib/blossom-os/providers/ollama/ollama".into(),
                 "serve".into(),
             ],
-            environment_names: vec!["HOME".into(), "OLLAMA_HOST".into(), "OLLAMA_MODELS".into()],
+            environment_names: vec![
+                "HOME".into(),
+                "OLLAMA_HOST".into(),
+                "OLLAMA_LLM_LIBRARY".into(),
+                "OLLAMA_MAX_LOADED_MODELS".into(),
+                "OLLAMA_MAX_QUEUE".into(),
+                "OLLAMA_MODELS".into(),
+                "OLLAMA_NOPRUNE".into(),
+                "OLLAMA_NO_CLOUD".into(),
+                "OLLAMA_NUM_PARALLEL".into(),
+            ],
             endpoint: OLLAMA_ENDPOINT,
             inference_path: "/api/chat",
             provider_unit: "blossom-model-ollama.service",
@@ -675,7 +699,19 @@ fn validate_environment(names: &[String]) -> Result<(), ProviderProfileError> {
     for name in names {
         if !matches!(
             name.as_str(),
-            "HOME" | "LANG" | "LC_ALL" | "OLLAMA_HOST" | "OLLAMA_MODELS" | "OMP_NUM_THREADS" | "TZ"
+            "HOME"
+                | "LANG"
+                | "LC_ALL"
+                | "OLLAMA_HOST"
+                | "OLLAMA_LLM_LIBRARY"
+                | "OLLAMA_MAX_LOADED_MODELS"
+                | "OLLAMA_MAX_QUEUE"
+                | "OLLAMA_MODELS"
+                | "OLLAMA_NO_CLOUD"
+                | "OLLAMA_NOPRUNE"
+                | "OLLAMA_NUM_PARALLEL"
+                | "OMP_NUM_THREADS"
+                | "TZ"
         ) || name.is_empty()
             || name.len() > 128
             || !name
@@ -1355,23 +1391,14 @@ mod tests {
 
     #[test]
     fn production_registry_has_no_fallback_profile() {
-        assert!(
-            production_provider_profile(GatewayProfile::OllamaCpuV1)
-                .unwrap()
-                .is_none()
-        );
         #[cfg(target_arch = "x86_64")]
-        assert!(
-            production_provider_profile(GatewayProfile::LlamaCppCpuV1)
-                .unwrap()
-                .is_some()
-        );
+        for profile in [GatewayProfile::LlamaCppCpuV1, GatewayProfile::OllamaCpuV1] {
+            assert!(production_provider_profile(profile).unwrap().is_some());
+        }
         #[cfg(not(target_arch = "x86_64"))]
-        assert!(
-            production_provider_profile(GatewayProfile::LlamaCppCpuV1)
-                .unwrap()
-                .is_none()
-        );
+        for profile in [GatewayProfile::LlamaCppCpuV1, GatewayProfile::OllamaCpuV1] {
+            assert!(production_provider_profile(profile).unwrap().is_none());
+        }
     }
 
     #[test]
