@@ -79,6 +79,9 @@ jobs:
           sudo install -d -o root -g root -m 0755 /opt/blossom-phase4-private
           sudo install -o root -g root -m 0644 /dev/null \
             /opt/blossom-phase4-private/host-only
+          sudo install -D -o root -g root -m 0755 \
+            target/release/examples/installed_llama_race_provider \
+            /usr/local/libexec/blossom-installed-llama-race-provider
           sudo systemctl daemon-reload
 
       - name: Start the installed distinct-identity services
@@ -183,7 +186,7 @@ jobs:
             blossom-model-gateway.service)
           provider_uid=$(id -u blossom-model-provider)
           provider_gid=$(id -g blossom-model-provider)
-          fixture=$GITHUB_WORKSPACE/target/release/examples/installed_llama_race_provider
+          fixture=/usr/local/libexec/blossom-installed-llama-race-provider
           sudo systemctl stop blossom-model-llama-cpp.service
 
           sudo nsenter --target "$gateway_pid" --net \
