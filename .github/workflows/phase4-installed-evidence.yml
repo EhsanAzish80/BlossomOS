@@ -198,7 +198,7 @@ jobs:
             iptables --wait -D OUTPUT -p tcp --dport 8080 -j DROP
           trap - EXIT
 
-          for mode in headers completion; do
+          for mode in headers completion terminal-write; do
             sudo nsenter --target "$gateway_pid" --net \
               --setgid "$provider_gid" --setuid "$provider_uid" \
               "$fixture" "$mode" &
@@ -214,12 +214,22 @@ jobs:
               ss -ltn 'sport = :8080' | grep -q 8080
             if test "$mode" = headers; then
               probe=cancel-delayed
-            else
+            elif test "$mode" = completion; then
               probe=cancel-after-delta
+            else
+              probe=refuse-terminal-write
+              completed_before=$(sudo grep -c '"outcome":"completed_text"' \
+                /run/blossom-model-gateway/audit/audit.jsonl)
             fi
             sudo -u blossom-evidence-allowed \
               target/release/examples/installed_gateway_probe "$probe"
             wait "$fixture_pid"
+            if test "$mode" = terminal-write; then
+              completed_after=$(sudo grep -c '"outcome":"completed_text"' \
+                /run/blossom-model-gateway/audit/audit.jsonl)
+              test "$completed_after" -gt "$completed_before"
+              systemctl is-active --quiet blossom-model-gateway.service
+            fi
           done
 
           sudo systemctl start blossom-model-llama-cpp.service
@@ -236,6 +246,8 @@ jobs:
           sudo nsenter --target "$provider_pid" --net \
             curl --silent --fail --max-time 1 \
             http://127.0.0.1:8080/health >/dev/null
+          sudo -u blossom-evidence-allowed \
+            target/release/examples/installed_gateway_probe infer
 
       - name: Verify audit isolation and redaction
         run: |
