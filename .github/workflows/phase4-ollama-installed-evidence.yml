@@ -210,12 +210,35 @@ jobs:
 
       - name: Verify orderly cleanup and stale socket refusal
         run: |
+          socket=/run/blossom-model-gateway/inference.sock
+          drop_in=/run/systemd/system/blossom-model-gateway.service.d
+          wrapper=/run/blossom-model-gateway-stale-wrapper
           sudo systemctl stop blossom-model-gateway.service
-          test ! -e /run/blossom-model-gateway/inference.sock
-          sudo install -m 0600 /dev/null /run/blossom-model-gateway/inference.sock
-          if sudo systemctl start blossom-model-gateway.service; then exit 1; fi
+          test ! -e "$socket"
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'set -eu' \
+            'install -m 0660 /dev/null /run/blossom-model-gateway/inference.sock' \
+            'exec /usr/lib/blossom-os/blossom-model-gateway' \
+            | sudo tee "$wrapper" >/dev/null
+          sudo chown root:root "$wrapper"
+          sudo chmod 0755 "$wrapper"
+          sudo install -d -o root -g root -m 0755 "$drop_in"
+          printf '%s\n' \
+            '[Service]' \
+            'ExecStart=' \
+            'ExecStart=/bin/sh /run/blossom-model-gateway-stale-wrapper' \
+            | sudo tee "$drop_in/stale-socket.conf" >/dev/null
+          sudo systemctl daemon-reload
+          sudo systemctl start blossom-model-gateway.service
+          for attempt in $(seq 1 50); do
+            systemctl is-failed --quiet blossom-model-gateway.service && break
+            sleep 0.1
+          done
           systemctl is-failed --quiet blossom-model-gateway.service
-          sudo test -f /run/blossom-model-gateway/inference.sock
+          test "$(systemctl show --property Result --value blossom-model-gateway.service)" = exit-code
+          test "$(systemctl show --property ExecMainStatus --value blossom-model-gateway.service)" -ne 0
+          test ! -S "$socket"
 
       - name: Capture content-free failure diagnostics
         if: failure()
