@@ -19,8 +19,8 @@ non-success.
 
 The workflow intentionally does not run for every pull request because the
 pinned model is approximately 491 MB. Run
-[`33853095060`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33853095060)
-passed on 2026-09-04 for merged commit `ed0d8c1`. It verified the installed
+[`33857138139`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33857138139)
+passed on 2026-09-04 for merged commit `17481c3`. It verified the installed
 llama.cpp boundary end to end: package assembly and installation, distinct
 service identities, socket metadata and admission denial, a shared private
 network namespace with external-network denial, selected resource limits, real
@@ -32,11 +32,15 @@ configuration, process and cross-service paths in their actual mount
 namespaces, and their code-owned binary/model mounts were read-only. The run
 also verified orderly socket cleanup followed by application-level refusal of a
 stale regular file injected immediately before the packaged gateway executable
-in the same service sandbox.
+in the same service sandbox. From a fresh one-record journal, at least 1,000
+gateway-level root rejections then exhausted the closed audit capacity within a
+5,000-attempt bound. The gateway failed with `Restart=no`, removed its socket
+and non-preserved boot-scoped journal, and left the provider and namespace
+services active.
 
 This run covers the pinned x86-64 llama.cpp profile only. It does not provide a
 pinned Ollama package or installed Ollama evidence, and it does not yet cover
-connect/header/completion cancellation races or audit-capacity faults required
+connect/header/completion cancellation races or terminal-write faults required
 by ADR-0017/0018.
 
 Failure diagnostics expose only systemd state/result categories; the workflow
