@@ -1,0 +1,39 @@
+[Unit]
+Description=Blossom OS unprivileged shell broker
+Documentation=https://github.com/EhsanAzish80/BlossomOS
+After=dbus.service
+Requires=dbus.service
+
+[Service]
+Type=dbus
+BusName=org.blossomos.Shell1
+ExecStart=/usr/lib/blossom-os/blossom-shell-service
+Restart=no
+TimeoutStartSec=15s
+TimeoutStopSec=5s
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+TasksMax=64
+MemoryMax=256M
+IPAddressDeny=any
+
+# Deliberately no enablement section: Phase 6 evidence activates this unit only
+# inside a disposable user session.

@@ -73,6 +73,13 @@ jobs:
             "$fixture_units"/blossom-model-ollama.service \
             "$fixture_units"/blossom-model-llama-cpp.service
 
+      - name: Validate inactive shell packaging boundary
+        run: |
+          python3 scripts/ci/check_shell_packaging.py
+          sudo install -d -m 0755 /usr/lib/blossom-os
+          sudo install -m 0755 /bin/true /usr/lib/blossom-os/blossom-shell-service
+          systemd-analyze --user verify system/shell/packaging/blossom-shell-service.service
+
       - name: Run prototype smoke tests
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
 

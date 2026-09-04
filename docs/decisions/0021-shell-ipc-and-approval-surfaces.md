@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-09-04
 - Accepted: 2026-09-04 after project-owner review of the Phase 6 boundary
+- Compatibility pin accepted: 2026-09-04 after project-owner review
 - Owners: Project maintainers
 
 ## Context
@@ -118,6 +119,13 @@ Phase 6 pins supported Hyprland and Quickshell interfaces before compatibility
 claims. Other hosts may use protocol fixtures, but exit evidence must use pinned
 Arch userspace with real Hyprland, Quickshell, session D-Bus, and packaged
 Blossom services. This is not hardware, installer, ArchISO, or release proof.
+
+The first reviewed x86-64 compatibility set is Hyprland `0.56.2-2` and
+Quickshell `0.3.1-1` from Arch `extra`, with systemd `261.2-1` and dbus-broker
+`37-3` from Arch `core`. These are exact evidence inputs rather than version
+ranges or permanent support promises. Updating any pin requires explicit
+review and fresh installed evidence; testing repositories, AUR builds, and
+moving source branches are not accepted substitutes.
 
 ### First vertical slice and non-goals
 

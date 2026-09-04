@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.blossomos.Shell1
+Exec=/usr/lib/blossom-os/blossom-shell-service
+SystemdService=blossom-shell-service.service

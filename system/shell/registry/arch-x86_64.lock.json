@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-09-04",
+  "architecture": "x86_64",
+  "packages": [
+    {"name":"hyprland","version":"0.56.2-2","repository":"extra","source":"https://archlinux.org/packages/extra/x86_64/hyprland/"},
+    {"name":"quickshell","version":"0.3.1-1","repository":"extra","source":"https://archlinux.org/packages/extra/x86_64/quickshell/"},
+    {"name":"systemd","version":"261.2-1","repository":"core","source":"https://archlinux.org/packages/core/x86_64/systemd/"},
+    {"name":"dbus-broker","version":"37-3","repository":"core","source":"https://archlinux.org/packages/core/x86_64/dbus-broker/"}
+  ]
+}
