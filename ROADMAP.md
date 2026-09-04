@@ -306,10 +306,10 @@ Exit: Blossom never reports success solely because a command was issued.
 
 ## Phase 6: Blossom Shell
 
-Status: active at the architecture-review stage. ADR-0021 is proposed, not yet
-accepted, and no graphical shell or IPC service is currently implemented.
+Status: active. ADR-0021 is accepted; no graphical shell or IPC service is
+currently implemented.
 
-- [ ] Review and accept the shell IPC and approval-surface ADR.
+- [x] Review and accept the shell IPC and approval-surface ADR.
 - [ ] Freeze a closed, authenticated, versioned, size-bounded session IPC
   schema for only the existing fixed diagnostic slice.
 - [ ] Implement the unprivileged session service without moving authorization,

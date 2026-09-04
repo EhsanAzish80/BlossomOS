@@ -1,7 +1,8 @@
 # ADR-0021: Shell IPC and approval surfaces
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-04
+- Accepted: 2026-09-04 after project-owner review of the Phase 6 boundary
 - Owners: Project maintainers
 
 ## Context

@@ -1,9 +1,10 @@
 # Phase 6 Blossom Shell baseline
 
-Status: active design work. No Phase 6 shell or IPC implementation is claimed.
+Status: active. ADR-0021 is accepted; no Phase 6 shell or IPC implementation is
+claimed yet.
 
-Phase 6 begins from the completed Phase 5 orchestration boundary. Proposed
-ADR-0021 defines the shell as an untrusted presentation client and proposes a
+Phase 6 begins from the completed Phase 5 orchestration boundary. Accepted
+ADR-0021 defines the shell as an untrusted presentation client and selects a
 narrow per-user D-Bus interface, service-authored approval ceremony, and
 truthful activity projection.
 

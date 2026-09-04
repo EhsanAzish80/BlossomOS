@@ -35,11 +35,11 @@ compatibility, packaging, or contributor obligations.
 - First privileged operation: ADR-0010 permits only an approval-gated
   `TryRestartUnit` for the fixed already-running `bluetooth.service`; its Phase
   3 implementation and independent exit review are complete.
-- Shell IPC and approval surfaces: proposed in ADR-0021 for Phase 6 review.
+- Shell IPC and approval surfaces: accepted in ADR-0021 for Phase 6.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and
-  evidence requirements proposed in ADR-0021; exact pinned versions remain an
+  evidence requirements accepted in ADR-0021; exact pinned versions remain an
   implementation checkpoint.
 - Model-provider protocol and offline guarantees.
 - Provider-neutral local model runtime: accepted in ADR-0011, including fixed
@@ -75,6 +75,6 @@ compatibility, packaging, or contributor obligations.
   plan schema and monotonic state machine, per-step policy/approval boundary,
   cancellation and partial/indeterminate results, non-automatic recovery and
   rollback rules, and authoritative summaries derived only from verification.
-- Shell IPC and approval surfaces: proposed in ADR-0021. It treats the shell as
+- Shell IPC and approval surfaces: accepted in ADR-0021. It treats the shell as
   an untrusted presentation client and limits the first graphical slice to the
   existing fixed diagnostic, exact approval, and truthful activity display.
