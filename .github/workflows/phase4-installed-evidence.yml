@@ -91,7 +91,7 @@ jobs:
           sudo nsenter --target "$provider_pid" --net \
             curl --silent --fail --max-time 1 \
             http://127.0.0.1:8080/health >/dev/null
-          sudo systemctl start blossom-model-gateway.service
+          sudo systemctl start blossom-model-gateway.service || true
           systemctl is-active --quiet blossom-model-netns.service
           systemctl is-active --quiet blossom-model-llama-cpp.service
           systemctl is-active --quiet blossom-model-gateway.service
@@ -182,9 +182,12 @@ jobs:
             'ExecStart=/bin/sh /run/blossom-model-gateway-stale-wrapper' \
             | sudo tee "$drop_in/stale-socket.conf" >/dev/null
           sudo systemctl daemon-reload
-          if sudo systemctl start blossom-model-gateway.service; then
-            exit 1
-          fi
+          sudo systemctl start blossom-model-gateway.service
+          for attempt in $(seq 1 50); do
+            systemctl is-failed --quiet blossom-model-gateway.service && break
+            sleep 0.1
+          done
+          systemctl is-failed --quiet blossom-model-gateway.service
           test "$(systemctl show --property Result --value \
             blossom-model-gateway.service)" = exit-code
           test "$(systemctl show --property ExecMainStatus --value \
