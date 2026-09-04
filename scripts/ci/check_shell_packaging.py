@@ -47,10 +47,10 @@ def check_evidence_lock() -> None:
     require(data["schema_version"] == 1, "evidence lock version drift")
     require(data["purpose"] == "ci-parent-compositor-only", "evidence lock purpose drift")
     require(data["architecture"] == "x86_64", "unsupported evidence architecture")
-    require(data["name"] == "weston" and data["version"] == "12.0.2-1", "evidence parent pin drift")
-    require(data["source"] == "https://archive.archlinux.org/packages/w/weston/weston-12.0.2-1-x86_64.pkg.tar.zst", "evidence source drift")
-    require(data["size"] == 1340384, "evidence package size drift")
-    require(data["sha256"] == "e8268fcd189af40158be6d23a0e090cacf5a88c9fb1c324e22f9799279b58636", "evidence digest drift")
+    require(data["name"] == "weston" and data["version"] == "11.0.1-1", "evidence parent pin drift")
+    require(data["source"] == "https://archive.archlinux.org/packages/w/weston/weston-11.0.1-1-x86_64.pkg.tar.zst", "evidence source drift")
+    require(data["size"] == 1222894, "evidence package size drift")
+    require(data["sha256"] == "ef2c2bb49389487fde286153ae775f7153661182ea3270ecd248d21202a61d9d", "evidence digest drift")
 
 
 def check_activation() -> None:
