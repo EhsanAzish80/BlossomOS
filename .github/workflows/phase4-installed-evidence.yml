@@ -72,6 +72,11 @@ jobs:
           sudo useradd --system --no-create-home --shell /usr/sbin/nologin \
             blossom-evidence-unlisted
           sudo usermod --append --groups blossom-ai blossom-evidence-allowed
+          sudo install -o root -g root -m 0644 /dev/null \
+            /home/blossom-phase4-private
+          sudo install -d -o root -g root -m 0755 /opt/blossom-phase4-private
+          sudo install -o root -g root -m 0644 /dev/null \
+            /opt/blossom-phase4-private/host-only
           sudo systemctl daemon-reload
 
       - name: Start the installed distinct-identity services
@@ -123,6 +128,37 @@ jobs:
           test "$(systemctl show --property TasksMax --value blossom-model-llama-cpp.service)" = 64
           sudo nsenter --target "$provider_pid" --net \
             sh -c '! curl --fail --max-time 3 https://example.com/'
+
+      - name: Verify installed filesystem denials
+        run: |
+          gateway_pid=$(systemctl show --property MainPID --value \
+            blossom-model-gateway.service)
+          provider_pid=$(systemctl show --property MainPID --value \
+            blossom-model-llama-cpp.service)
+          gateway_uid=$(id -u blossom-model-gateway)
+          gateway_gid=$(id -g blossom-model-gateway)
+          provider_uid=$(id -u blossom-model-provider)
+          provider_gid=$(id -g blossom-model-provider)
+          for path in /home/blossom-phase4-private \
+            /opt/blossom-phase4-private/host-only /etc/shadow /proc/1/cmdline; do
+            sudo nsenter --target "$gateway_pid" --mount \
+              --setgid "$gateway_gid" --setuid "$gateway_uid" \
+              /usr/bin/test ! -e "$path"
+          done
+          for path in /home/blossom-phase4-private \
+            /opt/blossom-phase4-private/host-only /etc/passwd /proc/1/cmdline \
+            /usr/lib/blossom-os/blossom-model-gateway; do
+            sudo nsenter --target "$provider_pid" --mount \
+              --setgid "$provider_gid" --setuid "$provider_uid" \
+              /usr/bin/test ! -e "$path"
+          done
+          sudo nsenter --target "$gateway_pid" --mount \
+            findmnt -n -o OPTIONS -T /usr/lib/blossom-os/blossom-model-gateway \
+            | grep -Eq '(^|,)ro(,|$)'
+          sudo nsenter --target "$provider_pid" --mount \
+            findmnt -n -o OPTIONS -T \
+              /usr/lib/blossom-os/models/llama-cpp/qwen2.5-0.5b-instruct-q4_k_m.gguf \
+            | grep -Eq '(^|,)ro(,|$)'
 
       - name: Verify admission and real offline inference
         run: |
