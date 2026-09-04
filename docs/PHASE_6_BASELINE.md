@@ -48,6 +48,11 @@ file access, privileged operation, or graphical implementation.
    and starts nothing after session-bus loss. Graphical close and focus-loss
    behavior remains part of the UI checkpoint.
 4. Add a minimal Quickshell approval and activity surface for the fixed slice.
+   The required narrow native Qt/QML transport plugin is implemented and built
+   in CI. It compiles in only the four fixed service calls and five UI-facing
+   operations; it has no generic D-Bus, process, file, network, policy, token,
+   execution, or audit authority. The actual QML surface and pinned-runtime
+   evidence remain pending.
 5. Package the pinned Hyprland, Quickshell, D-Bus, and Blossom service boundary.
    The first stable Arch x86-64 compatibility set is fixed to Hyprland
    `0.56.2-2`, Quickshell `0.3.1-1`, systemd `261.2-1`, and dbus-broker `37-3`.

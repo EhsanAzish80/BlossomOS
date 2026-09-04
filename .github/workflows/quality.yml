@@ -26,7 +26,13 @@ jobs:
       - name: Install system test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes bubblewrap dbus-daemon shellcheck
+          sudo apt-get install --yes \
+            bubblewrap \
+            dbus-daemon \
+            ninja-build \
+            qt6-base-dev \
+            qt6-declarative-dev \
+            shellcheck
 
       - name: Enable unprivileged user namespaces for Bubblewrap integration test
         run: sudo sysctl kernel.apparmor_restrict_unprivileged_userns=0
@@ -79,6 +85,12 @@ jobs:
           sudo install -d -m 0755 /usr/lib/blossom-os
           sudo install -m 0755 /bin/true /usr/lib/blossom-os/blossom-shell-service
           systemd-analyze --user verify system/shell/packaging/blossom-shell-service.service
+
+      - name: Build narrow QML client plugin
+        run: |
+          python3 scripts/ci/check_shell_client_plugin.py
+          cmake -S system/shell/client-plugin -B /tmp/blossom-shell-client-build -G Ninja
+          cmake --build /tmp/blossom-shell-client-build
 
       - name: Run prototype smoke tests
         run: python3 -m unittest discover -s tests -p 'test_*.py' -v
