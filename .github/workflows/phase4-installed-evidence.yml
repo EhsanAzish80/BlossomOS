@@ -32,6 +32,8 @@ jobs:
             --features production-private-inference
           cargo build --locked --release --package blossom-model-gateway \
             --example installed_gateway_probe
+          cargo build --locked --release --package blossom-model-gateway \
+            --example installed_llama_race_provider
 
       - name: Fetch immutable package inputs
         env:
@@ -174,6 +176,63 @@ jobs:
         run: |
           sudo -u blossom-evidence-allowed \
             target/release/examples/installed_gateway_probe cancel
+
+      - name: Verify cancellation across provider races
+        run: |
+          gateway_pid=$(systemctl show --property MainPID --value \
+            blossom-model-gateway.service)
+          provider_uid=$(id -u blossom-model-provider)
+          provider_gid=$(id -g blossom-model-provider)
+          fixture=$GITHUB_WORKSPACE/target/release/examples/installed_llama_race_provider
+          sudo systemctl stop blossom-model-llama-cpp.service
+
+          sudo nsenter --target "$gateway_pid" --net \
+            iptables --wait -I OUTPUT 1 -p tcp --dport 8080 -j DROP
+          trap 'sudo nsenter --target "$gateway_pid" --net iptables --wait -D OUTPUT -p tcp --dport 8080 -j DROP || true' EXIT
+          sudo -u blossom-evidence-allowed \
+            target/release/examples/installed_gateway_probe cancel-delayed
+          sudo nsenter --target "$gateway_pid" --net \
+            iptables --wait -D OUTPUT -p tcp --dport 8080 -j DROP
+          trap - EXIT
+
+          for mode in headers completion; do
+            sudo nsenter --target "$gateway_pid" --net \
+              --setgid "$provider_gid" --setuid "$provider_uid" \
+              "$fixture" "$mode" &
+            fixture_pid=$!
+            for attempt in $(seq 1 50); do
+              if sudo nsenter --target "$gateway_pid" --net \
+                ss -ltn 'sport = :8080' | grep -q 8080; then
+                break
+              fi
+              sleep 0.1
+            done
+            sudo nsenter --target "$gateway_pid" --net \
+              ss -ltn 'sport = :8080' | grep -q 8080
+            if test "$mode" = headers; then
+              probe=cancel-delayed
+            else
+              probe=cancel-after-delta
+            fi
+            sudo -u blossom-evidence-allowed \
+              target/release/examples/installed_gateway_probe "$probe"
+            wait "$fixture_pid"
+          done
+
+          sudo systemctl start blossom-model-llama-cpp.service
+          provider_pid=$(systemctl show --property MainPID --value \
+            blossom-model-llama-cpp.service)
+          for attempt in $(seq 1 120); do
+            if sudo nsenter --target "$provider_pid" --net \
+              curl --silent --fail --max-time 1 \
+              http://127.0.0.1:8080/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          sudo nsenter --target "$provider_pid" --net \
+            curl --silent --fail --max-time 1 \
+            http://127.0.0.1:8080/health >/dev/null
 
       - name: Verify audit isolation and redaction
         run: |

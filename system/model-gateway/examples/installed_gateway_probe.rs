@@ -171,7 +171,13 @@ fn infer() -> Result<(), String> {
     }
 }
 
-fn cancel() -> Result<(), String> {
+enum CancelPoint {
+    Immediate,
+    Delayed,
+    FirstDelta,
+}
+
+fn cancel(point: CancelPoint) -> Result<(), String> {
     let mut stream = UnixStream::connect(PRODUCTION_SOCKET_PATH).map_err(|_| "connect failed")?;
     stream
         .set_read_timeout(Some(Duration::from_secs(30)))
@@ -182,8 +188,15 @@ fn cancel() -> Result<(), String> {
     let mut reader = Reader::new();
     let hello = reader.read_one(&mut stream)?;
     decode_gateway_hello(&hello, GatewayProfile::LlamaCppCpuV1).map_err(|_| "invalid hello")?;
-    let request_id = InferenceRequestId::parse("installed-cancel-1".into())
-        .map_err(|_| "request id rejected")?;
+    let request_id = InferenceRequestId::parse(
+        match point {
+            CancelPoint::Immediate => "installed-cancel-immediate",
+            CancelPoint::Delayed => "installed-cancel-delayed",
+            CancelPoint::FirstDelta => "installed-cancel-after-delta",
+        }
+        .into(),
+    )
+    .map_err(|_| "request id rejected")?;
     let messages = [ConversationMessage::new(
         ConversationRole::User,
         "Write the numbers from one to one hundred, one per line.".into(),
@@ -207,6 +220,29 @@ fn cancel() -> Result<(), String> {
     validator.accept(&started).map_err(|_| "invalid sequence")?;
     if !matches!(started.event, NormalizedStreamKind::Started) {
         return Err("request did not start before cancellation".into());
+    }
+
+    match point {
+        CancelPoint::Immediate => {}
+        CancelPoint::Delayed => std::thread::sleep(Duration::from_millis(250)),
+        CancelPoint::FirstDelta => loop {
+            let event = decode_gateway_event(&reader.read_one(&mut stream)?)
+                .map_err(|_| "invalid event")?;
+            validator.accept(&event).map_err(|_| "invalid sequence")?;
+            match event.event {
+                NormalizedStreamKind::TextDelta { .. } => break,
+                NormalizedStreamKind::Finished { .. } => {
+                    return Err("request completed before cancellation point".into());
+                }
+                NormalizedStreamKind::Failed { .. } => {
+                    return Err("request failed before cancellation point".into());
+                }
+                NormalizedStreamKind::Cancelled => {
+                    return Err("request cancelled before cancellation point".into());
+                }
+                _ => {}
+            }
+        },
     }
 
     let cancellation = encode_gateway_cancel(&request_id).map_err(|_| "cancel encoding failed")?;
@@ -237,8 +273,13 @@ fn main() {
         Some("expect-rejected") => expect_rejected(),
         Some("exhaust-audit") => exhaust_audit(),
         Some("infer") => infer(),
-        Some("cancel") => cancel(),
-        _ => Err("expected expect-rejected, exhaust-audit, infer, or cancel".into()),
+        Some("cancel") => cancel(CancelPoint::Immediate),
+        Some("cancel-delayed") => cancel(CancelPoint::Delayed),
+        Some("cancel-after-delta") => cancel(CancelPoint::FirstDelta),
+        _ => Err(
+            "expected expect-rejected, exhaust-audit, infer, cancel, cancel-delayed, or cancel-after-delta"
+                .into(),
+        ),
     };
     if let Err(error) = result {
         eprintln!("installed gateway probe failed: {error}");
