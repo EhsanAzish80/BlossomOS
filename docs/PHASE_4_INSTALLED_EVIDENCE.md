@@ -19,8 +19,8 @@ non-success.
 
 The workflow intentionally does not run for every pull request because the
 pinned model is approximately 491 MB. The current authoritative run is
-[`33859738402`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33859738402),
-which passed on 2026-09-04 for merged commit `80a59d3`. It verified the installed
+[`33860951348`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33860951348),
+which passed on 2026-09-04 for merged commit `91830c3`. It verified the installed
 llama.cpp boundary end to end: package assembly and installation, distinct
 service identities, socket metadata and admission denial, a shared private
 network namespace with external-network denial, selected resource limits, real
@@ -46,10 +46,16 @@ request-bound cancellation produced `Cancelled`, never a successful completion
 or proposed tool intent. The fixture accepts only one bounded HTTP request on
 the fixed loopback endpoint, uses the pinned logical model identity, logs no
 request or response content, and runs only on the disposable evidence host.
+The client then retained its request half but refused further reads after a
+validated text delta. The provider completed after that refusal; the gateway
+synced the completed provider outcome before its terminal write failed, stayed
+active, and served a subsequent real inference successfully. This proves local
+terminal-write containment, not that a peer consumed any successfully written
+bytes.
 
 This run covers the pinned x86-64 llama.cpp profile only. It does not provide a
 pinned Ollama package or installed Ollama evidence, target-Arch evidence, or the
-terminal-write fault evidence still required by ADR-0018.
+equivalent provider-specific lifecycle evidence for Ollama.
 
 Failure diagnostics expose only systemd state/result categories; the workflow
 does not publish service journals, model output, prompts or raw gateway audit

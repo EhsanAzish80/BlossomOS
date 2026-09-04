@@ -40,9 +40,9 @@ controls from evidence that does not yet exist.
 - Inactive sysusers and hardened systemd templates pass repository drift checks
   and `systemd-analyze verify` in Linux CI.
 - Release/default gateway startup exits not-ready before creating a listener.
-- Merged commit `80a59d3` has passing disposable x86-64 Linux installed-system
+- Merged commit `91830c3` has passing disposable x86-64 Linux installed-system
   evidence in workflow run
-  [`33859738402`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33859738402).
+  [`33860951348`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33860951348).
   The pinned llama.cpp package passed installation, distinct service identity,
   private namespace and external-network denial, socket admission, real offline
   inference, installed filesystem denials and read-only package mounts, audit
@@ -50,7 +50,10 @@ controls from evidence that does not yet exist.
   non-success, audit-capacity fail-closed behavior, orderly socket cleanup and
   stale-path-refusal checks. A controlled, content-free provider fixture also
   proved cancellation during a stalled connect, withheld response headers, and
-  after a validated text delta but before completion.
+  after a validated text delta but before completion. It also proved that a
+  refused terminal write remains a per-connection failure: the provider outcome
+  was synced first, the gateway stayed active, and a later real inference
+  succeeded.
 
 ## Unsatisfied production gates
 
@@ -70,8 +73,8 @@ controls from evidence that does not yet exist.
   identity, external-network denial, socket ownership, peer authorization and
   provider-loss behavior, filesystem denials and selected lifecycle cases.
 - The installed journal passed ownership, access-denial, redaction and
-  audit-capacity fail-closed checks; terminal-write failure paths remain
-  unproved.
+  audit-capacity fail-closed checks, and the llama.cpp terminal-write refusal
+  path is contained without destabilizing later requests.
 - No pinned real Ollama package or installed Ollama inference evidence exists.
 
 ## Exit decision

@@ -228,12 +228,13 @@ cross-provider, target-Arch and remaining lifecycle evidence gates.
     private input by default.
     - [x] Add a manually dispatched, pinned-input installed-service harness and
       content-free gateway probe.
-    - [x] Record a successful llama.cpp run for merged commit `80a59d3`,
+    - [x] Record a successful llama.cpp run for merged commit `91830c3`,
       including filesystem denials, read-only package mounts, request-bound
       streaming cancellation, audit-capacity fail-closed behavior, orderly
       socket cleanup, stale-path refusal, and connect/header/completion
-      cancellation races.
-    - [ ] Close the remaining ADR-0018 terminal-write failure case.
+      cancellation races plus contained terminal-write refusal and recovery.
+    - [x] Close the ADR-0018 terminal-write failure case for the installed
+      llama.cpp path.
 - [x] Validate every model output and proposed tool intent against strict,
   code-owned schemas before it reaches the broker.
 - [ ] Produce controlled-protocol and real-model target-Linux evidence with
@@ -254,7 +255,7 @@ claim neither a production authenticated provider endpoint, private-input
 support, nor a real-model test. Controlled cross-provider gateway/adapter
 equivalence now exists, and the pinned llama.cpp path has offline real-model
 installed Ubuntu x86-64 evidence. Equivalent Ollama packaging/evidence,
-target-Arch evidence, and terminal-write failure evidence remain unresolved.
+and target-Arch evidence remain unresolved.
 The closed protocol and
 credential-primitives checkpoint is
 documented in `docs/PHASE_4_GATEWAY_PROTOCOL.md`; the synthetic process boundary
