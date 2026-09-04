@@ -69,3 +69,7 @@ compatibility, packaging, or contributor obligations.
 - Pinned offline Ollama package and active profile selection: accepted in
   ADR-0019. It fixes an x86-64 CPU-only Ollama/runtime/store package and replaces
   caller selection with exactly one root-owned canonical active profile.
+- Closed orchestration and truthful outcomes: accepted in ADR-0020. It fixes the
+  plan schema and monotonic state machine, per-step policy/approval boundary,
+  cancellation and partial/indeterminate results, non-automatic recovery and
+  rollback rules, and authoritative summaries derived only from verification.
