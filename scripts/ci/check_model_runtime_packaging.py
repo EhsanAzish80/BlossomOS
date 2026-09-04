@@ -130,6 +130,7 @@ def check_provider(name: str, kind: str) -> None:
         "@PROVIDER_BINARY@",
         "@PROVIDER_DIRECTORY@",
         "@MODEL_PATH@",
+        "@MODEL_ALIAS@",
         "@MODEL_DIRECTORY@",
         "@TASKS_MAX@",
         "@MEMORY_MAX@",

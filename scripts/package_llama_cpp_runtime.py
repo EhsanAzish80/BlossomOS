@@ -23,6 +23,7 @@ MODEL_PATH = PurePosixPath(
 PROFILE_PATH = PurePosixPath(
     "/etc/blossom-os/model-profiles/llama-cpp-cpu-x86_64.json"
 )
+LOGICAL_MODEL = "qwen2.5-0.5b-instruct:q4_k_m"
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 MAX_GATEWAY_BYTES = 64 * 1024 * 1024
 
@@ -127,6 +128,7 @@ def render_provider_unit() -> bytes:
         "@PROVIDER_BINARY@": str(RUNTIME_ROOT / "llama-server"),
         "@PROVIDER_DIRECTORY@": str(RUNTIME_ROOT),
         "@MODEL_PATH@": str(MODEL_PATH),
+        "@MODEL_ALIAS@": LOGICAL_MODEL,
         "@TASKS_MAX@": "64",
         "@MEMORY_MAX@": "4G",
         "@MEMORY_SWAP_MAX@": "0",
@@ -174,7 +176,7 @@ def registry_bytes(lock: dict) -> bytes:
         "profile_version": 5,
         "profile": "llama_cpp_cpu_v1",
         "provider": "llama_cpp",
-        "logical_model": "qwen2.5-0.5b-instruct:q4_k_m",
+        "logical_model": LOGICAL_MODEL,
         "gateway_protocol_version": 1,
         "model_protocol_version": 1,
         "binary": binary,
@@ -189,6 +191,8 @@ def registry_bytes(lock: dict) -> bytes:
             str(RUNTIME_ROOT / "llama-server"),
             "--model",
             str(MODEL_PATH),
+            "--alias",
+            LOGICAL_MODEL,
             "--no-webui",
         ],
         "environment_names": ["HOME"],
@@ -346,12 +350,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--verify-lock", action="store_true")
     parser.add_argument("--emit-registry", action="store_true")
+    parser.add_argument("--refresh-registry", action="store_true")
     parser.add_argument("--runtime-archive", type=Path)
     parser.add_argument("--model", type=Path)
     parser.add_argument("--model-license", type=Path)
     parser.add_argument("--gateway-binary", type=Path)
     parser.add_argument("--output", type=Path)
     arguments = parser.parse_args()
+    if sum((arguments.verify_lock, arguments.emit_registry, arguments.refresh_registry)) > 1:
+        fail("select exactly one registry operation")
     lock = load_lock()
     if arguments.verify_lock:
         if any([arguments.runtime_archive, arguments.model, arguments.model_license, arguments.gateway_binary, arguments.output]):
@@ -363,6 +370,11 @@ def main() -> None:
         if any([arguments.runtime_archive, arguments.model, arguments.model_license, arguments.gateway_binary, arguments.output]):
             fail("registry emission accepts no package paths")
         print(registry_bytes(lock).decode())
+        return
+    if arguments.refresh_registry:
+        if any([arguments.runtime_archive, arguments.model, arguments.model_license, arguments.gateway_binary, arguments.output]):
+            fail("registry refresh accepts no package paths")
+        REGISTRY_PATH.write_bytes(registry_bytes(lock) + b"\n")
         return
     if None in (
         arguments.runtime_archive,

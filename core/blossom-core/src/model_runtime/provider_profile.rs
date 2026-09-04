@@ -245,6 +245,8 @@ pub fn fixed_synthetic_provider_package(
                 "/usr/lib/blossom-os/providers/llama-cpp/llama-server".into(),
                 "--model".into(),
                 "/usr/lib/blossom-os/models/llama-cpp/evidence.gguf".into(),
+                "--alias".into(),
+                "fixture-model:1".into(),
                 "--no-webui".into(),
             ],
             environment_names: vec!["HOME".into()],
@@ -368,6 +370,9 @@ fn render_synthetic_unit(
             return Err(ProviderProfileError::InvalidManifest);
         }
         rendered = rendered.replace("@MODEL_DIRECTORY@", model_directory);
+    }
+    if rendered.contains("@MODEL_ALIAS@") {
+        rendered = rendered.replace("@MODEL_ALIAS@", "fixture-model:1");
     }
     if rendered.contains("@PROVIDER_")
         || rendered.contains("@MODEL_")
@@ -623,9 +628,14 @@ fn validate_arguments(manifest: &ProviderProfileManifest) -> Result<(), Provider
     }
     let provider_arguments_valid = match manifest.profile {
         GatewayProfile::OllamaCpuV1 => arguments.len() == 2 && arguments[1] == "serve",
-        GatewayProfile::LlamaCppCpuV1 => arguments
-            .iter()
-            .any(|argument| Path::new(argument) == manifest.model_mount),
+        GatewayProfile::LlamaCppCpuV1 => {
+            arguments.len() == 6
+                && arguments[1] == "--model"
+                && Path::new(&arguments[2]) == manifest.model_mount
+                && arguments[3] == "--alias"
+                && arguments[4] == manifest.logical_model
+                && arguments[5] == "--no-webui"
+        }
     };
     if Path::new(&arguments[0]) != manifest.binary.path || !provider_arguments_valid {
         return Err(ProviderProfileError::InvalidManifest);
@@ -970,6 +980,8 @@ mod tests {
                 "/usr/bin/llama-server".into(),
                 "--model".into(),
                 "/usr/lib/blossom/models/evidence.gguf".into(),
+                "--alias".into(),
+                "fixture-model:1".into(),
                 "--no-webui".into(),
             ],
             environment_names: vec!["LANG".into()],
@@ -1065,6 +1077,9 @@ mod tests {
         let mut argument = fixture();
         argument.executable_arguments.push("--port=9000".into());
         cases.push(argument);
+        let mut wrong_alias = fixture();
+        wrong_alias.executable_arguments[4] = "different-model:1".into();
+        cases.push(wrong_alias);
         let mut device = fixture();
         device.filesystem.devices.push("/dev/dri/renderD128".into());
         cases.push(device);
