@@ -306,10 +306,27 @@ Exit: Blossom never reports success solely because a command was issued.
 
 ## Phase 6: Blossom Shell
 
-- Establish Hyprland + Quickshell development environment.
-- Build agent panel, approval UI, activity history, launcher, notifications, and
-  system status incrementally.
-- Keep shell UI separate from authorization and execution services.
+Status: active. ADR-0021 is accepted; no graphical shell or IPC service is
+currently implemented.
+
+- [x] Review and accept the shell IPC and approval-surface ADR.
+- [ ] Freeze a closed, authenticated, versioned, size-bounded session IPC
+  schema for only the existing fixed diagnostic slice.
+- [ ] Implement the unprivileged session service without moving authorization,
+  token custody, execution, verification, or audit authority into QML.
+- [ ] Prove hostile same-user caller, replay, mutation, expiry, disconnect,
+  restart, cancellation, schema, and service-loss behavior fails closed.
+- [ ] Establish the pinned Arch + Hyprland + Quickshell development and package
+  boundary.
+- [ ] Build exact approval preview and readable correlated activity UI for the
+  fixed diagnostic.
+- [ ] Add launcher, notifications, system status, and agent surfaces only as
+  separately reviewed increments after the first slice preserves the boundary.
+- [ ] Produce installed target evidence and an independent Phase 6 exit audit.
+
+The active design baseline and exit evidence are tracked in
+`docs/PHASE_6_BASELINE.md`. Phase 6 adds no capability merely to make a UI
+demonstration work.
 
 Exit: the shell can operate the tested vertical slices without XFCE dependencies.
 

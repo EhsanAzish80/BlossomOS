@@ -171,8 +171,9 @@ builds. Phase 5 adds closed, bounded typed plans, per-step policy and approval,
 verification-derived outcomes, hash-chained plan activity, and deterministic
 truthful reports. Its model bridge accepts only the six existing argument-free
 native read proposals; model output still grants no authorization. Recovery is
-in-memory only, active synchronous steps are not interruptible mid-call, and
-Phase 6 has not begun. See
+in-memory only and active synchronous steps are not interruptible mid-call.
+Phase 6 is active under accepted ADR-0021, but no graphical shell or session IPC
+service is implemented yet. See
 `docs/PHASE_4_INSTALLED_EVIDENCE.md` and `docs/PHASE_5_EXIT_AUDIT.md`.
 
 Prototype commands in older documentation are historical development material,
