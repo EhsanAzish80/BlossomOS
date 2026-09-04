@@ -78,6 +78,19 @@ jobs:
         run: |
           sudo systemctl start blossom-model-netns.service
           sudo systemctl start blossom-model-llama-cpp.service
+          provider_pid=$(systemctl show --property MainPID --value \
+            blossom-model-llama-cpp.service)
+          for attempt in $(seq 1 120); do
+            if sudo nsenter --target "$provider_pid" --net \
+              curl --silent --fail --max-time 1 \
+              http://127.0.0.1:8080/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          sudo nsenter --target "$provider_pid" --net \
+            curl --silent --fail --max-time 1 \
+            http://127.0.0.1:8080/health >/dev/null
           sudo systemctl start blossom-model-gateway.service
           systemctl is-active --quiet blossom-model-netns.service
           systemctl is-active --quiet blossom-model-llama-cpp.service
