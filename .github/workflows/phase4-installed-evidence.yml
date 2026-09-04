@@ -170,6 +170,11 @@ jobs:
           sudo -u blossom-evidence-allowed \
             target/release/examples/installed_gateway_probe infer
 
+      - name: Verify request-bound streaming cancellation
+        run: |
+          sudo -u blossom-evidence-allowed \
+            target/release/examples/installed_gateway_probe cancel
+
       - name: Verify audit isolation and redaction
         run: |
           audit=/run/blossom-model-gateway/audit/audit.jsonl
@@ -180,8 +185,9 @@ jobs:
           sudo -u blossom-model-provider test ! -r "$audit"
           sudo grep -Eq '"kind":"request_terminal"' "$audit"
           sudo grep -Eq '"outcome":"completed_text"' "$audit"
+          sudo grep -Eq '"outcome":"cancelled"' "$audit"
           if sudo grep -Eq \
-            'Reply with one short greeting|blossom-evidence|blossom-ai|reasoning_text|tool_arguments|/home/' \
+            'Reply with one short greeting|Write the numbers from one to one hundred|blossom-evidence|blossom-ai|reasoning_text|tool_arguments|/home/' \
             "$audit"; then
             exit 1
           fi
