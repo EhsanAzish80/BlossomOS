@@ -118,7 +118,7 @@ jobs:
             XDG_RUNTIME_DIR=/run/user/1000 \
             dbus-run-session -- bash -eo pipefail -c '
               LIBGL_ALWAYS_SOFTWARE=1 weston \
-                --backend=headless-backend.so --renderer=gl \
+                --backend=headless-backend.so --use-gl \
                 --socket=wayland-parent \
                 --idle-time=0 --log="$XDG_RUNTIME_DIR/weston.log" &
               weston_pid=$!
