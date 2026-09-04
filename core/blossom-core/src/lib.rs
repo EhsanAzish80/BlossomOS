@@ -67,9 +67,10 @@ pub use model_runtime::{
 #[cfg(debug_assertions)]
 pub use model_runtime::{SyntheticProviderPackage, fixed_synthetic_provider_package};
 pub use orchestration::{
-    MAX_PLAN_STEPS, PlanError, PlanId, PlanOutcome, ProposedPlanStep, StateError, StepId,
-    StepLifecycle, StepPhase, StepTerminalOutcome, SummaryError, TruthfulPlanSummary,
-    ValidatedPlan, ValidatedPlanStep,
+    MAX_PLAN_STEPS, OrchestrationError, OrchestrationEvent, PlanError, PlanId, PlanOrchestrator,
+    PlanOutcome, ProposedPlanStep, StateError, StepId, StepLifecycle, StepPhase,
+    StepTerminalOutcome, SummaryError, TruthfulPlanSummary, TypedRequestEngine, ValidatedPlan,
+    ValidatedPlanStep,
 };
 pub use os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, OsReleaseReader, OsReleaseSource,

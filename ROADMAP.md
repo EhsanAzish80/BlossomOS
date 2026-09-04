@@ -285,7 +285,8 @@ orchestration state machine and truthful terminal outcomes.
 - [ ] Treat model, tool, and retrieved content as untrusted across adversarial
   end-to-end orchestration tests and record the exit audit.
 
-First checkpoint: `docs/PHASE_5_PLAN_CORE.md`.
+Protected checkpoints: `docs/PHASE_5_PLAN_CORE.md` and
+`docs/PHASE_5_TYPED_ORCHESTRATOR.md`.
 
 Exit: Blossom never reports success solely because a command was issued.
 
