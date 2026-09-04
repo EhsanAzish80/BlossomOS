@@ -138,8 +138,8 @@ jobs:
         run: |
           audit=/run/blossom-model-gateway/audit/audit.jsonl
           sudo test -f "$audit"
-          sudo test "$(stat -c %U "$audit")" = blossom-model-gateway
-          sudo test "$(stat -c %a "$audit")" = 600
+          test "$(sudo stat -c %U "$audit")" = blossom-model-gateway
+          test "$(sudo stat -c %a "$audit")" = 600
           sudo -u blossom-evidence-allowed test ! -r "$audit"
           sudo -u blossom-model-provider test ! -r "$audit"
           sudo grep -Eq '"kind":"request_terminal"' "$audit"
