@@ -105,7 +105,26 @@ jobs:
               weston --backend=headless-backend.so --socket=wayland-parent \
                 --idle-time=0 --log="$XDG_RUNTIME_DIR/weston.log" &
               weston_pid=$!
-              trap "kill $weston_pid $hyprland_pid 2>/dev/null || true" EXIT
+              hyprland_pid=""
+              cleanup() {
+                status=$?
+                kill $weston_pid $hyprland_pid 2>/dev/null || true
+                if test "$status" -ne 0; then
+                  echo "::group::Weston log"
+                  cat "$XDG_RUNTIME_DIR/weston.log" 2>/dev/null || true
+                  echo "::endgroup::"
+                  echo "::group::Hyprland launcher log"
+                  cat "$XDG_RUNTIME_DIR/hyprland.log" 2>/dev/null || true
+                  echo "::endgroup::"
+                  echo "::group::Hyprland runtime logs"
+                  find "$XDG_RUNTIME_DIR/hypr" -type f -maxdepth 3 \
+                    -exec sh -c '"'"'echo "--- $1"; cat "$1"'"'"' sh {} \; \
+                    2>/dev/null || true
+                  echo "::endgroup::"
+                fi
+                exit "$status"
+              }
+              trap cleanup EXIT
               for attempt in $(seq 1 100); do
                 test -S "$XDG_RUNTIME_DIR/wayland-parent" && break
                 sleep 0.1
