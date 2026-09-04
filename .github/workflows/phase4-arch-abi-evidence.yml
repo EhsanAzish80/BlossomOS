@@ -29,10 +29,16 @@ jobs:
 
       - name: Build and test on Arch Linux
         run: |
-          cargo test --locked --package blossom-core model_runtime
-          cargo test --locked --package blossom-model-gateway --all-features
-          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-          cargo build --locked --release --package blossom-model-gateway \
+          useradd --create-home --shell /usr/bin/nologin blossom-ci
+          install -d -o blossom-ci -g blossom-ci "$GITHUB_WORKSPACE/target"
+          runuser -u blossom-ci -- env HOME=/home/blossom-ci \
+            cargo test --locked --package blossom-core model_runtime
+          runuser -u blossom-ci -- env HOME=/home/blossom-ci \
+            cargo test --locked --package blossom-model-gateway --all-features
+          runuser -u blossom-ci -- env HOME=/home/blossom-ci \
+            cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+          runuser -u blossom-ci -- env HOME=/home/blossom-ci \
+            cargo build --locked --release --package blossom-model-gateway \
             --features production-private-inference
 
       - name: Fetch immutable llama.cpp inputs
