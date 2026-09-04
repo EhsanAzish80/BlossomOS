@@ -280,6 +280,8 @@ orchestration state machine and truthful terminal outcomes.
   monotonic step lifecycle, terminal taxonomy, and truthful aggregate core.
 - [x] Record plan acceptance, every step state, and the final typed aggregate in
   the engine's hash-chained, content-redacted audit log.
+- [x] Translate only normalized, per-turn-eligible Phase 4 native-read intents
+  into conservatively chained typed steps with runtime-derived identifiers.
 - [ ] Integrate intent, per-step policy, approval, execution, verification, and
   truthful-summary states over existing typed operations.
 - [ ] Handle dependency blocking, partial completion, rollback opportunities,
@@ -289,7 +291,8 @@ orchestration state machine and truthful terminal outcomes.
 
 Protected checkpoints: `docs/PHASE_5_PLAN_CORE.md` and
 `docs/PHASE_5_TYPED_ORCHESTRATOR.md`, plus
-`docs/PHASE_5_ORCHESTRATION_AUDIT.md`.
+`docs/PHASE_5_ORCHESTRATION_AUDIT.md` and
+`docs/PHASE_5_INTENT_PLAN_BRIDGE.md`.
 
 Exit: Blossom never reports success solely because a command was issued.
 

@@ -287,11 +287,9 @@ impl TurnIntentCatalogue {
         self.eligible.iter().copied()
     }
 
-    #[allow(
-        dead_code,
-        reason = "the first provider adapter will construct per-turn catalogues"
-    )]
-    pub(crate) fn from_eligible(
+    /// Builds the minimal eligibility set selected by trusted runtime code.
+    /// Membership permits only a proposal; policy and approval still apply.
+    pub fn from_code_owned_eligible(
         eligible: impl IntoIterator<Item = ModelIntentKind>,
     ) -> Result<Self, ModelContractError> {
         let eligible: BTreeSet<_> = eligible.into_iter().collect();
@@ -299,6 +297,12 @@ impl TurnIntentCatalogue {
             return Err(ModelContractError::TooManyIntents);
         }
         Ok(Self { eligible })
+    }
+
+    pub(crate) fn from_eligible(
+        eligible: impl IntoIterator<Item = ModelIntentKind>,
+    ) -> Result<Self, ModelContractError> {
+        Self::from_code_owned_eligible(eligible)
     }
 }
 

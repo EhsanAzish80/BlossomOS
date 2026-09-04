@@ -6,10 +6,11 @@
 use crate::verification::VerificationReason;
 use crate::{
     ApprovalToken, AuditEvent, BeginOutcome, Capability, CompletionOutcome, EngineError,
-    PolicyEngine, RequestId, ToolRequest,
+    ModelIntentKind, PolicyEngine, ProposedToolIntent, RequestId, ToolRequest, TurnIntentCatalogue,
 };
 use serde::Serialize;
-use std::collections::HashSet;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeSet, HashSet};
 use std::fmt;
 
 pub const MAX_PLAN_STEPS: usize = 16;
@@ -150,6 +151,57 @@ impl ValidatedPlan {
         })
     }
 
+    /// Translates only Phase 4's normalized, argument-free read intents.
+    /// Generated request and step identifiers replace provider-controlled data.
+    pub fn from_model_intents(
+        plan_id: PlanId,
+        correlation_id: RequestId,
+        catalogue: &TurnIntentCatalogue,
+        intents: &[ProposedToolIntent],
+    ) -> Result<Self, PlanError> {
+        if intents.is_empty() {
+            return Err(PlanError::EmptyPlan);
+        }
+        if intents.len() > MAX_PLAN_STEPS {
+            return Err(PlanError::TooManySteps);
+        }
+        let mut seen = BTreeSet::new();
+        let mut proposed = Vec::with_capacity(intents.len());
+        for (index, intent) in intents.iter().enumerate() {
+            let kind = intent.kind();
+            if !catalogue.contains(kind) {
+                return Err(PlanError::IntentNotEligible);
+            }
+            if !seen.insert(kind) {
+                return Err(PlanError::DuplicateIntent);
+            }
+            let request_id = derived_request_id(&plan_id, &correlation_id, index)?;
+            let request = match kind {
+                ModelIntentKind::SystemOsIdentity => ToolRequest::SystemOsIdentity { request_id },
+                ModelIntentKind::SystemUptime => ToolRequest::SystemUptime { request_id },
+                ModelIntentKind::SystemMemorySummary => {
+                    ToolRequest::SystemMemorySummary { request_id }
+                }
+                ModelIntentKind::SystemStorageSummary => {
+                    ToolRequest::SystemStorageSummary { request_id }
+                }
+                ModelIntentKind::ProcessSelf => ToolRequest::ProcessSelf { request_id },
+                ModelIntentKind::ProcessList => ToolRequest::ProcessList { request_id },
+            };
+            let step_id = StepId::parse(format!("step-{:03}", index + 1))?;
+            let depends_on = proposed
+                .last()
+                .map(|previous: &ProposedPlanStep| vec![previous.step_id.clone()])
+                .unwrap_or_default();
+            proposed.push(ProposedPlanStep {
+                step_id,
+                request,
+                depends_on,
+            });
+        }
+        Self::new(plan_id, correlation_id, proposed)
+    }
+
     pub fn plan_id(&self) -> &PlanId {
         &self.plan_id
     }
@@ -161,6 +213,26 @@ impl ValidatedPlan {
     pub fn steps(&self) -> &[ValidatedPlanStep] {
         &self.steps
     }
+}
+
+fn derived_request_id(
+    plan_id: &PlanId,
+    correlation_id: &RequestId,
+    index: usize,
+) -> Result<RequestId, PlanError> {
+    let mut digest = Sha256::new();
+    digest.update(b"blossom-phase5-request-id-v1\0");
+    digest.update(plan_id.as_str().as_bytes());
+    digest.update(b"\0");
+    digest.update(correlation_id.as_str().as_bytes());
+    digest.update(b"\0");
+    digest.update(index.to_be_bytes());
+    let encoded = digest
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    RequestId::parse(encoded).map_err(|_| PlanError::DerivedRequestIdInvalid)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -709,6 +781,9 @@ pub enum PlanError {
     DuplicateRequestId,
     DuplicateDependency,
     DependencyNotEarlier,
+    IntentNotEligible,
+    DuplicateIntent,
+    DerivedRequestIdInvalid,
 }
 
 impl fmt::Display for PlanError {
@@ -722,6 +797,9 @@ impl fmt::Display for PlanError {
             Self::DuplicateRequestId => "plan contains a duplicate request identifier",
             Self::DuplicateDependency => "plan contains a duplicate dependency",
             Self::DependencyNotEarlier => "dependency must identify an earlier step",
+            Self::IntentNotEligible => "model intent is not eligible for this turn",
+            Self::DuplicateIntent => "model plan contains a duplicate intent",
+            Self::DerivedRequestIdInvalid => "derived request identifier is invalid",
         })
     }
 }
@@ -964,6 +1042,72 @@ mod tests {
         assert_eq!(
             TruthfulPlanSummary::from_terminal_steps(&plan, &[]),
             Err(SummaryError::IncompleteTerminalSet)
+        );
+    }
+
+    #[test]
+    fn validated_model_intents_become_only_closed_native_read_steps() {
+        let catalogue = TurnIntentCatalogue::from_code_owned_eligible([
+            ModelIntentKind::SystemUptime,
+            ModelIntentKind::ProcessList,
+        ])
+        .unwrap();
+        let completion = crate::validate_provider_completion(
+            br#"{"kind":"tool_intents","intents":[{"name":"system.uptime","arguments":{}},{"name":"process.list","arguments":{}}]}"#,
+            &catalogue,
+        )
+        .unwrap();
+        let crate::NormalizedCompletion::ToolIntents { intents } = completion else {
+            panic!("validated intents")
+        };
+        let plan_id = PlanId::parse("model-plan".into()).unwrap();
+        let correlation_id = id("model-correlation");
+        let plan = ValidatedPlan::from_model_intents(
+            plan_id.clone(),
+            correlation_id.clone(),
+            &catalogue,
+            &intents,
+        )
+        .unwrap();
+        assert_eq!(plan.steps().len(), 2);
+        assert_eq!(plan.steps()[0].capability(), Capability::SystemReadUptime);
+        assert_eq!(plan.steps()[1].capability(), Capability::ProcessReadList);
+        assert_eq!(
+            plan.steps()[1].depends_on(),
+            &[plan.steps()[0].step_id().clone()]
+        );
+        assert_eq!(plan.steps()[0].request().request_id().as_str().len(), 64);
+        let repeated =
+            ValidatedPlan::from_model_intents(plan_id, correlation_id, &catalogue, &intents)
+                .unwrap();
+        assert_eq!(plan, repeated);
+    }
+
+    #[test]
+    fn model_plan_bridge_rechecks_eligibility_and_duplicates() {
+        let eligible =
+            TurnIntentCatalogue::from_code_owned_eligible([ModelIntentKind::SystemUptime]).unwrap();
+        let uptime: ProposedToolIntent =
+            serde_json::from_str(r#"{"kind":"system_uptime"}"#).unwrap();
+        let process: ProposedToolIntent =
+            serde_json::from_str(r#"{"kind":"process_self"}"#).unwrap();
+        assert_eq!(
+            ValidatedPlan::from_model_intents(
+                PlanId::parse("ineligible".into()).unwrap(),
+                id("correlation-ineligible"),
+                &eligible,
+                &[process],
+            ),
+            Err(PlanError::IntentNotEligible)
+        );
+        assert_eq!(
+            ValidatedPlan::from_model_intents(
+                PlanId::parse("duplicate".into()).unwrap(),
+                id("correlation-duplicate"),
+                &eligible,
+                &[uptime.clone(), uptime],
+            ),
+            Err(PlanError::DuplicateIntent)
         );
     }
 
