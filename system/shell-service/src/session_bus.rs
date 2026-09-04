@@ -16,45 +16,72 @@ const DBUS_PATH: &str = "/org/freedesktop/DBus";
 const DBUS_INTERFACE: &str = "org.freedesktop.DBus";
 const MAX_WIRE_RESULT_BYTES: usize = 32 * 1024;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HandlerError;
+
 pub trait ShellRequestHandler: Send {
-    fn start(&mut self, peer: ShellPeerId, now_ms: u64) -> Result<Vec<u8>, ()>;
-    fn decide(&mut self, peer: &ShellPeerId, input: &[u8], now_ms: u64) -> Result<Vec<u8>, ()>;
-    fn cancel(&mut self, peer: &ShellPeerId, input: &[u8], now_ms: u64) -> Result<Vec<u8>, ()>;
-    fn activity(&mut self, after: Option<u64>, limit: u16) -> Result<Vec<u8>, ()>;
+    fn start(&mut self, peer: ShellPeerId, now_ms: u64) -> Result<Vec<u8>, HandlerError>;
+    fn decide(
+        &mut self,
+        peer: &ShellPeerId,
+        input: &[u8],
+        now_ms: u64,
+    ) -> Result<Vec<u8>, HandlerError>;
+    fn cancel(
+        &mut self,
+        peer: &ShellPeerId,
+        input: &[u8],
+        now_ms: u64,
+    ) -> Result<Vec<u8>, HandlerError>;
+    fn activity(&mut self, after: Option<u64>, limit: u16) -> Result<Vec<u8>, HandlerError>;
     fn disconnect(&mut self, peer: &ShellPeerId, now_ms: u64);
 }
 
 impl ShellRequestHandler for ShellDiagnosticService<BubblewrapExecutor> {
-    fn start(&mut self, peer: ShellPeerId, now_ms: u64) -> Result<Vec<u8>, ()> {
-        encode(&self.begin_system_uname(peer, now_ms).map_err(|_| ())?)
+    fn start(&mut self, peer: ShellPeerId, now_ms: u64) -> Result<Vec<u8>, HandlerError> {
+        encode(
+            &self
+                .begin_system_uname(peer, now_ms)
+                .map_err(|_| HandlerError)?,
+        )
     }
 
-    fn decide(&mut self, peer: &ShellPeerId, input: &[u8], now_ms: u64) -> Result<Vec<u8>, ()> {
-        let request = decode_shell_client_request(input).map_err(|_| ())?;
+    fn decide(
+        &mut self,
+        peer: &ShellPeerId,
+        input: &[u8],
+        now_ms: u64,
+    ) -> Result<Vec<u8>, HandlerError> {
+        let request = decode_shell_client_request(input).map_err(|_| HandlerError)?;
         if !matches!(request, ShellClientRequest::SubmitDecision { .. }) {
-            return Err(());
+            return Err(HandlerError);
         }
         encode(
             &self
                 .handle_client_request(peer, request, now_ms)
-                .map_err(|_| ())?,
+                .map_err(|_| HandlerError)?,
         )
     }
 
-    fn cancel(&mut self, peer: &ShellPeerId, input: &[u8], now_ms: u64) -> Result<Vec<u8>, ()> {
-        let request = decode_shell_client_request(input).map_err(|_| ())?;
+    fn cancel(
+        &mut self,
+        peer: &ShellPeerId,
+        input: &[u8],
+        now_ms: u64,
+    ) -> Result<Vec<u8>, HandlerError> {
+        let request = decode_shell_client_request(input).map_err(|_| HandlerError)?;
         if !matches!(request, ShellClientRequest::CancelPending { .. }) {
-            return Err(());
+            return Err(HandlerError);
         }
         encode(
             &self
                 .handle_client_request(peer, request, now_ms)
-                .map_err(|_| ())?,
+                .map_err(|_| HandlerError)?,
         )
     }
 
-    fn activity(&mut self, after: Option<u64>, limit: u16) -> Result<Vec<u8>, ()> {
-        encode(&self.read_activity(after, limit).map_err(|_| ())?)
+    fn activity(&mut self, after: Option<u64>, limit: u16) -> Result<Vec<u8>, HandlerError> {
+        encode(&self.read_activity(after, limit).map_err(|_| HandlerError)?)
     }
 
     fn disconnect(&mut self, peer: &ShellPeerId, now_ms: u64) {
@@ -62,10 +89,10 @@ impl ShellRequestHandler for ShellDiagnosticService<BubblewrapExecutor> {
     }
 }
 
-fn encode(value: &impl serde::Serialize) -> Result<Vec<u8>, ()> {
-    let bytes = serde_json::to_vec(value).map_err(|_| ())?;
+fn encode(value: &impl serde::Serialize) -> Result<Vec<u8>, HandlerError> {
+    let bytes = serde_json::to_vec(value).map_err(|_| HandlerError)?;
     if bytes.len() > MAX_WIRE_RESULT_BYTES {
-        return Err(());
+        return Err(HandlerError);
     }
     Ok(bytes)
 }
@@ -258,19 +285,19 @@ mod tests {
     }
 
     impl ShellRequestHandler for Handler {
-        fn start(&mut self, peer: ShellPeerId, _: u64) -> Result<Vec<u8>, ()> {
+        fn start(&mut self, peer: ShellPeerId, _: u64) -> Result<Vec<u8>, HandlerError> {
             assert_eq!(peer.as_str(), self.expected_peer);
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(br#"{"status":"awaiting_approval"}"#.to_vec())
         }
-        fn decide(&mut self, _: &ShellPeerId, _: &[u8], _: u64) -> Result<Vec<u8>, ()> {
-            Err(())
+        fn decide(&mut self, _: &ShellPeerId, _: &[u8], _: u64) -> Result<Vec<u8>, HandlerError> {
+            Err(HandlerError)
         }
-        fn cancel(&mut self, _: &ShellPeerId, _: &[u8], _: u64) -> Result<Vec<u8>, ()> {
-            Err(())
+        fn cancel(&mut self, _: &ShellPeerId, _: &[u8], _: u64) -> Result<Vec<u8>, HandlerError> {
+            Err(HandlerError)
         }
-        fn activity(&mut self, _: Option<u64>, _: u16) -> Result<Vec<u8>, ()> {
-            Err(())
+        fn activity(&mut self, _: Option<u64>, _: u16) -> Result<Vec<u8>, HandlerError> {
+            Err(HandlerError)
         }
         fn disconnect(&mut self, _: &ShellPeerId, _: u64) {}
     }
