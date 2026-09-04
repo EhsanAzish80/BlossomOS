@@ -329,8 +329,10 @@ shell or installed-runtime evidence is currently claimed.
   approval replay, exact cancellation, and cancellation replay against the real
   engine with an execution counter. Private-bus replacement and bus-loss tests
   prove old previews cannot survive service or bus loss and start nothing.
-- [ ] Establish the pinned Arch + Hyprland + Quickshell development and package
-  boundary.
+- [x] Establish the pinned Arch + Hyprland + Quickshell development and package
+  boundary. The accepted exact stable-repository versions, closed lock schema,
+  inactive user service, D-Bus activation metadata, and drift checker are
+  committed; installed compatibility remains a separate exit gate.
 - [ ] Build exact approval preview and readable correlated activity UI for the
   fixed diagnostic.
 - [ ] Add launcher, notifications, system status, and agent surfaces only as

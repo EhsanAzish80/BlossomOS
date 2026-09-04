@@ -49,6 +49,11 @@ file access, privileged operation, or graphical implementation.
    behavior remains part of the UI checkpoint.
 4. Add a minimal Quickshell approval and activity surface for the fixed slice.
 5. Package the pinned Hyprland, Quickshell, D-Bus, and Blossom service boundary.
+   The first stable Arch x86-64 compatibility set is fixed to Hyprland
+   `0.56.2-2`, Quickshell `0.3.1-1`, systemd `261.2-1`, and dbus-broker `37-3`.
+   An inactive hardened user unit, session activation metadata, closed lock,
+   and CI drift validator are implemented. No installed compatibility is yet
+   claimed.
 6. Produce installed Arch userspace evidence and an independent exit audit.
 
 ## Exit evidence required
