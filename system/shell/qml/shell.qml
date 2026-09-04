@@ -4,6 +4,8 @@ import Quickshell
 import Blossom.Shell
 
 ShellRoot {
+    Component.onCompleted: BlossomBroker.refreshActivity()
+
     PanelWindow {
         id: commandBar
         anchors {

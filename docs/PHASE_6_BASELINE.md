@@ -60,6 +60,9 @@ file access, privileged operation, or graphical implementation.
    and CI drift validator are implemented. No installed compatibility is yet
    claimed.
 6. Produce installed Arch userspace evidence and an independent exit audit.
+   A disposable nested-compositor harness is implemented but has not yet
+   produced an authoritative passing run. Its evidence limits are documented in
+   `docs/PHASE_6_INSTALLED_EVIDENCE.md`.
 
 ## Exit evidence required
 
