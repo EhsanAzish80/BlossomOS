@@ -15,6 +15,7 @@ pub mod process_list;
 pub mod process_self;
 pub mod request;
 pub mod service_status;
+pub mod shell_activity;
 pub mod shell_ipc;
 pub mod shell_service;
 pub mod shell_session;
@@ -98,6 +99,7 @@ pub use service_status::{
     ServiceStatus, ServiceStatusError, ServiceStatusProvider, SystemdServiceStatusProvider,
     UnavailableServiceStatusProvider, validate_service_status, validate_service_unit,
 };
+pub use shell_activity::{ShellActivityError, project_shell_activity};
 pub use shell_ipc::{
     MAX_ACTIVITY_BATCH, MAX_SHELL_MESSAGE_BYTES, SHELL_BUS_NAME, SHELL_INTERFACE,
     SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellActivityCategory, ShellActivityKind,

@@ -145,6 +145,14 @@ impl<E: Executor> ShellDiagnosticService<E> {
         self.engine.audit()
     }
 
+    pub fn read_activity(
+        &self,
+        after_sequence: Option<u64>,
+        limit: u16,
+    ) -> Result<Vec<crate::ShellActivityProjection>, crate::ShellActivityError> {
+        crate::project_shell_activity(self.engine.audit(), after_sequence, limit)
+    }
+
     fn expire_pending(&mut self, peer: &ShellPeerId, now_ms: u64) -> Result<(), ShellServiceError> {
         let Some(expired) = self.sessions.expire(peer, now_ms) else {
             return Err(ShellSessionError::NoPendingApproval.into());
@@ -286,6 +294,16 @@ mod tests {
             ShellServiceOutcome::Verified
         );
         assert_eq!(calls.get(), 1);
+        let activity = service.read_activity(None, 16).expect("activity");
+        assert_eq!(
+            activity.last().expect("terminal activity").category,
+            crate::ShellActivityCategory::Verified
+        );
+        assert!(
+            activity
+                .windows(2)
+                .all(|items| items[0].sequence < items[1].sequence)
+        );
         assert!(
             service
                 .handle_client_request(&owner, decision(&preview, "approve_once"), 1_002)

@@ -317,8 +317,8 @@ currently implemented.
 - [ ] Implement the unprivileged session service without moving authorization,
   token custody, execution, verification, or audit authority into QML. The
   connection-bound pending state and fixed-diagnostic engine bridge are
-  implemented. Redacted activity projection and the service process remain
-  pending.
+  implemented with a bounded redacted projection of authoritative audit stages.
+  The service process and real transport remain pending.
 - [ ] Prove hostile same-user caller, replay, mutation, expiry, disconnect,
   restart, cancellation, schema, and service-loss behavior fails closed.
 - [ ] Establish the pinned Arch + Hyprland + Quickshell development and package
