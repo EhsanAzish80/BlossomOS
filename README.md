@@ -146,18 +146,18 @@ authenticated one-request gateway framing, retained installed-identity
 readiness, a content-free operational audit, hardened systemd packaging, and a
 pinned offline-buildable llama.cpp x86-64 package.
 
-Merged commit `80a59d3` has passing disposable Ubuntu x86-64 installed evidence
+Merged commit `91830c3` has passing disposable Ubuntu x86-64 installed evidence
 in workflow run
-[`33859738402`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33859738402).
+[`33860951348`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33860951348).
 That run installed the package and exercised real offline inference, distinct
 service identities, peer admission, filesystem and network isolation, resource
 bounds, provider loss, audit redaction and capacity failure, socket lifecycle,
-and cancellation during connect, response headers, streaming and the
-pre-completion race.
+cancellation during connect, response headers, streaming and the pre-completion
+race, plus contained terminal-write refusal and recovery.
 
 This remains a pre-alpha Phase 4 checkpoint, not a completed production AI
 runtime. A pinned Ollama production package and equivalent installed evidence,
-target-Arch evidence, and terminal-write fault evidence remain unresolved.
+and target-Arch evidence remain unresolved.
 Private input remains disabled in default builds, and Phase 5 has not begun.
 See `docs/PHASE_4_EXIT_AUDIT.md` and
 `docs/PHASE_4_INSTALLED_EVIDENCE.md` for the exact evidence and open gates.
