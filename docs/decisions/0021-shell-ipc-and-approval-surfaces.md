@@ -189,6 +189,15 @@ end-to-end evidence pass. Existing CLI and core tests remain reference behavior.
 Removing Phase 6 packages returns to non-graphical interfaces without changing
 capability, policy, approval, executor, helper, or audit formats.
 
+The pinned Quickshell release does not expose a generic QML D-Bus client API.
+The reviewed integration is therefore a separately built native Qt/QML plugin
+whose complete public surface is the fixed Phase 6 start, approve-once, deny,
+cancel, and bounded activity operations. All bus and method identifiers are
+code-owned. The plugin may transport service-authored projections but contains
+no policy, token, execution, filesystem, process-launch, network, generic D-Bus,
+or privileged authority. This preserves QML as an untrusted presentation layer
+rather than moving the broker into the shell process.
+
 ## Validation
 
 Tests and evidence must prove:
