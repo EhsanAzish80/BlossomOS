@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "purpose": "ci-parent-compositor-only",
+  "architecture": "x86_64",
+  "name": "weston",
+  "version": "14.0.2-3",
+  "source": "https://archive.archlinux.org/packages/w/weston/weston-14.0.2-3-x86_64.pkg.tar.zst",
+  "size": 1342921,
+  "sha256": "23057fb6d468f1c287864fa08f954d30ee300833405b2dd9b6a169198a3dd73f"
+}

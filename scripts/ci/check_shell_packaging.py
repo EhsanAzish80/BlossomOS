@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SHELL = ROOT / "system" / "shell"
 PACKAGE = SHELL / "packaging"
 LOCK = SHELL / "registry" / "arch-x86_64.lock.json"
+EVIDENCE_LOCK = SHELL / "evidence" / "weston-arch-x86_64.lock.json"
 BUS_NAME = "org.blossomos.Shell1"
 BINARY = "/usr/lib/blossom-os/blossom-shell-service"
 UNIT = "blossom-shell-service.service"
@@ -39,6 +40,19 @@ def check_lock() -> None:
         require(item["source"] == f"https://archlinux.org/packages/{item['repository']}/x86_64/{name}/", f"package source drift: {name}")
 
 
+def check_evidence_lock() -> None:
+    require(EVIDENCE_LOCK.is_file() and not EVIDENCE_LOCK.is_symlink(), "missing regular evidence lock")
+    data = json.loads(EVIDENCE_LOCK.read_text())
+    require(set(data) == {"schema_version", "purpose", "architecture", "name", "version", "source", "size", "sha256"}, "evidence lock schema drift")
+    require(data["schema_version"] == 1, "evidence lock version drift")
+    require(data["purpose"] == "ci-parent-compositor-only", "evidence lock purpose drift")
+    require(data["architecture"] == "x86_64", "unsupported evidence architecture")
+    require(data["name"] == "weston" and data["version"] == "14.0.2-3", "evidence parent pin drift")
+    require(data["source"] == "https://archive.archlinux.org/packages/w/weston/weston-14.0.2-3-x86_64.pkg.tar.zst", "evidence source drift")
+    require(data["size"] == 1342921, "evidence package size drift")
+    require(data["sha256"] == "23057fb6d468f1c287864fa08f954d30ee300833405b2dd9b6a169198a3dd73f", "evidence digest drift")
+
+
 def check_activation() -> None:
     parser = configparser.ConfigParser()
     parser.optionxform = str
@@ -63,6 +77,7 @@ def check_unit() -> None:
 def main() -> None:
     require({path.name for path in PACKAGE.iterdir()} == {"README.md", UNIT, f"{BUS_NAME}.service"}, "unexpected shell package surface")
     check_lock()
+    check_evidence_lock()
     check_activation()
     check_unit()
 

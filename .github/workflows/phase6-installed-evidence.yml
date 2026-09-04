@@ -37,6 +37,21 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Pin the evidence-only parent compositor
+        run: |
+          lock=system/shell/evidence/weston-arch-x86_64.lock.json
+          weston_url=$(jq -r .source "$lock")
+          weston_package="$RUNNER_TEMP/weston.pkg.tar.zst"
+          curl --fail --silent --show-error --location \
+            "$weston_url" --output "$weston_package"
+          curl --fail --silent --show-error --location \
+            "$weston_url.sig" --output "$weston_package.sig"
+          printf '%s  %s\n' "$(jq -r .sha256 "$lock")" "$weston_package" \
+            | sha256sum --check --strict
+          test "$(stat --format=%s "$weston_package")" = "$(jq -r .size "$lock")"
+          pacman -U --noconfirm "$weston_package"
+          test "$(pacman -Q weston | cut -d ' ' -f 2)" = "$(jq -r .version "$lock")"
+
       - name: Require the reviewed package versions
         run: |
           lock=system/shell/registry/arch-x86_64.lock.json
