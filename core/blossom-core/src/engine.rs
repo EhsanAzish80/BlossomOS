@@ -7,6 +7,7 @@ use crate::file_read::{
 use crate::memory_summary::{
     MemorySummary, MemorySummaryError, MemorySummaryProvider, UnavailableMemorySummaryProvider,
 };
+use crate::orchestration::TypedRequestEngine;
 use crate::os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, UnavailableOsIdentityProvider,
 };
@@ -417,6 +418,16 @@ impl<
                 return Err(EngineError::InvalidRequest(error));
             }
         };
+        self.begin_request(request, now_ms)
+    }
+
+    /// Starts one already-validated typed request through the same policy,
+    /// approval, execution, verification, and audit path as JSON input.
+    pub fn begin_request(
+        &mut self,
+        request: ToolRequest,
+        now_ms: u64,
+    ) -> Result<BeginOutcome, EngineError> {
         self.audit.append(AuditEvent::RequestAccepted {
             request_id: request.request_id().as_str().into(),
             tool: request.tool_name().into(),
@@ -863,6 +874,55 @@ impl<
             verification,
             output: ToolOutput::ServiceStatus(Box::new(result)),
         })
+    }
+}
+
+impl<
+    E: Executor,
+    O: OsIdentityProvider,
+    U: UptimeProvider,
+    M: MemorySummaryProvider,
+    S: StorageSummaryProvider,
+    P: ProcessSelfProvider,
+    L: ProcessListProvider,
+    F: FileContentProvider,
+    W: WorkspaceCreateProvider,
+    V: ServiceStatusProvider,
+> TypedRequestEngine for BlossomEngine<E, O, U, M, S, P, L, F, W, V>
+{
+    fn begin_typed(
+        &mut self,
+        request: ToolRequest,
+        now_ms: u64,
+    ) -> Result<BeginOutcome, EngineError> {
+        self.begin_request(request, now_ms)
+    }
+
+    fn approve_typed(
+        &mut self,
+        token: ApprovalToken,
+        request: ToolRequest,
+        now_ms: u64,
+    ) -> Result<CompletionOutcome, EngineError> {
+        self.approve(token, request, now_ms)
+    }
+
+    fn deny_typed(
+        &mut self,
+        token: ApprovalToken,
+        request: ToolRequest,
+        now_ms: u64,
+    ) -> Result<(), EngineError> {
+        self.deny_approval(token, request, now_ms)
+    }
+
+    fn cancel_typed(
+        &mut self,
+        token: ApprovalToken,
+        request: ToolRequest,
+        now_ms: u64,
+    ) -> Result<(), EngineError> {
+        self.cancel_approval(token, request, now_ms)
     }
 }
 
