@@ -216,7 +216,7 @@ jobs:
           test -S /run/blossom-model-gateway/inference.sock
           audit=/run/blossom-model-gateway/audit/audit.jsonl
           test "$(sudo wc -l "$audit" | awk '{print $1}')" -eq 1
-          target/release/examples/installed_gateway_probe exhaust-audit
+          sudo target/release/examples/installed_gateway_probe exhaust-audit
           for attempt in $(seq 1 30); do
             systemctl is-failed --quiet blossom-model-gateway.service && break
             sleep 1
