@@ -138,8 +138,9 @@ protected CI and merged to `main` as `0662e51`.
 Status: active. ADR-0011 defines the accepted provider-neutral local inference
 boundary, ADR-0012 defines the endpoint-identity and packaging boundary, and
 ADR-0017 fixes production admission and cancellation semantics. Controlled
-synthetic implementation is substantial; private inputs remain blocked pending
-the complete production and evidence gates.
+synthetic implementation and pinned llama.cpp installed evidence are
+substantial; private inputs remain blocked by default pending the complete
+cross-provider, target-Arch and remaining lifecycle evidence gates.
 
 - [x] Accept the provider-neutral inference, proposed-tool-intent, cancellation,
   streaming, locality, privacy, and conformance contract.
@@ -223,16 +224,16 @@ the complete production and evidence gates.
       x86-64 llama.cpp profile.
     - [ ] Add an equivalently pinned, closed Ollama production package and
       installed evidence before claiming both supported providers.
-  - [ ] Pass adversarial production-path Linux evidence before enabling private
-    input.
+  - [ ] Pass all adversarial production-path Linux evidence before enabling
+    private input by default.
     - [x] Add a manually dispatched, pinned-input installed-service harness and
       content-free gateway probe.
-    - [x] Record a successful llama.cpp run for merged commit `17481c3`,
+    - [x] Record a successful llama.cpp run for merged commit `80a59d3`,
       including filesystem denials, read-only package mounts, request-bound
       streaming cancellation, audit-capacity fail-closed behavior, orderly
-      socket cleanup and stale-path refusal.
-    - [ ] Close the remaining ADR-0017/0018 adversarial cases, including
-      connect/header/completion cancellation races and terminal-write failure.
+      socket cleanup, stale-path refusal, and connect/header/completion
+      cancellation races.
+    - [ ] Close the remaining ADR-0018 terminal-write failure case.
 - [x] Validate every model output and proposed tool intent against strict,
   code-owned schemas before it reaches the broker.
 - [ ] Produce controlled-protocol and real-model target-Linux evidence with
@@ -251,9 +252,10 @@ Checkpoint evidence: `docs/PHASE_4_CORE_CONTRACT.md` and
 `docs/PHASE_4_LLAMA_CPP_ADAPTER.md`. Phase 4 remains active; these checkpoints
 claim neither a production authenticated provider endpoint, private-input
 support, nor a real-model test. Controlled cross-provider gateway/adapter
-equivalence now exists, while offline real-model target-Linux evidence and the
-production endpoint-identity boundary remain unresolved. ADR-0012 accepts that
-boundary; it is not yet fully implemented. The closed protocol and
+equivalence now exists, and the pinned llama.cpp path has offline real-model
+installed Ubuntu x86-64 evidence. Equivalent Ollama packaging/evidence,
+target-Arch evidence, and terminal-write failure evidence remain unresolved.
+The closed protocol and
 credential-primitives checkpoint is
 documented in `docs/PHASE_4_GATEWAY_PROTOCOL.md`; the synthetic process boundary
 is documented in `docs/PHASE_4_GATEWAY_FIXTURE.md`. The closed manifest validator
