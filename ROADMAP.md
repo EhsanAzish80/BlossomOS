@@ -321,14 +321,14 @@ shell or installed-runtime evidence is currently claimed.
   implemented with a bounded redacted projection of authoritative audit stages.
   A Linux-only session D-Bus service adapter now exists behind an inactive
   production feature. Installed evidence is tracked separately below.
-- [ ] Prove hostile same-user caller, replay, mutation, expiry, disconnect,
+- [x] Prove hostile same-user caller, replay, mutation, expiry, disconnect,
   restart, cancellation, schema, and service-loss behavior fails closed. Client
   unique-name loss now cancels its pending approval through the audited engine
   path, and loss of the owner-monitor stream terminates the service path; the
   private-bus suite also proves cross-peer preview theft, preview mutation,
   approval replay, exact cancellation, and cancellation replay against the real
-  engine with an execution counter. Restart and installed service-loss cases
-  keep this item open.
+  engine with an execution counter. Private-bus replacement and bus-loss tests
+  prove old previews cannot survive service or bus loss and start nothing.
 - [ ] Establish the pinned Arch + Hyprland + Quickshell development and package
   boundary.
 - [ ] Build exact approval preview and readable correlated activity UI for the

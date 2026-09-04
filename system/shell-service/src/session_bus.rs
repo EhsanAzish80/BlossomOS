@@ -608,4 +608,105 @@ mod tests {
         assert!(cancel_replay.is_err());
         assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
+
+    #[test]
+    fn service_loss_and_restart_invalidate_the_old_preview() {
+        let (_bus, address) = test_bus();
+        let client = zbus::blocking::connection::Builder::address(address.as_str())
+            .expect("client address")
+            .build()
+            .expect("client");
+        let first_calls = Arc::new(AtomicUsize::new(0));
+        let first_service = zbus::blocking::connection::Builder::address(address.as_str())
+            .expect("first service address")
+            .name(SHELL_BUS_NAME)
+            .expect("first service name")
+            .serve_at(
+                SHELL_OBJECT_PATH,
+                ShellBusService::new(ShellDiagnosticService::new(
+                    CountingExecutor {
+                        calls: Arc::clone(&first_calls),
+                    },
+                    31,
+                )),
+            )
+            .expect("first serve")
+            .build()
+            .expect("first service");
+        let proxy =
+            zbus::blocking::Proxy::new(&client, SHELL_BUS_NAME, SHELL_OBJECT_PATH, SHELL_INTERFACE)
+                .expect("proxy");
+        let awaiting: Vec<u8> = proxy
+            .call("StartSystemUname1", &(SHELL_PROTOCOL_VERSION,))
+            .expect("start");
+        let envelope: serde_json::Value = serde_json::from_slice(&awaiting).expect("envelope");
+        let stale_approval = decision_bytes(&envelope["preview"], "approve_once");
+
+        drop(first_service);
+        let while_absent: Result<Vec<u8>, _> =
+            proxy.call("SubmitDecision1", &(stale_approval.clone(),));
+        assert!(while_absent.is_err());
+        assert_eq!(first_calls.load(Ordering::SeqCst), 0);
+
+        let second_calls = Arc::new(AtomicUsize::new(0));
+        let _second_service = zbus::blocking::connection::Builder::address(address.as_str())
+            .expect("second service address")
+            .name(SHELL_BUS_NAME)
+            .expect("second service name")
+            .serve_at(
+                SHELL_OBJECT_PATH,
+                ShellBusService::new(ShellDiagnosticService::new(
+                    CountingExecutor {
+                        calls: Arc::clone(&second_calls),
+                    },
+                    32,
+                )),
+            )
+            .expect("second serve")
+            .build()
+            .expect("second service");
+        let after_restart: Result<Vec<u8>, _> = proxy.call("SubmitDecision1", &(stale_approval,));
+        assert!(after_restart.is_err());
+        assert_eq!(first_calls.load(Ordering::SeqCst), 0);
+        assert_eq!(second_calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn session_bus_loss_starts_nothing() {
+        let (bus, address) = test_bus();
+        let client = zbus::blocking::connection::Builder::address(address.as_str())
+            .expect("client address")
+            .build()
+            .expect("client");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let _service = zbus::blocking::connection::Builder::address(address.as_str())
+            .expect("service address")
+            .name(SHELL_BUS_NAME)
+            .expect("service name")
+            .serve_at(
+                SHELL_OBJECT_PATH,
+                ShellBusService::new(ShellDiagnosticService::new(
+                    CountingExecutor {
+                        calls: Arc::clone(&calls),
+                    },
+                    41,
+                )),
+            )
+            .expect("serve")
+            .build()
+            .expect("service");
+        let proxy =
+            zbus::blocking::Proxy::new(&client, SHELL_BUS_NAME, SHELL_OBJECT_PATH, SHELL_INTERFACE)
+                .expect("proxy");
+        let awaiting: Vec<u8> = proxy
+            .call("StartSystemUname1", &(SHELL_PROTOCOL_VERSION,))
+            .expect("start");
+        let envelope: serde_json::Value = serde_json::from_slice(&awaiting).expect("envelope");
+        let approval = decision_bytes(&envelope["preview"], "approve_once");
+
+        drop(bus);
+        let after_bus_loss: Result<Vec<u8>, _> = proxy.call("SubmitDecision1", &(approval,));
+        assert!(after_bus_loss.is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+    }
 }
