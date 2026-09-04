@@ -87,7 +87,6 @@ impl<S> ShellSessionApprovals<S> {
             .get(peer)
             .ok_or(ShellSessionError::NoPendingApproval)?;
         if now_ms > pending.expires_at_ms {
-            self.pending.remove(peer);
             return Err(ShellSessionError::ApprovalExpired);
         }
         if &pending.request_id != request_id || pending.preview_sha256 != preview_sha256 {
@@ -116,7 +115,6 @@ impl<S> ShellSessionApprovals<S> {
             .get(peer)
             .ok_or(ShellSessionError::NoPendingApproval)?;
         if now_ms > pending.expires_at_ms {
-            self.pending.remove(peer);
             return Err(ShellSessionError::ApprovalExpired);
         }
         if &pending.request_id != request_id || pending.preview_sha256 != preview_sha256 {
