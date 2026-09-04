@@ -204,6 +204,8 @@ jobs:
 
       - name: Verify audit capacity fails the gateway closed
         run: |
+          sudo systemctl stop blossom-model-gateway.service
+          test ! -e /run/blossom-model-gateway/inference.sock
           sudo systemctl start blossom-model-llama-cpp.service
           sudo systemctl reset-failed blossom-model-gateway.service
           sudo systemctl start blossom-model-gateway.service
