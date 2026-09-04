@@ -2,6 +2,7 @@ use crate::approval::ApprovalError;
 use crate::executor::{ExecutionResult, ExecutorError};
 use crate::file_read::{FileContent, FileReadError};
 use crate::memory_summary::{MemorySummary, MemorySummaryError};
+use crate::orchestration::{PlanOutcome, StepPhase};
 use crate::os_identity::{OsIdentity, OsIdentityError};
 use crate::policy::{Capability, PolicyDecision};
 use crate::process_list::{ProcessList, ProcessListError};
@@ -21,6 +22,25 @@ use std::fmt::Write;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AuditEvent {
+    PlanAccepted {
+        plan_id: String,
+        correlation_id: String,
+        step_count: usize,
+    },
+    PlanStepTransition {
+        plan_id: String,
+        step_id: String,
+        capability: Capability,
+        phase: StepPhase,
+    },
+    PlanFinished {
+        plan_id: String,
+        outcome: PlanOutcome,
+        verified_steps: usize,
+        verified_effectful_steps: usize,
+        not_started_steps: usize,
+        uncertain_steps: usize,
+    },
     RequestRejected {
         category: String,
     },

@@ -958,6 +958,32 @@ fn render_service_status(result: &ServiceStatus) -> String {
 
 fn describe_event(event: &AuditEvent) -> String {
     match event {
+        AuditEvent::PlanAccepted {
+            plan_id,
+            correlation_id,
+            step_count,
+        } => format!("plan {plan_id} accepted correlation={correlation_id}, steps={step_count}"),
+        AuditEvent::PlanStepTransition {
+            plan_id,
+            step_id,
+            capability,
+            phase,
+        } => format!(
+            "plan {plan_id} step {step_id} {:?} for {}",
+            phase,
+            capability.as_str()
+        ),
+        AuditEvent::PlanFinished {
+            plan_id,
+            outcome,
+            verified_steps,
+            verified_effectful_steps,
+            not_started_steps,
+            uncertain_steps,
+        } => format!(
+            "plan {plan_id} {:?}: verified={verified_steps}, effectful={verified_effectful_steps}, not_started={not_started_steps}, uncertain={uncertain_steps}",
+            outcome
+        ),
         AuditEvent::RequestRejected { category } => format!("request rejected ({category})"),
         AuditEvent::RequestAccepted { request_id, tool } => {
             format!("request {request_id} accepted for {tool}")

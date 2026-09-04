@@ -5,8 +5,8 @@
 
 use crate::verification::VerificationReason;
 use crate::{
-    ApprovalToken, BeginOutcome, Capability, CompletionOutcome, EngineError, PolicyEngine,
-    RequestId, ToolRequest,
+    ApprovalToken, AuditEvent, BeginOutcome, Capability, CompletionOutcome, EngineError,
+    PolicyEngine, RequestId, ToolRequest,
 };
 use serde::Serialize;
 use std::collections::HashSet;
@@ -351,6 +351,8 @@ impl TruthfulPlanSummary {
 /// Narrow adapter implemented by the existing trusted engine. Approval tokens
 /// never leave `PlanOrchestrator`.
 pub trait TypedRequestEngine {
+    fn record_orchestration(&mut self, event: AuditEvent);
+
     fn begin_typed(
         &mut self,
         request: ToolRequest,
@@ -418,16 +420,30 @@ pub struct PlanOrchestrator<E> {
     cursor: usize,
     pending: Option<PendingStep>,
     cancellation_requested: bool,
+    final_recorded: bool,
 }
 
 impl<E: TypedRequestEngine> PlanOrchestrator<E> {
-    pub fn new(engine: E, plan: ValidatedPlan) -> Self {
+    pub fn new(mut engine: E, plan: ValidatedPlan) -> Self {
         let lifecycles = plan
             .steps()
             .iter()
             .map(|step| StepLifecycle::new(step.step_id().clone()))
             .collect();
         let outcomes = vec![None; plan.steps().len()];
+        engine.record_orchestration(AuditEvent::PlanAccepted {
+            plan_id: plan.plan_id().as_str().into(),
+            correlation_id: plan.correlation_id().as_str().into(),
+            step_count: plan.steps().len(),
+        });
+        for step in plan.steps() {
+            engine.record_orchestration(AuditEvent::PlanStepTransition {
+                plan_id: plan.plan_id().as_str().into(),
+                step_id: step.step_id().as_str().into(),
+                capability: step.capability(),
+                phase: StepPhase::Validated,
+            });
+        }
         Self {
             engine,
             plan,
@@ -436,6 +452,7 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
             cursor: 0,
             pending: None,
             cancellation_requested: false,
+            final_recorded: false,
         }
     }
 
@@ -479,6 +496,7 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
         self.lifecycles[index]
             .capability_analyzed()
             .map_err(|_| OrchestrationError::InvalidLifecycle)?;
+        self.record_phase(index);
         match self.engine.begin_typed(step.request().clone(), now_ms) {
             Ok(BeginOutcome::Denied) => {
                 self.finish_without_start(index, StepTerminalOutcome::Denied)
@@ -487,11 +505,13 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
                 self.lifecycles[index]
                     .awaiting_approval()
                     .map_err(|_| OrchestrationError::InvalidLifecycle)?;
+                self.record_phase(index);
                 if request != *step.request() {
                     let _ = self.engine.cancel_typed(token, request, now_ms);
                     self.lifecycles[index]
                         .finish(StepTerminalOutcome::Blocked)
                         .map_err(|_| OrchestrationError::InvalidLifecycle)?;
+                    self.record_phase(index);
                     self.outcomes[index] = Some(StepTerminalOutcome::Blocked);
                     self.cursor += 1;
                     return Err(OrchestrationError::EngineContractViolation);
@@ -588,8 +608,12 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
         }
         self.lifecycles[index]
             .executing()
-            .and_then(|_| self.lifecycles[index].verifying())
             .map_err(|_| OrchestrationError::InvalidLifecycle)?;
+        self.record_phase(index);
+        self.lifecycles[index]
+            .verifying()
+            .map_err(|_| OrchestrationError::InvalidLifecycle)?;
+        self.record_phase(index);
         let outcome = if completion.verification.succeeded {
             StepTerminalOutcome::Verified
         } else if completion.verification.reason
@@ -610,6 +634,7 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
         self.lifecycles[index]
             .executing()
             .map_err(|_| OrchestrationError::InvalidLifecycle)?;
+        self.record_phase(index);
         self.finish_terminal(index, outcome)
     }
 
@@ -629,6 +654,7 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
         self.lifecycles[index]
             .finish(outcome)
             .map_err(|_| OrchestrationError::InvalidLifecycle)?;
+        self.record_phase(index);
         self.outcomes[index] = Some(outcome);
         self.cursor += 1;
         Ok(OrchestrationEvent::StepFinished {
@@ -638,16 +664,38 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
         })
     }
 
-    fn finished_event(&self) -> Result<OrchestrationEvent, OrchestrationError> {
+    fn finished_event(&mut self) -> Result<OrchestrationEvent, OrchestrationError> {
         let outcomes = self
             .outcomes
             .iter()
             .copied()
             .collect::<Option<Vec<_>>>()
             .ok_or(OrchestrationError::SummaryUnavailable)?;
-        TruthfulPlanSummary::from_terminal_steps(&self.plan, &outcomes)
-            .map(OrchestrationEvent::PlanFinished)
-            .map_err(|_| OrchestrationError::SummaryUnavailable)
+        let summary = TruthfulPlanSummary::from_terminal_steps(&self.plan, &outcomes)
+            .map_err(|_| OrchestrationError::SummaryUnavailable)?;
+        if !self.final_recorded {
+            self.engine.record_orchestration(AuditEvent::PlanFinished {
+                plan_id: self.plan.plan_id().as_str().into(),
+                outcome: summary.outcome,
+                verified_steps: summary.verified_steps,
+                verified_effectful_steps: summary.verified_effectful_steps,
+                not_started_steps: summary.not_started_steps,
+                uncertain_steps: summary.uncertain_steps,
+            });
+            self.final_recorded = true;
+        }
+        Ok(OrchestrationEvent::PlanFinished(summary))
+    }
+
+    fn record_phase(&mut self, index: usize) {
+        let step = &self.plan.steps()[index];
+        self.engine
+            .record_orchestration(AuditEvent::PlanStepTransition {
+                plan_id: self.plan.plan_id().as_str().into(),
+                step_id: step.step_id().as_str().into(),
+                capability: step.capability(),
+                phase: self.lifecycles[index].phase(),
+            });
     }
 }
 
@@ -955,6 +1003,19 @@ mod tests {
             })
         ));
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let record_count = orchestrator.engine().audit().records().len();
+        assert!(orchestrator.engine().audit().verify_chain());
+        let audit = serde_json::to_string(orchestrator.engine().audit().records()).unwrap();
+        assert!(audit.contains("plan_accepted"));
+        assert!(audit.contains("plan_step_transition"));
+        assert!(audit.contains("plan_finished"));
+        assert!(!audit.contains("Linux"));
+        assert!(!audit.contains("token"));
+        assert!(matches!(
+            orchestrator.advance(1_003).unwrap(),
+            OrchestrationEvent::PlanFinished(_)
+        ));
+        assert_eq!(orchestrator.engine().audit().records().len(), record_count);
     }
 
     #[test]
