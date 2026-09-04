@@ -16,6 +16,7 @@ pub mod process_self;
 pub mod request;
 pub mod service_status;
 pub mod shell_ipc;
+pub mod shell_session;
 pub mod storage_summary;
 pub mod uptime;
 pub mod verification;
@@ -101,6 +102,10 @@ pub use shell_ipc::{
     SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellActivityCategory, ShellActivityKind,
     ShellActivityProjection, ShellApprovalPreview, ShellClientRequest, ShellDecision,
     ShellProtocolError, decode_shell_client_request,
+};
+pub use shell_session::{
+    MAX_SHELL_PEER_NAME_BYTES, ShellCancellationReason, ShellCancelledApproval, ShellPeerId,
+    ShellResolvedApproval, ShellSessionApprovals, ShellSessionError,
 };
 pub use storage_summary::{
     ROOT_FILESYSTEM_PATH, RootStorageReader, StorageSummary, StorageSummaryError,
