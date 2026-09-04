@@ -160,6 +160,22 @@ jobs:
           sudo grep -Eq '"outcome":"provider_failed"' \
             /run/blossom-model-gateway/audit/audit.jsonl
 
+      - name: Verify orderly cleanup and stale socket refusal
+        run: |
+          socket=/run/blossom-model-gateway/inference.sock
+          runtime_directory=/run/blossom-model-gateway
+          sudo systemctl stop blossom-model-gateway.service
+          test ! -e "$socket"
+          sudo install -d -o blossom-model-gateway \
+            -g blossom-model-gateway -m 0755 "$runtime_directory"
+          sudo install -o blossom-model-gateway \
+            -g blossom-ai -m 0660 /dev/null "$socket"
+          test -f "$socket"
+          if sudo systemctl start blossom-model-gateway.service; then
+            exit 1
+          fi
+          test ! -S "$socket"
+
       - name: Capture content-free failure diagnostics
         if: failure()
         run: |
