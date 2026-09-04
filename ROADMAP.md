@@ -227,11 +227,11 @@ the complete production and evidence gates.
     input.
     - [x] Add a manually dispatched, pinned-input installed-service harness and
       content-free gateway probe.
-    - [x] Record a successful llama.cpp run for merged commit `7a1b159`,
-      including filesystem denials, read-only package mounts, orderly socket
-      cleanup and stale-path refusal.
+    - [x] Record a successful llama.cpp run for merged commit `ed0d8c1`,
+      including filesystem denials, read-only package mounts, request-bound
+      streaming cancellation, orderly socket cleanup and stale-path refusal.
     - [ ] Close the remaining ADR-0017/0018 adversarial cases, including
-      cancellation races and audit-capacity failure.
+      connect/header/completion cancellation races and audit-capacity failure.
 - [x] Validate every model output and proposed tool intent against strict,
   code-owned schemas before it reaches the broker.
 - [ ] Produce controlled-protocol and real-model target-Linux evidence with

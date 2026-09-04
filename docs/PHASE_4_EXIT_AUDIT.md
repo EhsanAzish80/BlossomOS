@@ -40,14 +40,14 @@ controls from evidence that does not yet exist.
 - Inactive sysusers and hardened systemd templates pass repository drift checks
   and `systemd-analyze verify` in Linux CI.
 - Release/default gateway startup exits not-ready before creating a listener.
-- Merged commit `7a1b159` has passing disposable x86-64 Linux installed-system
+- Merged commit `ed0d8c1` has passing disposable x86-64 Linux installed-system
   evidence in workflow run
-  [`33852144280`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33852144280).
+  [`33853095060`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33853095060).
   The pinned llama.cpp package passed installation, distinct service identity,
   private namespace and external-network denial, socket admission, real offline
   inference, installed filesystem denials and read-only package mounts, audit
-  isolation/redaction, provider-loss non-success, orderly socket cleanup and
-  stale-path-refusal checks.
+  isolation/redaction, request-bound streaming cancellation, provider-loss
+  non-success, orderly socket cleanup and stale-path-refusal checks.
 
 ## Unsatisfied production gates
 
@@ -62,14 +62,16 @@ controls from evidence that does not yet exist.
   account-snapshot membership checks and their negative tests are implemented,
   and the isolated one-request/cancellation handler and gated listener are
   implemented. Installed evidence now covers the primary llama.cpp path, but
-  not every cancellation and lifecycle edge case.
+  only the streaming cancellation case after a validated start, not every
+  cancellation and lifecycle edge case.
 - Installed llama.cpp evidence covers intended distinct users, namespace
   identity, external-network denial, socket ownership, peer authorization and
   provider-loss behavior, filesystem denials and selected lifecycle cases.
 - The installed journal passed ownership, access-denial and redaction checks;
   audit-capacity failure and all terminal-write failure paths remain unproved.
 - No pinned real Ollama package or installed Ollama inference evidence exists.
-- Cancellation races still lack installed-service evidence.
+- Connect, header and completion cancellation races still lack installed-service
+  evidence; request-bound streaming cancellation now has passing evidence.
 
 ## Exit decision
 
