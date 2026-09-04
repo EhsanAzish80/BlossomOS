@@ -55,7 +55,7 @@ audit path. The session service has no direct privileged-helper authority.
 
 The initial interface is intentionally small:
 
-- request the existing fixed `uname` diagnostic;
+- request the existing fixed `/usr/bin/uname -s` diagnostic;
 - subscribe to a bounded, redacted activity projection;
 - obtain a service-authored exact preview for one pending request;
 - submit `approve_once` or `deny` for that request; and
@@ -82,12 +82,18 @@ The service checks that the challenge is pending, unexpired, unchanged, bound to
 the submitting D-Bus connection, and unused, then creates the existing private
 one-use grant. The approval token never crosses IPC and is never rendered,
 logged, or stored by QML. Mutation, replay, timeout, shell/service restart,
-connection loss, or duplicate submission denies and starts nothing.
+connection loss, or duplicate submission invalidates the challenge and starts
+nothing. When the audit boundary remains available, it records the exact
+cancellation, expiry, disconnect, or rejection category rather than inventing a
+user denial.
 
 Only one approval may be visibly pending per shell connection. A new request
-cannot replace or cover it. Keyboard shortcuts cannot approve; approval needs a
-deliberate pointer or touch activation after all security fields are visible.
-Focus loss does not approve or dismiss. Escape and window close deny.
+cannot replace or cover it. Global shortcuts, default-button activation, and an
+unmodified Enter key cannot approve. After all security fields are visible,
+approval requires deliberate activation of the focused `Approve once` control
+through keyboard, pointer, touch, or assistive technology. Focus loss does not
+approve or dismiss. Escape and window close cancel the pending challenge and
+start nothing; they are recorded as cancellation rather than user denial.
 
 ### Activity and truthful outcomes
 
@@ -116,7 +122,7 @@ Blossom services. This is not hardware, installer, ArchISO, or release proof.
 
 ```text
 shell request -> typed service request -> policy -> exact preview
-              -> approve once or deny -> fixed sandboxed uname
+              -> approve once or deny -> fixed sandboxed /usr/bin/uname -s
               -> verification -> redacted activity projection
 ```
 
@@ -190,9 +196,9 @@ Tests and evidence must prove:
 - only verified results render completed, with gaps and uncertainty explicit;
 - QML cannot spawn commands or select tools, arguments, paths, plans, D-Bus
   targets, or privileged requests;
-- focus, overlays, notification spoofing, rapid replacement, and accessibility
-  behavior receive adversarial UI tests;
+- focus, global/default keys, overlays, notification spoofing, rapid
+  replacement, keyboard-only operation, and assistive-technology behavior
+  receive adversarial UI tests;
 - existing Phase 1-5 negative tests remain green; and
 - pinned Arch/Hyprland/Quickshell installed evidence exercises the complete
   fixed diagnostic slice before Phase 6 is marked complete.
-

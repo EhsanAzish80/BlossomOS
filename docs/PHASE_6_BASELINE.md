@@ -10,7 +10,7 @@ truthful activity projection.
 ## Fixed first slice
 
 ```text
-request fixed uname diagnostic
+request fixed /usr/bin/uname -s diagnostic
   -> policy decision
   -> exact service-authored preview
   -> approve once or deny
@@ -43,4 +43,3 @@ file access, privileged operation, or graphical implementation.
 - Passing prior-phase regression, lint, dependency, secret, and CodeQL checks.
 - Documentation distinguishing installed evidence from hardware, ArchISO,
   installer, distribution, and release-readiness proof.
-
