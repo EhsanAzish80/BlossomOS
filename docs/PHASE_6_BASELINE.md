@@ -40,8 +40,10 @@ file access, privileged operation, or graphical implementation.
    cancels that client's pending approval through the existing audited engine
    path. Subscription failure, stream loss, poisoned shared state, or audited
    cancellation failure terminates the service path. The adapter remains behind
-   an inactive production feature. Broader hostile-client, restart, and
-   installed service-loss evidence remains pending.
+   an inactive production feature. A private-bus test uses the real service
+   engine and a counting executor to prove that a second same-UID peer, preview
+   mutation, decision replay, and cancellation replay cannot start additional
+   execution. Restart and installed service-loss evidence remains pending.
 4. Add a minimal Quickshell approval and activity surface for the fixed slice.
 5. Package the pinned Hyprland, Quickshell, D-Bus, and Blossom service boundary.
 6. Produce installed Arch userspace evidence and an independent exit audit.

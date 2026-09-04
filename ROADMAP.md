@@ -325,7 +325,10 @@ shell or installed-runtime evidence is currently claimed.
   restart, cancellation, schema, and service-loss behavior fails closed. Client
   unique-name loss now cancels its pending approval through the audited engine
   path, and loss of the owner-monitor stream terminates the service path; the
-  remaining adversarial and installed cases keep this item open.
+  private-bus suite also proves cross-peer preview theft, preview mutation,
+  approval replay, exact cancellation, and cancellation replay against the real
+  engine with an execution counter. Restart and installed service-loss cases
+  keep this item open.
 - [ ] Establish the pinned Arch + Hyprland + Quickshell development and package
   boundary.
 - [ ] Build exact approval preview and readable correlated activity UI for the

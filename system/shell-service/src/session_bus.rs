@@ -1,7 +1,7 @@
 use blossom_core::executor::bubblewrap::BubblewrapExecutor;
 use blossom_core::{
-    SHELL_BUS_NAME, SHELL_INTERFACE, SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellClientRequest,
-    ShellDiagnosticService, ShellPeerId, decode_shell_client_request,
+    Executor, SHELL_BUS_NAME, SHELL_INTERFACE, SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION,
+    ShellClientRequest, ShellDiagnosticService, ShellPeerId, decode_shell_client_request,
 };
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -37,7 +37,7 @@ pub trait ShellRequestHandler: Send {
     fn disconnect(&mut self, peer: &ShellPeerId, now_ms: u64) -> Result<(), HandlerError>;
 }
 
-impl ShellRequestHandler for ShellDiagnosticService<BubblewrapExecutor> {
+impl<E: Executor + Send> ShellRequestHandler for ShellDiagnosticService<E> {
     fn start(&mut self, peer: ShellPeerId, now_ms: u64) -> Result<Vec<u8>, HandlerError> {
         encode(
             &self
@@ -334,10 +334,29 @@ pub fn run_production() -> Result<(), ShellProcessError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use blossom_core::{CommandSpec, ExecutionResult, ExecutorError};
     use std::io::{BufRead, BufReader};
     use std::process::{Child, Command, Stdio};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
+
+    struct CountingExecutor {
+        calls: Arc<AtomicUsize>,
+    }
+
+    impl Executor for CountingExecutor {
+        fn execute(&mut self, command: &CommandSpec) -> Result<ExecutionResult, ExecutorError> {
+            assert_eq!(command, &CommandSpec::system_uname());
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(ExecutionResult {
+                exit_code: Some(0),
+                stdout: b"Linux\n".to_vec(),
+                stderr: Vec::new(),
+                timed_out: false,
+                output_truncated: false,
+            })
+        }
+    }
 
     struct TestBus(Child);
 
@@ -483,5 +502,110 @@ mod tests {
         assert_eq!(disconnects.load(Ordering::SeqCst), 1);
         drop(service_connection);
         drop(monitor);
+    }
+
+    fn decision_bytes(preview: &serde_json::Value, decision: &str) -> Vec<u8> {
+        serde_json::to_vec(&serde_json::json!({
+            "kind": "submit_decision",
+            "version": SHELL_PROTOCOL_VERSION,
+            "request_id": preview["request_id"],
+            "preview_sha256": preview["preview_sha256"],
+            "decision": decision,
+        }))
+        .expect("decision")
+    }
+
+    #[test]
+    fn hostile_peer_mutation_replay_and_cancellation_start_nothing() {
+        let (_bus, address) = test_bus();
+        let owner = zbus::blocking::connection::Builder::address(address.as_str())
+            .expect("owner address")
+            .build()
+            .expect("owner");
+        let attacker = zbus::blocking::connection::Builder::address(address.as_str())
+            .expect("attacker address")
+            .build()
+            .expect("attacker");
+        let calls = Arc::new(AtomicUsize::new(0));
+        let _service = zbus::blocking::connection::Builder::address(address.as_str())
+            .expect("service address")
+            .name(SHELL_BUS_NAME)
+            .expect("service name")
+            .serve_at(
+                SHELL_OBJECT_PATH,
+                ShellBusService::new(ShellDiagnosticService::new(
+                    CountingExecutor {
+                        calls: Arc::clone(&calls),
+                    },
+                    17,
+                )),
+            )
+            .expect("serve")
+            .build()
+            .expect("service");
+        let owner_proxy =
+            zbus::blocking::Proxy::new(&owner, SHELL_BUS_NAME, SHELL_OBJECT_PATH, SHELL_INTERFACE)
+                .expect("owner proxy");
+        let attacker_proxy = zbus::blocking::Proxy::new(
+            &attacker,
+            SHELL_BUS_NAME,
+            SHELL_OBJECT_PATH,
+            SHELL_INTERFACE,
+        )
+        .expect("attacker proxy");
+
+        let awaiting: Vec<u8> = owner_proxy
+            .call("StartSystemUname1", &(SHELL_PROTOCOL_VERSION,))
+            .expect("start");
+        let envelope: serde_json::Value = serde_json::from_slice(&awaiting).expect("envelope");
+        let preview = &envelope["preview"];
+        let approve = decision_bytes(preview, "approve_once");
+
+        let stolen: Result<Vec<u8>, _> =
+            attacker_proxy.call("SubmitDecision1", &(approve.clone(),));
+        assert!(stolen.is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+
+        let mut mutated: serde_json::Value = serde_json::from_slice(&approve).expect("request");
+        mutated["preview_sha256"] = serde_json::Value::String("0".repeat(64));
+        let mutated = serde_json::to_vec(&mutated).expect("mutated request");
+        let changed: Result<Vec<u8>, _> = owner_proxy.call("SubmitDecision1", &(mutated,));
+        assert!(changed.is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+
+        let verified: Vec<u8> = owner_proxy
+            .call("SubmitDecision1", &(approve.clone(),))
+            .expect("approve once");
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&verified).expect("verified")["status"],
+            "verified"
+        );
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let replay: Result<Vec<u8>, _> = owner_proxy.call("SubmitDecision1", &(approve,));
+        assert!(replay.is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+
+        let awaiting: Vec<u8> = owner_proxy
+            .call("StartSystemUname1", &(SHELL_PROTOCOL_VERSION,))
+            .expect("second start");
+        let envelope: serde_json::Value = serde_json::from_slice(&awaiting).expect("envelope");
+        let preview = &envelope["preview"];
+        let cancel = serde_json::to_vec(&serde_json::json!({
+            "kind": "cancel_pending",
+            "version": SHELL_PROTOCOL_VERSION,
+            "request_id": preview["request_id"],
+            "preview_sha256": preview["preview_sha256"],
+        }))
+        .expect("cancel");
+        let cancelled: Vec<u8> = owner_proxy
+            .call("CancelPending1", &(cancel.clone(),))
+            .expect("cancel once");
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&cancelled).expect("cancelled")["status"],
+            "cancelled"
+        );
+        let cancel_replay: Result<Vec<u8>, _> = owner_proxy.call("CancelPending1", &(cancel,));
+        assert!(cancel_replay.is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
     }
 }
