@@ -16,7 +16,7 @@ const PRODUCTION_AUDIT_PATH: &str = "/run/blossom-model-gateway/audit";
 
 pub const PRODUCTION_SOCKET_PATH: &str = "/run/blossom-model-gateway/inference.sock";
 #[cfg(all(target_os = "linux", feature = "production-private-inference"))]
-const PRODUCTION_PROFILE_PATH: &str = "/etc/blossom-os/model-profiles/llama-cpp-cpu-x86_64.json";
+const PRODUCTION_PROFILE_PATH: &str = "/etc/blossom-os/model-profiles/active.json";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GatewayProcessError {
@@ -504,16 +504,19 @@ pub fn run_production() -> Result<(), GatewayProcessError> {
         };
         use blossom_core::{
             GatewayPeerCredentials, GatewayProfile, LlamaCppAdapter, ModelProfile,
-            ModelProviderKind, load_installed_runtime_readiness, production_provider_profile,
+            ModelProviderKind, OllamaAdapter, load_installed_runtime_readiness_from_set,
+            production_provider_profile,
         };
         use std::path::Path;
 
         let specification = production_provider_profile(GatewayProfile::LlamaCppCpuV1)
             .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
             .ok_or(GatewayProcessError::ProfileRegistryUnavailable)?;
-        let readiness =
-            load_installed_runtime_readiness(Path::new(PRODUCTION_PROFILE_PATH), &specification)
-                .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?;
+        let readiness = load_installed_runtime_readiness_from_set(
+            Path::new(PRODUCTION_PROFILE_PATH),
+            &[specification],
+        )
+        .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?;
         let effective_uid = nix::unistd::geteuid().as_raw();
         let effective_gid = nix::unistd::getegid().as_raw();
         if effective_uid != readiness.accounts().gateway_uid()
@@ -579,7 +582,8 @@ pub fn run_production() -> Result<(), GatewayProcessError> {
                     outcome: GatewayAdmissionOutcome::Authorized,
                 })
                 .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
-            let adapter = LlamaCppAdapter::default();
+            let llama_cpp = LlamaCppAdapter::default();
+            let ollama = OllamaAdapter::default();
             let _ = serve_authorized_private_connection(
                 stream,
                 PrivateConnectionContext {
@@ -592,10 +596,13 @@ pub fn run_production() -> Result<(), GatewayProcessError> {
                     client_uid_sha256: &client_uid_sha256,
                 },
                 &mut audit,
-                |request, cancellation, emit| {
-                    adapter
+                |request, cancellation, emit| match request.provider() {
+                    ModelProviderKind::LlamaCpp => llama_cpp
                         .stream(request, cancellation, emit)
-                        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)
+                        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable),
+                    ModelProviderKind::Ollama => ollama
+                        .stream(request, cancellation, emit)
+                        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable),
                 },
             );
         }

@@ -21,7 +21,7 @@ MODEL_PATH = PurePosixPath(
     "/usr/lib/blossom-os/models/llama-cpp/qwen2.5-0.5b-instruct-q4_k_m.gguf"
 )
 PROFILE_PATH = PurePosixPath(
-    "/etc/blossom-os/model-profiles/llama-cpp-cpu-x86_64.json"
+    "/etc/blossom-os/model-profiles/active.json"
 )
 LOGICAL_MODEL = "qwen2.5-0.5b-instruct:q4_k_m"
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024

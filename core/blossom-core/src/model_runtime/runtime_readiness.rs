@@ -7,7 +7,7 @@
 use super::GatewayPeerCredentials;
 use super::provider_profile::{
     ProviderProfileError, ProviderProfileSpec, ValidatedProviderProfile,
-    load_installed_provider_profile,
+    load_installed_provider_profile, load_installed_provider_profile_from_set,
 };
 use sha2::{Digest, Sha256};
 use std::fs::{File, Metadata};
@@ -222,6 +222,23 @@ pub fn load_installed_runtime_readiness(
     expected: &ProviderProfileSpec,
 ) -> Result<RuntimeReadinessEvidence, RuntimeReadinessError> {
     let profile = load_installed_provider_profile(manifest_path, expected)?;
+    let unit_path = Path::new(UNIT_DIRECTORY).join(profile.identity().provider_unit());
+    load_runtime_readiness(
+        profile,
+        Path::new(PASSWD_PATH),
+        Path::new(GROUP_PATH),
+        &unit_path,
+        0,
+    )
+}
+
+/// Validate one root-owned active profile against a closed embedded set while
+/// opening and reading the manifest only once.
+pub fn load_installed_runtime_readiness_from_set(
+    manifest_path: &Path,
+    expected: &[ProviderProfileSpec],
+) -> Result<RuntimeReadinessEvidence, RuntimeReadinessError> {
+    let profile = load_installed_provider_profile_from_set(manifest_path, expected)?;
     let unit_path = Path::new(UNIT_DIRECTORY).join(profile.identity().provider_unit());
     load_runtime_readiness(
         profile,

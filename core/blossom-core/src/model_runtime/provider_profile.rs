@@ -509,11 +509,31 @@ pub fn load_installed_provider_profile(
     load_provider_profile(path, expected, 0)
 }
 
+/// Load one root-owned active manifest once and accept it only when its exact
+/// canonical bytes match one member of the closed code-owned profile set.
+pub fn load_installed_provider_profile_from_set(
+    path: &Path,
+    expected: &[ProviderProfileSpec],
+) -> Result<ValidatedProviderProfile, ProviderProfileError> {
+    load_provider_profile_from_set(path, expected, 0)
+}
+
 fn load_provider_profile(
     path: &Path,
     expected: &ProviderProfileSpec,
     expected_uid: u32,
 ) -> Result<ValidatedProviderProfile, ProviderProfileError> {
+    load_provider_profile_from_set(path, std::slice::from_ref(expected), expected_uid)
+}
+
+fn load_provider_profile_from_set(
+    path: &Path,
+    expected: &[ProviderProfileSpec],
+    expected_uid: u32,
+) -> Result<ValidatedProviderProfile, ProviderProfileError> {
+    if expected.is_empty() {
+        return Err(ProviderProfileError::UnexpectedManifest);
+    }
     validate_absolute_path(path)?;
     let mut file = open_manifest(path)?;
     let before = file
@@ -543,8 +563,12 @@ fn load_provider_profile(
         serde_json::from_slice(&bytes).map_err(|_| ProviderProfileError::InvalidManifest)?;
     validate_manifest(&parsed)?;
     let digest = hex_digest(&bytes);
-    if bytes != expected.canonical_bytes || digest != expected.sha256 || parsed != expected.expected
-    {
+    let matched = expected.iter().find(|candidate| {
+        bytes == candidate.canonical_bytes
+            && digest == candidate.sha256
+            && parsed == candidate.expected
+    });
+    if matched.is_none() {
         return Err(ProviderProfileError::UnexpectedManifest);
     }
 
@@ -1053,6 +1077,29 @@ mod tests {
             spec.canonical_bytes().len() as u64
         );
         assert_ne!(validated.source_inode(), 0);
+    }
+
+    #[test]
+    fn active_profile_is_read_once_and_matches_only_the_closed_set() {
+        let directory = TestDirectory::new();
+        let first = ProviderProfileSpec::compile(fixture()).unwrap();
+        let mut alternative = fixture();
+        alternative.logical_model = "fixture-model:2".into();
+        alternative.executable_arguments[4] = alternative.logical_model.clone();
+        let second = ProviderProfileSpec::compile(alternative).unwrap();
+        let (path, _, uid) = write_fixture(&directory, second.canonical_bytes());
+
+        let validated =
+            load_provider_profile_from_set(&path, &[first.clone(), second.clone()], uid).unwrap();
+        assert_eq!(validated.manifest(), second.manifest());
+        assert_eq!(
+            load_provider_profile_from_set(&path, &[first], uid),
+            Err(ProviderProfileError::UnexpectedManifest)
+        );
+        assert_eq!(
+            load_provider_profile_from_set(&path, &[], uid),
+            Err(ProviderProfileError::UnexpectedManifest)
+        );
     }
 
     #[test]
