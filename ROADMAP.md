@@ -273,6 +273,9 @@ than as current unresolved-gate statements.
 Status: active. Implementation begins with an accepted ADR defining the closed
 orchestration state machine and truthful terminal outcomes.
 
+- [x] Accept ADR-0020 for the closed plan schema, monotonic state machine,
+  per-step authority checks, cancellation, partial/indeterminate outcomes,
+  recovery and rollback limits, audit projection, and truthful summaries.
 - Add intent, plan, capability analysis, approval, execution, verification, and
   truthful-summary states.
 - Handle partial completion, rollback opportunities, cancellation, and recovery.
