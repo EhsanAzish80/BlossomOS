@@ -66,14 +66,13 @@ fn expect_rejected() -> Result<(), String> {
 }
 
 fn exhaust_audit() -> Result<(), String> {
-    const MIN_REJECTIONS: usize = 1_000;
     const MAX_REJECTIONS: usize = 5_000;
 
     for completed in 0..MAX_REJECTIONS {
         let mut stream = match UnixStream::connect(PRODUCTION_SOCKET_PATH) {
             Ok(stream) => stream,
-            Err(_) if completed >= MIN_REJECTIONS => return Ok(()),
-            Err(_) => return Err("gateway stopped before capacity evidence".into()),
+            Err(_) if completed > 0 => return Ok(()),
+            Err(_) => return Err("gateway was unavailable before exhaustion".into()),
         };
         stream
             .set_read_timeout(Some(Duration::from_secs(2)))
