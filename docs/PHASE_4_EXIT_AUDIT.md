@@ -40,38 +40,42 @@ controls from evidence that does not yet exist.
 - Inactive sysusers and hardened systemd templates pass repository drift checks
   and `systemd-analyze verify` in Linux CI.
 - Release/default gateway startup exits not-ready before creating a listener.
+- Merged commit `bba9aea` has passing disposable x86-64 Linux installed-system
+  evidence in workflow run
+  [`33847719169`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33847719169).
+  The pinned llama.cpp package passed installation, distinct service identity,
+  private namespace and external-network denial, socket admission, real offline
+  inference, audit isolation/redaction and provider-loss non-success checks.
 
 ## Unsatisfied production gates
 
 - The production registry/package set is incomplete: the pinned llama.cpp
   x86-64 entry exists, but Ollama and other supported architectures do not.
-- The llama.cpp recipe produces one reviewed package root, but it has not been
-  installed or exercised on the supported target Linux baseline.
+- The llama.cpp recipe and feature-gated gateway have now been installed and
+  exercised on a disposable Ubuntu x86-64 baseline, but no target-Arch package
+  or ABI evidence is recorded.
 - Production startup consumes readiness evidence and retains its descriptors
-  through admission. The listener remains disabled in default packages and no
-  installed service has exercised the feature-gated path.
+  through admission. The listener remains disabled in default packages.
 - ADR-0017 fixes the private admission and cancellation contract. Retained
   account-snapshot membership checks and their negative tests are implemented,
   and the isolated one-request/cancellation handler and gated listener are
-  implemented, but installed-service evidence is not.
-- No test has started the packaged services under the intended distinct users
-  and verified namespace identity, loopback-only networking, socket ownership,
-  peer authorization, filesystem denial and lifecycle failure behavior.
-- The journal has unit-level integrity and redaction evidence, but its ownership,
-  access denial, capacity and failure behavior remain unproved in the installed
-  systemd service.
-- No pinned real Ollama package exists; pinned llama.cpp/Qwen inputs have not
-  yet produced target-Linux runtime evidence.
-- No real local-model inference has been recorded with external networking
-  disabled on the supported target Linux baseline.
-- A manually dispatched installed-service workflow and content-free probe now
-  exist, but no successful merged-commit run is recorded yet; harness presence
-  is not runtime evidence.
+  implemented. Installed evidence now covers the primary llama.cpp path, but
+  not every cancellation and lifecycle edge case.
+- Installed llama.cpp evidence covers intended distinct users, namespace
+  identity, external-network denial, socket ownership, peer authorization and
+  provider-loss behavior, but broader filesystem-denial and lifecycle cases
+  remain incomplete.
+- The installed journal passed ownership, access-denial and redaction checks;
+  audit-capacity failure and all terminal-write failure paths remain unproved.
+- No pinned real Ollama package or installed Ollama inference evidence exists.
+- Cancellation races and stale-socket recovery still lack installed-service
+  evidence.
 
 ## Exit decision
 
-The Phase 4 exit criterion is not satisfied. Controlled-protocol conformance is
-not real-model evidence, and static unit analysis is not runtime isolation
-evidence. Private and ambient input must remain disabled in packages, the
-default gateway must remain fail closed, and Phase 5 must not begin until every
-item above is backed by reviewable target-Linux evidence.
+The Phase 4 exit criterion is not satisfied. Real-model installed evidence now
+exists for the pinned llama.cpp profile, but Ollama packaging/evidence,
+target-Arch evidence and the remaining adversarial cases are unresolved.
+Private and ambient input must remain disabled in default packages, the default
+gateway must remain fail closed, and Phase 5 must not begin until every item
+above is backed by reviewable evidence.

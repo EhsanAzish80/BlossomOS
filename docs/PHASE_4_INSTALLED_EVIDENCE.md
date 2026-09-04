@@ -1,7 +1,7 @@
 # Phase 4 installed-service evidence
 
-Status: harness implemented but not yet successfully executed. It is manually
-dispatched and does not complete any Phase 4 exit criterion by existing alone.
+Status: passing llama.cpp installed-system evidence recorded. The harness is
+manually dispatched; this evidence does not by itself complete Phase 4.
 
 `.github/workflows/phase4-installed-evidence.yml` uses a disposable x86-64
 Ubuntu runner. It builds the non-default production gateway, downloads only the
@@ -17,10 +17,19 @@ namespace, external-network denial, selected systemd resource limits, audit
 ownership/redaction, and provider-loss non-success.
 
 The workflow intentionally does not run for every pull request because the
-pinned model is approximately 491 MB. A passing manually dispatched run and its
-immutable commit SHA must be recorded here before any evidence item is marked
-satisfied. It does not yet cover every cancellation race, audit-capacity fault,
-stale socket recovery or all filesystem denials required by ADR-0017/0018.
+pinned model is approximately 491 MB. Run
+[`33847719169`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33847719169)
+passed on 2026-09-04 for merged commit `bba9aea`. It verified the installed
+llama.cpp boundary end to end: package assembly and installation, distinct
+service identities, socket metadata and admission denial, a shared private
+network namespace with external-network denial, selected resource limits, real
+offline inference, audit ownership/isolation/redaction and provider-loss
+non-success.
+
+This run covers the pinned x86-64 llama.cpp profile only. It does not provide a
+pinned Ollama package or installed Ollama evidence, and it does not yet cover
+every cancellation race, audit-capacity fault, stale-socket recovery or all
+filesystem denials required by ADR-0017/0018.
 
 Failure diagnostics expose only systemd state/result categories; the workflow
 does not publish service journals, model output, prompts or raw gateway audit
