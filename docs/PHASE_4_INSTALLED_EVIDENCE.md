@@ -18,9 +18,9 @@ systemd resource limits, audit ownership/redaction, and provider-loss
 non-success.
 
 The workflow intentionally does not run for every pull request because the
-pinned model is approximately 491 MB. Run
-[`33857138139`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33857138139)
-passed on 2026-09-04 for merged commit `17481c3`. It verified the installed
+pinned model is approximately 491 MB. The current authoritative run is
+[`33859738402`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33859738402),
+which passed on 2026-09-04 for merged commit `80a59d3`. It verified the installed
 llama.cpp boundary end to end: package assembly and installation, distinct
 service identities, socket metadata and admission denial, a shared private
 network namespace with external-network denial, selected resource limits, real
@@ -38,10 +38,18 @@ gateway-level root rejections then exhausted the closed audit capacity within a
 and non-preserved boot-scoped journal, and left the provider and namespace
 services active.
 
+The same run used a fixed, content-free protocol fixture outside the production
+package and signed provider inventory to exercise cancellation while a provider
+connection was deliberately stalled, while response headers were withheld, and
+after the first validated text delta but before completion. In every case the
+request-bound cancellation produced `Cancelled`, never a successful completion
+or proposed tool intent. The fixture accepts only one bounded HTTP request on
+the fixed loopback endpoint, uses the pinned logical model identity, logs no
+request or response content, and runs only on the disposable evidence host.
+
 This run covers the pinned x86-64 llama.cpp profile only. It does not provide a
-pinned Ollama package or installed Ollama evidence, and it does not yet cover
-connect/header/completion cancellation races or terminal-write faults required
-by ADR-0017/0018.
+pinned Ollama package or installed Ollama evidence, target-Arch evidence, or the
+terminal-write fault evidence still required by ADR-0018.
 
 Failure diagnostics expose only systemd state/result categories; the workflow
 does not publish service journals, model output, prompts or raw gateway audit

@@ -140,55 +140,27 @@ not been moved or restructured.
 Phases 0 through 3 are complete. Their exit evidence is recorded in
 `docs/PHASE_0_BASELINE.md`, `docs/PHASE_1_SECURITY_CORE.md`,
 `docs/PHASE_2_BASELINE.md`, and `docs/PHASE_3_BASELINE.md`. Phase 4 is active
-under accepted ADR-0011, beginning with provider-neutral types and synthetic
-conformance fixtures. The closed core contract is implemented and documented in
-`docs/PHASE_4_CORE_CONTRACT.md`. A fixed-loopback, synthetic-only Ollama
-development adapter is documented in `docs/PHASE_4_OLLAMA_ADAPTER.md`, and an
-equally constrained llama.cpp adapter is documented in
-`docs/PHASE_4_LLAMA_CPP_ADAPTER.md`. These two adapters demonstrate a replaceable
-provider boundary against controlled protocol fixtures; they are not an
-authenticated or production model runtime. No private input, model download,
-provider lifecycle, cross-provider real-model proof, or offline real-model
-evidence exists, pending complete implementation and validation of the accepted
-provider-identity boundary.
+under accepted ADR-0011 through ADR-0018. The repository now contains closed
+provider-neutral inference types, bounded Ollama and llama.cpp adapters,
+authenticated one-request gateway framing, retained installed-identity
+readiness, a content-free operational audit, hardened systemd packaging, and a
+pinned offline-buildable llama.cpp x86-64 package.
 
-ADR-0012 now defines that provider-identity boundary. Its first implementation
-checkpoint adds only closed, synthetic gateway framing, strict request/event
-validation, cancellation binding, and Linux Unix-socket peer-credential
-primitives. It does not create or install the gateway service, authenticate a
-production provider, or permit private input. See
-`docs/PHASE_4_GATEWAY_PROTOCOL.md`.
+Merged commit `80a59d3` has passing disposable Ubuntu x86-64 installed evidence
+in workflow run
+[`33859738402`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33859738402).
+That run installed the package and exercised real offline inference, distinct
+service identities, peer admission, filesystem and network isolation, resource
+bounds, provider loss, audit redaction and capacity failure, socket lifecycle,
+and cancellation during connect, response headers, streaming and the
+pre-completion race.
 
-A second synthetic-only checkpoint connects a bounded client to a one-request
-fixture gateway over an ephemeral Unix socket. Target-Linux tests run the
-gateway in a separate process and prove that a peer-identity mismatch closes the
-connection before any request byte is written. This remains test infrastructure,
-not the packaged production gateway. See `docs/PHASE_4_GATEWAY_FIXTURE.md`.
-
-A third checkpoint defines a closed CPU-only provider-profile manifest and
-validates canonical expected bytes, artifact and unit digests, fixed endpoints,
-static identities, filesystem visibility, and resource bounds. Its tests use
-synthetic user-owned files; no root-owned production manifest, compiled profile
-registry, package, service, model, or private-input path exists. See
-`docs/PHASE_4_PROVIDER_MANIFEST.md`.
-
-A fourth, inactive packaging checkpoint defines persistent non-login service
-account declarations, fixed paths, a private-network namespace anchor, a
-hardened gateway unit, and closed CPU-provider unit templates. CI checks this
-surface and verifies the concrete units, but the repository does not install,
-render, enable, or start them. See `docs/PHASE_4_SYSTEMD_BOUNDARY.md`.
-
-A fifth checkpoint adds the `blossom-model-gateway` process scaffold. Its normal
-and release entry point exits not-ready before creating a listener because no
-production profile registry or readiness proof exists. Debug builds expose only
-one fixed, argument-free synthetic request through an explicit fixture mode for
-Linux separate-process testing. See `docs/PHASE_4_GATEWAY_PROCESS.md`.
-
-A sixth checkpoint adds a debug/test-only closed registry for two synthetic CPU
-packages and deterministically renders the reviewed Ollama and llama.cpp unit
-templates. Each synthetic manifest derives its unit digest from those exact
-bytes. Release builds still contain neither a constructible registry nor a
-renderer. See `docs/PHASE_4_PROFILE_RENDERER.md`.
+This remains a pre-alpha Phase 4 checkpoint, not a completed production AI
+runtime. A pinned Ollama production package and equivalent installed evidence,
+target-Arch evidence, and terminal-write fault evidence remain unresolved.
+Private input remains disabled in default builds, and Phase 5 has not begun.
+See `docs/PHASE_4_EXIT_AUDIT.md` and
+`docs/PHASE_4_INSTALLED_EVIDENCE.md` for the exact evidence and open gates.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.
