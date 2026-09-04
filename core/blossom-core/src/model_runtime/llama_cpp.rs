@@ -5,7 +5,7 @@
 //! model, media, server-tool, agent, control, or administrative endpoints.
 
 use super::ollama::{
-    OllamaAdapterError, configure_stream, read_body, read_headers, remaining, write_request,
+    OllamaAdapterError, configure_stream, connect_checked, read_body, read_headers, write_request,
 };
 use super::{
     ConversationRole, InferenceCancellation, InferenceOutputMode, InferenceRequest,
@@ -17,7 +17,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io::BufReader;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::time::{Duration, Instant};
 
 pub const LLAMA_CPP_ENDPOINT: &str = "127.0.0.1:8080";
@@ -98,21 +98,9 @@ impl LlamaCppAdapter {
             .checked_add(Duration::from_millis(request.deadline_ms()))
             .ok_or(LlamaCppAdapterError::TimedOut)?;
         let payload = encode_request(request)?;
-        let mut stream = match TcpStream::connect_timeout(&self.endpoint, remaining(deadline)?) {
+        let mut stream = match connect_checked(self.endpoint, deadline, &cancellation) {
             Ok(stream) => stream,
-            Err(error) => {
-                let category = if error.kind() == std::io::ErrorKind::TimedOut {
-                    ProviderFailureCategory::TimedOut
-                } else {
-                    ProviderFailureCategory::Unavailable
-                };
-                push_event(
-                    &mut events,
-                    state.apply(1, ProviderStreamInput::Failed(category))?,
-                    emit,
-                );
-                return Ok(events);
-            }
+            Err(error) => return terminalize(error.into(), state, events, 1, emit),
         };
         if let Err(error) = configure_stream(&stream) {
             return terminalize(error.into(), state, events, 1, emit);
@@ -804,7 +792,7 @@ mod tests {
         NormalizedCompletion, NormalizedStreamKind, TurnIntentCatalogue,
     };
     use std::io::{Read, Write};
-    use std::net::{Shutdown, TcpListener};
+    use std::net::{Shutdown, TcpListener, TcpStream};
     use std::thread::{self, JoinHandle};
 
     fn request(intents: TurnIntentCatalogue, deadline_ms: u64) -> InferenceRequest {

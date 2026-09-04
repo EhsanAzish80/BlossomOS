@@ -96,22 +96,9 @@ impl OllamaAdapter {
             .checked_add(Duration::from_millis(request.deadline_ms()))
             .ok_or(OllamaAdapterError::TimedOut)?;
         let payload = encode_request(request)?;
-        let remaining = remaining(deadline)?;
-        let mut stream = match TcpStream::connect_timeout(&self.endpoint, remaining) {
+        let mut stream = match connect_checked(self.endpoint, deadline, &cancellation) {
             Ok(stream) => stream,
-            Err(error) => {
-                let category = if error.kind() == io::ErrorKind::TimedOut {
-                    ProviderFailureCategory::TimedOut
-                } else {
-                    ProviderFailureCategory::Unavailable
-                };
-                push_event(
-                    &mut events,
-                    state.apply(1, ProviderStreamInput::Failed(category))?,
-                    emit,
-                );
-                return Ok(events);
-            }
+            Err(error) => return terminalize(error, state, events, 1, emit),
         };
         if let Err(error) = configure_stream(&stream) {
             return terminalize(error, state, events, 1, emit);
@@ -315,6 +302,35 @@ pub(super) fn configure_stream(stream: &TcpStream) -> Result<(), OllamaAdapterEr
     stream.set_write_timeout(Some(IO_POLL_INTERVAL))?;
     stream.set_nodelay(true)?;
     Ok(())
+}
+
+pub(super) fn connect_checked(
+    endpoint: SocketAddr,
+    deadline: Instant,
+    cancellation: &InferenceCancellation,
+) -> Result<TcpStream, OllamaAdapterError> {
+    connect_with_cancellation(deadline, cancellation, |timeout| {
+        TcpStream::connect_timeout(&endpoint, timeout)
+    })
+}
+
+fn connect_with_cancellation<T>(
+    deadline: Instant,
+    cancellation: &InferenceCancellation,
+    mut connect: impl FnMut(Duration) -> io::Result<T>,
+) -> Result<T, OllamaAdapterError> {
+    loop {
+        check_progress(deadline, cancellation)?;
+        let timeout = remaining(deadline)?.min(IO_POLL_INTERVAL);
+        match connect(timeout) {
+            Ok(connection) => {
+                check_progress(deadline, cancellation)?;
+                return Ok(connection);
+            }
+            Err(error) if is_retryable(&error) => continue,
+            Err(_) => return Err(OllamaAdapterError::Unavailable),
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -1340,6 +1356,28 @@ mod tests {
         )));
         cancel_thread.join().unwrap();
         handle.join().unwrap();
+    }
+
+    #[test]
+    fn cancellation_interrupts_retryable_connect_wait() {
+        let cancellation = InferenceCancellation::new();
+        let trigger = cancellation.clone();
+        let cancel_thread = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(20));
+            trigger.cancel();
+        });
+        let started = Instant::now();
+        let result: Result<(), OllamaAdapterError> = connect_with_cancellation(
+            Instant::now() + Duration::from_secs(2),
+            &cancellation,
+            |timeout| {
+                thread::sleep(timeout);
+                Err(io::Error::new(io::ErrorKind::TimedOut, "fixture timeout"))
+            },
+        );
+        assert_eq!(result, Err(OllamaAdapterError::Cancelled));
+        assert!(started.elapsed() < Duration::from_millis(500));
+        cancel_thread.join().unwrap();
     }
 
     #[test]
