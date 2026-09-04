@@ -1,0 +1,114 @@
+name: Phase 4 target Arch ABI evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase4-arch-abi-evidence
+  cancel-in-progress: false
+
+jobs:
+  arch-x86-64:
+    name: Arch Linux package and ABI evidence
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34
+    timeout-minutes: 60
+    steps:
+      - name: Establish the pinned target userspace
+        run: |
+          grep -qx 'ID=arch' /etc/os-release
+          test "$(uname -m)" = x86_64
+          pacman -Syu --noconfirm rust python jq curl zstd systemd file
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build and test on Arch Linux
+        run: |
+          cargo test --locked --package blossom-core model_runtime
+          cargo test --locked --package blossom-model-gateway --all-features
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo build --locked --release --package blossom-model-gateway \
+            --features production-private-inference
+
+      - name: Fetch immutable llama.cpp inputs
+        env:
+          LOCK: system/model-runtime/registry/llama-cpp-cpu-x86_64.lock.json
+        run: |
+          mkdir -m 0700 -p "$RUNNER_TEMP/llama-inputs"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/llama-inputs/runtime.tar.gz" "$(jq -r .runtime.url "$LOCK")"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/llama-inputs/model.gguf" "$(jq -r .model.url "$LOCK")"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/llama-inputs/model.LICENSE" "$(jq -r .model.license.url "$LOCK")"
+
+      - name: Assemble and inspect llama.cpp package on Arch
+        run: |
+          python3 scripts/package_llama_cpp_runtime.py \
+            --runtime-archive "$RUNNER_TEMP/llama-inputs/runtime.tar.gz" \
+            --model "$RUNNER_TEMP/llama-inputs/model.gguf" \
+            --model-license "$RUNNER_TEMP/llama-inputs/model.LICENSE" \
+            --gateway-binary "$GITHUB_WORKSPACE/target/release/blossom-model-gateway" \
+            --output "$RUNNER_TEMP/llama-package"
+          cp -a "$RUNNER_TEMP/llama-package/usr/." /usr/
+          cp -a "$RUNNER_TEMP/llama-package/etc/." /etc/
+          systemd-sysusers /usr/lib/sysusers.d/blossom-model-runtime.conf
+          systemd-analyze verify /usr/lib/systemd/system/blossom-model-netns.service \
+            /usr/lib/systemd/system/blossom-model-gateway.service \
+            /usr/lib/systemd/system/blossom-model-llama-cpp.service
+          ! ldd /usr/lib/blossom-os/blossom-model-gateway | grep -q 'not found'
+          ! ldd /usr/lib/blossom-os/providers/llama-cpp/llama-server | grep -q 'not found'
+          /usr/lib/blossom-os/providers/llama-cpp/llama-server --version
+          set +e
+          /usr/lib/blossom-os/blossom-model-gateway
+          status=$?
+          set -e
+          test "$status" -eq 78
+          test ! -e /run/blossom-model-gateway/inference.sock
+
+      - name: Fetch immutable Ollama inputs
+        env:
+          LOCK: system/model-runtime/registry/ollama-cpu-x86_64.lock.json
+        run: |
+          mkdir -m 0700 -p "$RUNNER_TEMP/ollama-inputs/blobs"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/ollama-inputs/runtime.tar.zst" "$(jq -r .runtime.url "$LOCK")"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/ollama-inputs/runtime.LICENSE" "$(jq -r .runtime.license.url "$LOCK")"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$RUNNER_TEMP/ollama-inputs/manifest.json" "$(jq -r .model.manifest.url "$LOCK")"
+          jq -r '.model.blobs[] | [.sha256, .url] | @tsv' "$LOCK" | while IFS=$'\t' read -r digest url; do
+            curl --fail --location --proto '=https' --tlsv1.2 \
+              --output "$RUNNER_TEMP/ollama-inputs/blobs/$digest" "$url"
+          done
+
+      - name: Assemble and inspect Ollama package on Arch
+        run: |
+          python3 scripts/package_ollama_runtime.py \
+            --runtime-archive "$RUNNER_TEMP/ollama-inputs/runtime.tar.zst" \
+            --runtime-license "$RUNNER_TEMP/ollama-inputs/runtime.LICENSE" \
+            --manifest "$RUNNER_TEMP/ollama-inputs/manifest.json" \
+            --blob-directory "$RUNNER_TEMP/ollama-inputs/blobs" \
+            --gateway-binary "$GITHUB_WORKSPACE/target/release/blossom-model-gateway" \
+            --output "$RUNNER_TEMP/ollama-package"
+          test ! -e "$RUNNER_TEMP/ollama-package/usr/lib/systemd/system/blossom-model-llama-cpp.service"
+          cp -a "$RUNNER_TEMP/ollama-package/usr/." /usr/
+          cp -a "$RUNNER_TEMP/ollama-package/etc/." /etc/
+          systemd-analyze verify /usr/lib/systemd/system/blossom-model-netns.service \
+            /usr/lib/systemd/system/blossom-model-gateway.service \
+            /usr/lib/systemd/system/blossom-model-ollama.service
+          ! ldd /usr/lib/blossom-os/providers/ollama/ollama | grep -q 'not found'
+          ! ldd /usr/lib/blossom-os/providers/ollama/llama-server | grep -q 'not found'
+          /usr/lib/blossom-os/providers/ollama/ollama --version
+          /usr/lib/blossom-os/providers/ollama/llama-server --version
+          set +e
+          /usr/lib/blossom-os/blossom-model-gateway
+          status=$?
+          set -e
+          test "$status" -eq 78
+          test ! -e /run/blossom-model-gateway/inference.sock

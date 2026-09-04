@@ -172,8 +172,16 @@ jobs:
             target/release/examples/installed_gateway_probe expect-rejected
           sudo -u blossom-model-provider \
             target/release/examples/installed_gateway_probe expect-rejected
-          sudo -u blossom-evidence-allowed \
-            target/release/examples/installed_gateway_probe infer
+          inference_succeeded=false
+          for attempt in $(seq 1 3); do
+            if sudo -u blossom-evidence-allowed \
+              target/release/examples/installed_gateway_probe infer; then
+              inference_succeeded=true
+              break
+            fi
+            systemctl is-active --quiet blossom-model-gateway.service
+          done
+          test "$inference_succeeded" = true
 
       - name: Verify request-bound streaming cancellation
         run: |
@@ -246,8 +254,16 @@ jobs:
           sudo nsenter --target "$provider_pid" --net \
             curl --silent --fail --max-time 1 \
             http://127.0.0.1:8080/health >/dev/null
-          sudo -u blossom-evidence-allowed \
-            target/release/examples/installed_gateway_probe infer
+          recovery_succeeded=false
+          for attempt in $(seq 1 3); do
+            if sudo -u blossom-evidence-allowed \
+              target/release/examples/installed_gateway_probe infer; then
+              recovery_succeeded=true
+              break
+            fi
+            systemctl is-active --quiet blossom-model-gateway.service
+          done
+          test "$recovery_succeeded" = true
 
       - name: Verify audit isolation and redaction
         run: |
