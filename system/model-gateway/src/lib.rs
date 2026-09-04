@@ -426,8 +426,14 @@ fn bind_production_socket(
         device: initial.dev(),
         inode: initial.ino(),
     };
-    chown(path, None, Some(Gid::from_raw(access_gid)))
-        .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    // Avoid requiring CAP_CHOWN when the socket already inherited the exact
+    // code-owned access group. Production still changes the group when the
+    // runtime directory's group differs, and the final descriptor-bound
+    // metadata check remains authoritative in either case.
+    if initial.gid() != access_gid {
+        chown(path, None, Some(Gid::from_raw(access_gid)))
+            .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
+    }
     fs::set_permissions(path, fs::Permissions::from_mode(0o660))
         .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
     let metadata = fs::symlink_metadata(path)
