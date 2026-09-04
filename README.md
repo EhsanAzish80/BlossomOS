@@ -101,8 +101,8 @@ The following are architectural goals only:
 - A typed Blossom Bus and structured desktop/system context.
 - A complete user-facing, persistent and manageable audit service beyond the
   current security-core and privileged-helper audit backends.
-- Agent planning and truthful multi-step summaries, memory, distribution
-  packaging, and safe updates.
+- Durable orchestration recovery, memory, distribution packaging, and safe
+  updates.
 
 No security property described in the target documents should be treated as a
 claim about the current prototype.
@@ -139,11 +139,11 @@ not been moved or restructured.
 
 ## Development
 
-Phases 0 through 4 are complete. Their exit evidence is recorded in
+Phases 0 through 5 are complete. Their exit evidence is recorded in
 `docs/PHASE_0_BASELINE.md`, `docs/PHASE_1_SECURITY_CORE.md`,
-`docs/PHASE_2_BASELINE.md`, `docs/PHASE_3_BASELINE.md`, and
-`docs/PHASE_4_EXIT_AUDIT.md`. Phase 5 is active. Phase 4, governed by accepted
-ADR-0011 through ADR-0019, added closed
+`docs/PHASE_2_BASELINE.md`, `docs/PHASE_3_BASELINE.md`,
+`docs/PHASE_4_EXIT_AUDIT.md`, and `docs/PHASE_5_EXIT_AUDIT.md`. Phase 4,
+governed by accepted ADR-0011 through ADR-0019, added closed
 provider-neutral inference types, bounded Ollama and llama.cpp adapters,
 authenticated one-request gateway framing, retained installed-identity
 readiness, a content-free operational audit, hardened systemd packaging, and a
@@ -167,9 +167,13 @@ That Arch run is not Arch-kernel, ArchISO, hardware, installer, or release proof
 
 This remains a pre-alpha engineering boundary, not a supported production AI
 runtime or operating-system release. Private input remains disabled in default
-builds. Phase 5 begins with an ADR for typed planning and truthful verification;
-it does not grant model output authorization. See
-`docs/PHASE_4_EXIT_AUDIT.md` and `docs/PHASE_4_INSTALLED_EVIDENCE.md`.
+builds. Phase 5 adds closed, bounded typed plans, per-step policy and approval,
+verification-derived outcomes, hash-chained plan activity, and deterministic
+truthful reports. Its model bridge accepts only the six existing argument-free
+native read proposals; model output still grants no authorization. Recovery is
+in-memory only, active synchronous steps are not interruptible mid-call, and
+Phase 6 has not begun. See
+`docs/PHASE_4_INSTALLED_EVIDENCE.md` and `docs/PHASE_5_EXIT_AUDIT.md`.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.

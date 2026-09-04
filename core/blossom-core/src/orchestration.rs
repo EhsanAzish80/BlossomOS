@@ -420,6 +420,166 @@ impl TruthfulPlanSummary {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub enum RetryDisposition {
+    NotNeeded,
+    FreshPlanAllowed,
+    ManualReviewRequired,
+    ProhibitedIndeterminate,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub enum RollbackDisposition {
+    NotApplicable,
+    NoRegisteredInverse,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub enum RecoveryDisposition {
+    InMemoryOnlyNoResume,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct TruthfulStepReport {
+    pub step_id: StepId,
+    pub capability: Capability,
+    pub outcome: StepTerminalOutcome,
+    pub retry: RetryDisposition,
+    pub rollback: RollbackDisposition,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct TruthfulPlanReport {
+    pub plan_id: PlanId,
+    pub summary: TruthfulPlanSummary,
+    pub recovery: RecoveryDisposition,
+    pub steps: Vec<TruthfulStepReport>,
+}
+
+impl TruthfulPlanReport {
+    pub fn from_terminal_steps(
+        plan: &ValidatedPlan,
+        outcomes: &[StepTerminalOutcome],
+    ) -> Result<Self, SummaryError> {
+        let summary = TruthfulPlanSummary::from_terminal_steps(plan, outcomes)?;
+        let steps = plan
+            .steps()
+            .iter()
+            .zip(outcomes)
+            .map(|(step, outcome)| TruthfulStepReport {
+                step_id: step.step_id().clone(),
+                capability: step.capability(),
+                outcome: *outcome,
+                retry: retry_disposition(step, *outcome),
+                rollback: rollback_disposition(step, *outcome),
+            })
+            .collect();
+        Ok(Self {
+            plan_id: plan.plan_id().clone(),
+            summary,
+            recovery: RecoveryDisposition::InMemoryOnlyNoResume,
+            steps,
+        })
+    }
+
+    pub fn render(&self) -> String {
+        let mut rendered = format!(
+            "Plan {}: {}\nVerified steps: {}\nVerified effects: {}\nNot started: {}\nUncertain: {}\nRecovery: in-memory only; resume is not supported\n",
+            self.plan_id.as_str(),
+            plan_outcome_name(self.summary.outcome),
+            self.summary.verified_steps,
+            self.summary.verified_effectful_steps,
+            self.summary.not_started_steps,
+            self.summary.uncertain_steps,
+        );
+        for step in &self.steps {
+            rendered.push_str(&format!(
+                "Step {} [{}]: {}; retry={}; rollback={}\n",
+                step.step_id.as_str(),
+                step.capability.as_str(),
+                step_outcome_name(step.outcome),
+                retry_name(step.retry),
+                rollback_name(step.rollback),
+            ));
+        }
+        rendered
+    }
+}
+
+fn retry_disposition(step: &ValidatedPlanStep, outcome: StepTerminalOutcome) -> RetryDisposition {
+    match outcome {
+        StepTerminalOutcome::Verified => RetryDisposition::NotNeeded,
+        StepTerminalOutcome::Indeterminate => RetryDisposition::ProhibitedIndeterminate,
+        StepTerminalOutcome::CancelledAfterStart
+        | StepTerminalOutcome::ExecutionFailed
+        | StepTerminalOutcome::VerificationFailed
+            if step.is_effectful() =>
+        {
+            RetryDisposition::ManualReviewRequired
+        }
+        _ => RetryDisposition::FreshPlanAllowed,
+    }
+}
+
+fn rollback_disposition(
+    step: &ValidatedPlanStep,
+    outcome: StepTerminalOutcome,
+) -> RollbackDisposition {
+    if step.is_effectful()
+        && matches!(
+            outcome,
+            StepTerminalOutcome::Verified
+                | StepTerminalOutcome::CancelledAfterStart
+                | StepTerminalOutcome::ExecutionFailed
+                | StepTerminalOutcome::VerificationFailed
+                | StepTerminalOutcome::Indeterminate
+        )
+    {
+        RollbackDisposition::NoRegisteredInverse
+    } else {
+        RollbackDisposition::NotApplicable
+    }
+}
+
+fn plan_outcome_name(outcome: PlanOutcome) -> &'static str {
+    match outcome {
+        PlanOutcome::Completed => "completed",
+        PlanOutcome::PartiallyCompleted => "partially completed",
+        PlanOutcome::Cancelled => "cancelled",
+        PlanOutcome::Blocked => "blocked",
+        PlanOutcome::Indeterminate => "indeterminate",
+    }
+}
+
+fn step_outcome_name(outcome: StepTerminalOutcome) -> &'static str {
+    match outcome {
+        StepTerminalOutcome::Verified => "verified",
+        StepTerminalOutcome::Denied => "denied",
+        StepTerminalOutcome::CancelledBeforeStart => "cancelled before start",
+        StepTerminalOutcome::CancelledAfterStart => "cancelled after start; effect not proven",
+        StepTerminalOutcome::ExecutionFailed => "execution failed",
+        StepTerminalOutcome::VerificationFailed => "verification failed",
+        StepTerminalOutcome::Blocked => "blocked before start",
+        StepTerminalOutcome::Indeterminate => "indeterminate; effect requires review",
+    }
+}
+
+fn retry_name(disposition: RetryDisposition) -> &'static str {
+    match disposition {
+        RetryDisposition::NotNeeded => "not needed",
+        RetryDisposition::FreshPlanAllowed => "new plan with fresh policy and approval",
+        RetryDisposition::ManualReviewRequired => "manual review before a new plan",
+        RetryDisposition::ProhibitedIndeterminate => "prohibited while effect is indeterminate",
+    }
+}
+
+fn rollback_name(disposition: RollbackDisposition) -> &'static str {
+    match disposition {
+        RollbackDisposition::NotApplicable => "not applicable",
+        RollbackDisposition::NoRegisteredInverse => "no registered inverse capability",
+    }
+}
+
 /// Narrow adapter implemented by the existing trusted engine. Approval tokens
 /// never leave `PlanOrchestrator`.
 pub trait TypedRequestEngine {
@@ -546,6 +706,17 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
 
     pub fn into_engine(self) -> E {
         self.engine
+    }
+
+    pub fn report(&self) -> Result<TruthfulPlanReport, OrchestrationError> {
+        let outcomes = self
+            .outcomes
+            .iter()
+            .copied()
+            .collect::<Option<Vec<_>>>()
+            .ok_or(OrchestrationError::SummaryUnavailable)?;
+        TruthfulPlanReport::from_terminal_steps(&self.plan, &outcomes)
+            .map_err(|_| OrchestrationError::SummaryUnavailable)
     }
 
     pub fn advance(&mut self, now_ms: u64) -> Result<OrchestrationEvent, OrchestrationError> {
@@ -737,14 +908,7 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
     }
 
     fn finished_event(&mut self) -> Result<OrchestrationEvent, OrchestrationError> {
-        let outcomes = self
-            .outcomes
-            .iter()
-            .copied()
-            .collect::<Option<Vec<_>>>()
-            .ok_or(OrchestrationError::SummaryUnavailable)?;
-        let summary = TruthfulPlanSummary::from_terminal_steps(&self.plan, &outcomes)
-            .map_err(|_| OrchestrationError::SummaryUnavailable)?;
+        let summary = self.report()?.summary;
         if !self.final_recorded {
             self.engine.record_orchestration(AuditEvent::PlanFinished {
                 plan_id: self.plan.plan_id().as_str().into(),
@@ -869,6 +1033,34 @@ mod tests {
                 .iter()
                 .map(|value| StepId::parse((*value).into()).expect("valid dependency"))
                 .collect(),
+        }
+    }
+
+    fn write_step(step: &str, request: &str) -> ProposedPlanStep {
+        use crate::workspace_create::{
+            DirectoryIdentity, WORKSPACE_FILE_MODE, WorkspaceCreateSelection, digest,
+        };
+        ProposedPlanStep {
+            step_id: StepId::parse(step.into()).unwrap(),
+            request: ToolRequest::FilesWriteCreate {
+                request_id: id(request),
+                selection: WorkspaceCreateSelection {
+                    workspace_root: "/workspace".into(),
+                    root_identity: DirectoryIdentity {
+                        device: 1,
+                        inode: 2,
+                    },
+                    parent_identity: DirectoryIdentity {
+                        device: 1,
+                        inode: 3,
+                    },
+                    relative_destination: "created.txt".into(),
+                    content: "content".into(),
+                    content_sha256: digest(b"content"),
+                    mode: WORKSPACE_FILE_MODE,
+                },
+            },
+            depends_on: Vec::new(),
         }
     }
 
@@ -1109,6 +1301,66 @@ mod tests {
             ),
             Err(PlanError::DuplicateIntent)
         );
+    }
+
+    #[test]
+    fn readable_report_preserves_partial_and_uncertain_effects() {
+        let plan = plan(vec![
+            write_step("step-1", "req-write"),
+            step("step-2", "req-read", &[]),
+        ])
+        .unwrap();
+        let report = TruthfulPlanReport::from_terminal_steps(
+            &plan,
+            &[StepTerminalOutcome::Verified, StepTerminalOutcome::Blocked],
+        )
+        .unwrap();
+        assert_eq!(report.summary.outcome, PlanOutcome::PartiallyCompleted);
+        assert_eq!(report.summary.verified_effectful_steps, 1);
+        assert_eq!(
+            report.steps[0].rollback,
+            RollbackDisposition::NoRegisteredInverse
+        );
+        let rendered = report.render();
+        assert!(rendered.contains("partially completed"));
+        assert!(rendered.contains("Verified effects: 1"));
+        assert!(rendered.contains("Step step-2 [system.read:uptime]: blocked before start"));
+        assert!(rendered.contains("resume is not supported"));
+
+        let uncertain = TruthfulPlanReport::from_terminal_steps(
+            &plan,
+            &[
+                StepTerminalOutcome::Indeterminate,
+                StepTerminalOutcome::CancelledBeforeStart,
+            ],
+        )
+        .unwrap();
+        assert_eq!(uncertain.summary.outcome, PlanOutcome::Indeterminate);
+        assert_eq!(
+            uncertain.steps[0].retry,
+            RetryDisposition::ProhibitedIndeterminate
+        );
+        assert!(uncertain.render().contains("effect requires review"));
+    }
+
+    #[test]
+    fn effectful_after_start_failures_require_manual_review() {
+        let plan = plan(vec![write_step("step-1", "req-write")]).unwrap();
+        for outcome in [
+            StepTerminalOutcome::CancelledAfterStart,
+            StepTerminalOutcome::ExecutionFailed,
+            StepTerminalOutcome::VerificationFailed,
+        ] {
+            let report = TruthfulPlanReport::from_terminal_steps(&plan, &[outcome]).unwrap();
+            assert_eq!(
+                report.steps[0].retry,
+                RetryDisposition::ManualReviewRequired
+            );
+            assert_eq!(
+                report.steps[0].rollback,
+                RollbackDisposition::NoRegisteredInverse
+            );
+        }
     }
 
     #[test]
