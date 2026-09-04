@@ -30,8 +30,9 @@ file access, privileged operation, or graphical implementation.
    installed evidence remain pending.
 2. Implement the unprivileged Rust session service over the existing engine.
    The connection-bound pending state and fixed-diagnostic engine bridge are
-   implemented. They use the existing engine audit path; redacted activity
-   projection and real transport remain pending.
+   implemented. They use the existing engine audit path, and a bounded closed
+   activity projection now exposes only correlated lifecycle categories. Real
+   transport remains pending.
 3. Prove hostile-client, replay, expiry, disconnect, and service-loss behavior.
 4. Add a minimal Quickshell approval and activity surface for the fixed slice.
 5. Package the pinned Hyprland, Quickshell, D-Bus, and Blossom service boundary.
