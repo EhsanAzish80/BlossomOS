@@ -43,7 +43,10 @@ file access, privileged operation, or graphical implementation.
    an inactive production feature. A private-bus test uses the real service
    engine and a counting executor to prove that a second same-UID peer, preview
    mutation, decision replay, and cancellation replay cannot start additional
-   execution. Restart and installed service-loss evidence remains pending.
+   execution. Further private-bus tests prove a pending preview is invalid while
+   its service is absent, remains invalid in a replacement service instance,
+   and starts nothing after session-bus loss. Graphical close and focus-loss
+   behavior remains part of the UI checkpoint.
 4. Add a minimal Quickshell approval and activity surface for the fixed slice.
 5. Package the pinned Hyprland, Quickshell, D-Bus, and Blossom service boundary.
 6. Produce installed Arch userspace evidence and an independent exit audit.
