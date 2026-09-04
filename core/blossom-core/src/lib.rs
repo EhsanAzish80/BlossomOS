@@ -7,6 +7,7 @@ pub mod executor;
 pub mod file_read;
 pub mod memory_summary;
 pub mod model_runtime;
+pub mod orchestration;
 pub mod os_identity;
 pub mod policy;
 pub mod privileged;
@@ -65,6 +66,11 @@ pub use model_runtime::{
 };
 #[cfg(debug_assertions)]
 pub use model_runtime::{SyntheticProviderPackage, fixed_synthetic_provider_package};
+pub use orchestration::{
+    MAX_PLAN_STEPS, PlanError, PlanId, PlanOutcome, ProposedPlanStep, StateError, StepId,
+    StepLifecycle, StepPhase, StepTerminalOutcome, SummaryError, TruthfulPlanSummary,
+    ValidatedPlan, ValidatedPlanStep,
+};
 pub use os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, OsReleaseReader, OsReleaseSource,
     UnavailableOsIdentityProvider, parse_os_release,

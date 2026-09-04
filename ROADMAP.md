@@ -276,10 +276,16 @@ orchestration state machine and truthful terminal outcomes.
 - [x] Accept ADR-0020 for the closed plan schema, monotonic state machine,
   per-step authority checks, cancellation, partial/indeterminate outcomes,
   recovery and rollback limits, audit projection, and truthful summaries.
-- Add intent, plan, capability analysis, approval, execution, verification, and
-  truthful-summary states.
-- Handle partial completion, rollback opportunities, cancellation, and recovery.
-- Treat tool output and retrieved content as untrusted input.
+- [x] Add the closed bounded plan schema, code-derived capability projection,
+  monotonic step lifecycle, terminal taxonomy, and truthful aggregate core.
+- [ ] Integrate intent, per-step policy, approval, execution, verification, and
+  truthful-summary states over existing typed operations.
+- [ ] Handle dependency blocking, partial completion, rollback opportunities,
+  cancellation, retry representation, and recovery limits.
+- [ ] Treat model, tool, and retrieved content as untrusted across adversarial
+  end-to-end orchestration tests and record the exit audit.
+
+First checkpoint: `docs/PHASE_5_PLAN_CORE.md`.
 
 Exit: Blossom never reports success solely because a command was issued.
 
