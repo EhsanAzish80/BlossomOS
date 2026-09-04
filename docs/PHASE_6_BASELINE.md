@@ -1,7 +1,8 @@
 # Phase 6 Blossom Shell baseline
 
-Status: active. ADR-0021 is accepted; no Phase 6 shell or IPC implementation is
-claimed yet.
+Status: active. ADR-0021 is accepted. The closed Rust protocol, unprivileged
+engine bridge, redacted activity projection, and Linux session D-Bus adapter
+are implemented. No graphical shell or installed-runtime evidence is claimed.
 
 Phase 6 begins from the completed Phase 5 orchestration boundary. Accepted
 ADR-0021 defines the shell as an untrusted presentation client and selects a
@@ -26,16 +27,21 @@ file access, privileged operation, or graphical implementation.
 ## Implementation order after ADR acceptance
 
 1. Freeze the versioned session IPC schema and test bindings. The first closed
-   Rust schema is implemented on the Phase 6 IPC branch; D-Bus transport and
-   installed evidence remain pending.
+   Rust schema and real private-bus transport tests are implemented; installed
+   evidence remains pending.
 2. Implement the unprivileged Rust session service over the existing engine.
    The connection-bound pending state and fixed-diagnostic engine bridge are
    implemented. They use the existing engine audit path, and a bounded closed
-   activity projection now exposes only correlated lifecycle categories. Real
-   transport remains pending.
+   activity projection now exposes only correlated lifecycle categories. The
+   Linux adapter authenticates the real D-Bus sender as the same non-root UID.
 3. Prove hostile-client, replay, expiry, disconnect, and service-loss behavior.
-   A Linux-only same-UID session D-Bus adapter is now implemented behind an
-   inactive production feature; private-bus integration evidence remains.
+   The Linux-only adapter subscribes to `NameOwnerChanged` before exporting its
+   object or requesting its well-known name. Loss of a client unique name
+   cancels that client's pending approval through the existing audited engine
+   path. Subscription failure, stream loss, poisoned shared state, or audited
+   cancellation failure terminates the service path. The adapter remains behind
+   an inactive production feature. Broader hostile-client, restart, and
+   installed service-loss evidence remains pending.
 4. Add a minimal Quickshell approval and activity surface for the fixed slice.
 5. Package the pinned Hyprland, Quickshell, D-Bus, and Blossom service boundary.
 6. Produce installed Arch userspace evidence and an independent exit audit.
