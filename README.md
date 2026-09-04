@@ -96,11 +96,13 @@ behavior has not yet been claimed. See `docs/PHASE_3_BASELINE.md`.
 The following are architectural goals only:
 
 - Hyprland integration and a Quickshell-based Blossom Shell.
-- An authenticated, packaged, user-ready local AI runtime and model lifecycle.
+- A user-ready model lifecycle and selection interface beyond the two pinned,
+  evidence-only local runtime packages now present.
 - A typed Blossom Bus and structured desktop/system context.
 - A complete user-facing, persistent and manageable audit service beyond the
   current security-core and privileged-helper audit backends.
-- Agent planning, execution verification, memory, packaging, and safe updates.
+- Agent planning and truthful multi-step summaries, memory, distribution
+  packaging, and safe updates.
 
 No security property described in the target documents should be treated as a
 claim about the current prototype.
@@ -137,14 +139,15 @@ not been moved or restructured.
 
 ## Development
 
-Phases 0 through 3 are complete. Their exit evidence is recorded in
+Phases 0 through 4 are complete. Their exit evidence is recorded in
 `docs/PHASE_0_BASELINE.md`, `docs/PHASE_1_SECURITY_CORE.md`,
-`docs/PHASE_2_BASELINE.md`, and `docs/PHASE_3_BASELINE.md`. Phase 4 is active
-under accepted ADR-0011 through ADR-0018. The repository now contains closed
+`docs/PHASE_2_BASELINE.md`, `docs/PHASE_3_BASELINE.md`, and
+`docs/PHASE_4_EXIT_AUDIT.md`. Phase 5 is active. Phase 4, governed by accepted
+ADR-0011 through ADR-0019, added closed
 provider-neutral inference types, bounded Ollama and llama.cpp adapters,
 authenticated one-request gateway framing, retained installed-identity
 readiness, a content-free operational audit, hardened systemd packaging, and a
-pinned offline-buildable llama.cpp x86-64 package.
+pinned offline-buildable llama.cpp and Ollama x86-64 packages.
 
 Merged commit `91830c3` has passing disposable Ubuntu x86-64 installed evidence
 in workflow run
@@ -155,12 +158,18 @@ bounds, provider loss, audit redaction and capacity failure, socket lifecycle,
 cancellation during connect, response headers, streaming and the pre-completion
 race, plus contained terminal-write refusal and recovery.
 
-This remains a pre-alpha Phase 4 checkpoint, not a completed production AI
-runtime. A pinned Ollama production package and equivalent installed evidence,
-and target-Arch evidence remain unresolved.
-Private input remains disabled in default builds, and Phase 5 has not begun.
-See `docs/PHASE_4_EXIT_AUDIT.md` and
-`docs/PHASE_4_INSTALLED_EVIDENCE.md` for the exact evidence and open gates.
+Equivalent Ollama installed evidence passed in workflow run
+[`33866069049`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33866069049).
+Pinned Arch x86-64 userspace/package/ABI evidence for both providers passed in
+workflow run
+[`33867077966`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33867077966).
+That Arch run is not Arch-kernel, ArchISO, hardware, installer, or release proof.
+
+This remains a pre-alpha engineering boundary, not a supported production AI
+runtime or operating-system release. Private input remains disabled in default
+builds. Phase 5 begins with an ADR for typed planning and truthful verification;
+it does not grant model output authorization. See
+`docs/PHASE_4_EXIT_AUDIT.md` and `docs/PHASE_4_INSTALLED_EVIDENCE.md`.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.

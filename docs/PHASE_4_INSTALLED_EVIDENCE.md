@@ -1,7 +1,7 @@
 # Phase 4 installed-service evidence
 
-Status: passing llama.cpp installed-system evidence recorded. The harness is
-manually dispatched; this evidence does not by itself complete Phase 4.
+Status: passing llama.cpp and Ollama installed-system evidence plus pinned Arch
+userspace/package/ABI evidence recorded. The harnesses are manually dispatched.
 
 `.github/workflows/phase4-installed-evidence.yml` uses a disposable x86-64
 Ubuntu runner. It builds the non-default production gateway, downloads only the
@@ -53,10 +53,34 @@ active, and served a subsequent real inference successfully. This proves local
 terminal-write containment, not that a peer consumed any successfully written
 bytes.
 
-This run covers the pinned x86-64 llama.cpp profile only. It does not provide a
-pinned Ollama package or installed Ollama evidence, target-Arch evidence, or the
-equivalent provider-specific lifecycle evidence for Ollama.
+## Ollama installed evidence
 
-Failure diagnostics expose only systemd state/result categories; the workflow
-does not publish service journals, model output, prompts or raw gateway audit
+`.github/workflows/phase4-ollama-installed-evidence.yml` applies the same
+installed boundary to the separately pinned Ollama v0.33.3 CPU x86-64 runtime
+and exact Qwen 2.5 0.5B manifest/blob set. Authoritative run
+[`33866069049`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33866069049)
+passed package assembly, installed services, identity and namespace checks,
+external-network and filesystem denials, real offline inference, cancellation,
+provider races, terminal-write containment, audit redaction/capacity/provider
+loss, cleanup, and stale-socket refusal.
+
+Only a root-owned canonical `active.json` may select one of the two compiled-in
+profiles. The private request cannot select or fall back between providers.
+
+## Pinned Arch userspace evidence
+
+`.github/workflows/phase4-arch-abi-evidence.yml` uses the digest-pinned official
+Arch Linux x86-64 container. Authoritative run
+[`33867077966`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33867077966)
+passed non-root Rust tests, strict workspace clippy, feature-gated gateway build,
+both deterministic package assemblies, systemd unit verification, ELF
+dependency inspection, provider binary execution, and fail-closed gateway
+startup with no socket when installed readiness is absent.
+
+The Arch workflow shares the GitHub-hosted Linux kernel. It does not prove an
+Arch kernel, ArchISO, installer, desktop session, GPU, physical hardware,
+package repository, upgrade, rollback, or signed release.
+
+Failure diagnostics expose only bounded state/result categories; the workflows
+do not publish service journals, model output, prompts or raw gateway audit
 records.
