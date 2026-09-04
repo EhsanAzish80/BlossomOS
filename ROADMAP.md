@@ -135,12 +135,13 @@ protected CI and merged to `main` as `0662e51`.
 
 ## Phase 4: Replaceable local AI runtime
 
-Status: active. ADR-0011 defines the accepted provider-neutral local inference
+Status: complete. ADR-0011 defines the accepted provider-neutral local inference
 boundary, ADR-0012 defines the endpoint-identity and packaging boundary, and
 ADR-0017 fixes production admission and cancellation semantics. Controlled
 synthetic implementation and pinned llama.cpp installed evidence are
-substantial; private inputs remain blocked by default pending the complete
-cross-provider, target-Arch and remaining lifecycle evidence gates.
+substantial. The two pinned x86-64 provider paths and target-Arch
+userspace/package/ABI checks now have passing evidence. Private input remains a
+non-default package feature; Phase 4 completion is not a release-readiness claim.
 
 - [x] Accept the provider-neutral inference, proposed-tool-intent, cancellation,
   streaming, locality, privacy, and conformance contract.
@@ -148,7 +149,7 @@ cross-provider, target-Arch and remaining lifecycle evidence gates.
   state, redacted audit projection, and scripted conformance tests.
 - [x] Implement the fixed-local, synthetic-only Ollama development adapter.
 - [x] Implement the fixed-local, synthetic-only llama.cpp development adapter.
-- [ ] Implement the accepted ADR-0012 provider endpoint-identity and packaging
+- [x] Implement the accepted ADR-0012 provider endpoint-identity and packaging
   boundary before either real adapter may receive private or ambient user data.
   - [x] Accept the distinct-UID gateway, Unix peer-credential, isolated-provider,
     and root-owned profile design.
@@ -217,15 +218,15 @@ cross-provider, target-Arch and remaining lifecycle evidence gates.
   - [x] Accept ADR-0018 and implement the boot-scoped, synced, hash-chained,
     content-free operational journal so request-start evidence precedes
     inference and terminal evidence precedes terminal delivery.
-  - [ ] Implement and package the gateway, static identities, namespace anchor,
+  - [x] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.
     - [x] Complete that package and runtime-identity evidence for the pinned
       x86-64 llama.cpp profile.
-    - [ ] Add an equivalently pinned, closed Ollama production package and
+    - [x] Add an equivalently pinned, closed Ollama production package and
       installed evidence before claiming both supported providers.
-  - [ ] Pass all adversarial production-path Linux evidence before enabling
-    private input by default.
+  - [x] Pass the Phase 4 adversarial production-path Linux evidence while
+    keeping private input disabled by default.
     - [x] Add a manually dispatched, pinned-input installed-service harness and
       content-free gateway probe.
     - [x] Record a successful llama.cpp run for merged commit `91830c3`,
@@ -235,9 +236,14 @@ cross-provider, target-Arch and remaining lifecycle evidence gates.
       cancellation races plus contained terminal-write refusal and recovery.
     - [x] Close the ADR-0018 terminal-write failure case for the installed
       llama.cpp path.
+    - [x] Record equivalent installed Ollama isolation, inference,
+      cancellation, race, audit, provider-loss and socket-lifecycle evidence in
+      run `33866069049`.
+    - [x] Build/test as non-root and assemble/inspect both provider packages in
+      the pinned Arch x86-64 userspace in run `33867077966`.
 - [x] Validate every model output and proposed tool intent against strict,
   code-owned schemas before it reaches the broker.
-- [ ] Produce controlled-protocol and real-model target-Linux evidence with
+- [x] Produce controlled-protocol and real-model target-Linux evidence with
   external network access disabled.
 
 Arbitrary shell remains a separately reviewed fallback capability in the target
@@ -248,47 +254,24 @@ operation is verified offline on target Linux, and no provider path bypasses the
 broker, policy, approval, verification, or audit boundary. Unauthenticated
 loopback endpoints receive no private input.
 
-Checkpoint evidence: `docs/PHASE_4_CORE_CONTRACT.md` and
-`docs/PHASE_4_OLLAMA_ADAPTER.md`, and
-`docs/PHASE_4_LLAMA_CPP_ADAPTER.md`. Phase 4 remains active; these checkpoints
-claim neither a production authenticated provider endpoint, private-input
-support, nor a real-model test. Controlled cross-provider gateway/adapter
-equivalence now exists, and the pinned llama.cpp path has offline real-model
-installed Ubuntu x86-64 evidence. Equivalent Ollama packaging/evidence,
-and target-Arch evidence remain unresolved.
-The closed protocol and
-credential-primitives checkpoint is
-documented in `docs/PHASE_4_GATEWAY_PROTOCOL.md`; the synthetic process boundary
-is documented in `docs/PHASE_4_GATEWAY_FIXTURE.md`. The closed manifest validator
-and synthetic filesystem evidence are documented in
-`docs/PHASE_4_PROVIDER_MANIFEST.md`. One llama.cpp registry entry now has
-passing installed target-Linux evidence, but Ollama has no pinned production
-package and private input remains disabled by default. The inactive sysusers and
-systemd template boundary is documented in
-`docs/PHASE_4_SYSTEMD_BOUNDARY.md`; it creates no accounts or runtime state.
-The synthetic-only process scaffold is documented in
-`docs/PHASE_4_GATEWAY_PROCESS.md`; its production entry point deliberately exits
-not-ready before opening a socket.
-The closed synthetic registry and renderer evidence is documented in
-`docs/PHASE_4_PROFILE_RENDERER.md`.
-The runtime-readiness checkpoint is documented in
-`docs/PHASE_4_RUNTIME_READINESS.md`; the llama.cpp package now exercises it in
-the manually dispatched installed-evidence workflow, while default builds
-remain closed.
-The synthetic gateway-to-adapter checkpoint is documented in
-`docs/PHASE_4_GATEWAY_ADAPTERS.md`; it carries developer-authored fixture input
-only and does not enable the release gateway.
-The current exit audit and exact unresolved gates are recorded in
-`docs/PHASE_4_EXIT_AUDIT.md`.
-The pinned llama.cpp registry/package checkpoint is documented in
-`docs/PHASE_4_PRODUCTION_REGISTRY.md`; installed gateway admission and offline
-llama.cpp inference passed on target Linux, while Ollama packaging/evidence and
-the remaining adversarial cases are unresolved.
-ADR-0014 corrects the production identity representation: canonical profiles
-bind fixed service account names, while target-assigned numeric IDs are resolved
-from root-owned account data and retained only as readiness evidence.
+Exit satisfied: deterministic conformance covers both adapters; installed
+Ubuntu x86-64 runs `33865392657` (llama.cpp) and `33866069049` (Ollama) exercise
+real local models with provider external networking disabled; pinned Arch
+x86-64 userspace run `33867077966` builds/tests the boundary and assembles and
+inspects both package roots. The gateway remains the only private-input ingress,
+model tool output remains a proposal, and no default build enables private
+input. This is not Arch kernel, ArchISO, hardware, installer, or release proof.
+
+The detailed requirement and evidence decision is recorded in
+`docs/PHASE_4_EXIT_AUDIT.md`; installed evidence and its limitations are in
+`docs/PHASE_4_INSTALLED_EVIDENCE.md`. Earlier `PHASE_4_*` documents remain
+historical protected checkpoints and must be read in that chronology rather
+than as current unresolved-gate statements.
 
 ## Phase 5: Planning and verification
+
+Status: active. Implementation begins with an accepted ADR defining the closed
+orchestration state machine and truthful terminal outcomes.
 
 - Add intent, plan, capability analysis, approval, execution, verification, and
   truthful-summary states.

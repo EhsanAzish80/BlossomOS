@@ -1,7 +1,9 @@
 # Local model runtime package boundary
 
-Status: reviewed templates only. Nothing in this directory is installed,
-enabled, started, or rendered by the repository test suite.
+Status: reviewed templates and two deterministic evidence-package recipes.
+Nothing is installed or enabled merely by cloning or testing the repository;
+manually dispatched disposable Linux workflows assemble, install, start and
+adversarially test the pinned evidence packages.
 
 ## Static identities
 
@@ -54,15 +56,16 @@ The Blossom package tree is otherwise inaccessible and only the complete
 measured provider runtime directory and model are rebound read-only; ordinary dynamic-loader and system-library
 paths remain visible because the provider cannot start without them.
 
-## Not implemented
+## Current boundary
 
-The gateway process source now exists, but its production entry point exits
-not-ready before creating a listener. A debug/test-only renderer produces fixed
-synthetic units for CI; it is not a production renderer or installed tool. The
-core now has a fail-closed validator for installed account and artifact evidence.
-ADR-0016 adds one offline llama.cpp package-tree recipe and embedded registry,
-but no installed package invokes readiness or opens the gateway. Ollama package
-artifacts,
-account creation, socket creation, service activation, private input, and real
-model execution remain absent. Template and local package-tree validation are
-not production isolation evidence and do not complete Phase 4.
+The gateway production listener exists only behind the non-default
+`production-private-inference` feature and fails closed unless the exact active
+profile, installed accounts, package artifacts, rendered unit and audit state
+validate. ADR-0016 and ADR-0019 define pinned CPU-only llama.cpp and Ollama
+x86-64 evidence packages. Disposable Ubuntu workflows have installed and tested
+each package with real offline inference, and a pinned Arch userspace workflow
+has built/tested the Rust boundary and assembled/inspected both package roots.
+
+These recipes are not a package repository, installer, updater, model manager,
+ArchISO, supported release, or general provider loader. Default builds still
+open no private inference listener.
