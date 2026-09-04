@@ -204,6 +204,16 @@ jobs:
 
       - name: Verify audit capacity fails the gateway closed
         run: |
+          sudo systemctl start blossom-model-llama-cpp.service
+          sudo systemctl reset-failed blossom-model-gateway.service
+          sudo systemctl start blossom-model-gateway.service
+          for attempt in $(seq 1 30); do
+            test -S /run/blossom-model-gateway/inference.sock && break
+            sleep 1
+          done
+          test -S /run/blossom-model-gateway/inference.sock
+          audit=/run/blossom-model-gateway/audit/audit.jsonl
+          test "$(sudo wc -l "$audit" | awk '{print $1}')" -eq 1
           target/release/examples/installed_gateway_probe exhaust-audit
           for attempt in $(seq 1 30); do
             systemctl is-failed --quiet blossom-model-gateway.service && break
@@ -211,8 +221,8 @@ jobs:
           done
           systemctl is-failed --quiet blossom-model-gateway.service
           systemctl is-active --quiet blossom-model-netns.service
+          systemctl is-active --quiet blossom-model-llama-cpp.service
           test ! -e /run/blossom-model-gateway/inference.sock
-          audit=/run/blossom-model-gateway/audit/audit.jsonl
           test "$(sudo wc -l "$audit" | awk '{print $1}')" -ge 1000
           test "$(sudo stat -c %s "$audit")" -le 1048576
           if sudo grep -Eq \
