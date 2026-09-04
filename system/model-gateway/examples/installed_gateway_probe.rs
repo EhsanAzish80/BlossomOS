@@ -66,6 +66,7 @@ fn expect_rejected() -> Result<(), String> {
 }
 
 fn exhaust_audit() -> Result<(), String> {
+    const MIN_REJECTIONS: usize = 1_000;
     const MAX_REJECTIONS: usize = 5_000;
     const STOPPED_RETRIES: usize = 100;
 
@@ -80,10 +81,10 @@ fn exhaust_audit() -> Result<(), String> {
             Err(_) => {
                 unavailable += 1;
                 if unavailable == STOPPED_RETRIES {
-                    return if completed > 0 {
+                    return if completed >= MIN_REJECTIONS {
                         Ok(())
                     } else {
-                        Err("gateway was unavailable before exhaustion".into())
+                        Err("gateway stopped before capacity evidence".into())
                     };
                 }
                 std::thread::sleep(Duration::from_millis(10));
