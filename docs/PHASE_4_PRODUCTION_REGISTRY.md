@@ -1,8 +1,8 @@
 # Phase 4 pinned llama.cpp registry and package checkpoint
 
-Status: one x86-64 llama.cpp profile is release-constructible and has a
-deterministic offline package-tree recipe. This is not installed-service or
-real-inference evidence, and the production gateway remains disabled.
+Status: one x86-64 llama.cpp profile is release-constructible, has a
+deterministic offline package-tree recipe and has passing installed-service
+real-inference evidence. The production gateway remains disabled by default.
 
 ## Implemented
 
@@ -34,16 +34,18 @@ contained no symlinks. A wrong archive was rejected before output creation. The
 embedded registry passed canonical Rust validation and the release workspace
 compiled.
 
-This evidence was produced on the development host. The x86-64 Linux provider
-was not executed there. It does not satisfy target-Arch ABI, systemd, namespace,
-peer-authentication, network-isolation or real-inference exit requirements.
+The package inputs and deterministic-tree evidence above were produced on the
+development host. A later disposable x86-64 Linux run installed that package
+and passed systemd identity, namespace, peer-admission, network-isolation,
+audit and real offline-inference checks; see
+`docs/PHASE_4_INSTALLED_EVIDENCE.md`. This Ubuntu-runner evidence is not yet a
+target-Arch ABI claim.
 
 ## Remaining
 
 - build and validate the deterministic Ollama runtime/model-store package;
-- consume installed llama.cpp readiness evidence in the production gateway;
-- install the package into the supported target-Linux test environment;
-- prove identities, lifecycle, socket authorization, filesystem denials and
-  loopback-only networking adversarially; and
-- record real offline inference through the authenticated gateway for both
-  providers before Phase 4 can exit.
+- add target-Arch package/ABI evidence;
+- complete the remaining installed ADR-0017/0018 adversarial cases, including
+  broader filesystem denial; and
+- record real offline inference through the authenticated gateway for Ollama
+  before Phase 4 can exit with both providers supported.

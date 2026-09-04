@@ -185,7 +185,7 @@ the complete production and evidence gates.
     and bundled provider-runtime file as a closed immutable artifact set.
   - [x] Accept ADR-0016 and add the first release-constructible x86-64 llama.cpp
     registry entry plus an offline, deterministic, hash-pinned package-tree
-    recipe. This is not installed-service or target-Linux inference evidence.
+    recipe.
   - [x] Render the gateway service per closed package profile so its sandbox
     exposes only the selected manifest, measured runtime set, and model needed
     for readiness validation; keep the production listener disabled.
@@ -219,12 +219,18 @@ the complete production and evidence gates.
   - [ ] Implement and package the gateway, static identities, namespace anchor,
     hardened rendered services, closed production profile registry, installed
     manifests, and runtime identity evidence.
+    - [x] Complete that package and runtime-identity evidence for the pinned
+      x86-64 llama.cpp profile.
+    - [ ] Add an equivalently pinned, closed Ollama production package and
+      installed evidence before claiming both supported providers.
   - [ ] Pass adversarial production-path Linux evidence before enabling private
     input.
     - [x] Add a manually dispatched, pinned-input installed-service harness and
       content-free gateway probe.
-    - [ ] Record a successful run for the merged commit and close every
-      remaining ADR-0017/0018 adversarial case.
+    - [x] Record a successful llama.cpp run for merged commit `bba9aea`.
+    - [ ] Close the remaining ADR-0017/0018 adversarial cases, including
+      cancellation races, audit-capacity failure, stale-socket recovery and
+      broader installed filesystem-denial evidence.
 - [x] Validate every model output and proposed tool intent against strict,
   code-owned schemas before it reaches the broker.
 - [ ] Produce controlled-protocol and real-model target-Linux evidence with
@@ -250,9 +256,10 @@ credential-primitives checkpoint is
 documented in `docs/PHASE_4_GATEWAY_PROTOCOL.md`; the synthetic process boundary
 is documented in `docs/PHASE_4_GATEWAY_FIXTURE.md`. The closed manifest validator
 and synthetic filesystem evidence are documented in
-`docs/PHASE_4_PROVIDER_MANIFEST.md`. One llama.cpp registry entry now exists,
-but no production manifest, identity, or service is installed and private input
-remains blocked. The inactive sysusers and systemd template boundary is documented in
+`docs/PHASE_4_PROVIDER_MANIFEST.md`. One llama.cpp registry entry now has
+passing installed target-Linux evidence, but Ollama has no pinned production
+package and private input remains disabled by default. The inactive sysusers and
+systemd template boundary is documented in
 `docs/PHASE_4_SYSTEMD_BOUNDARY.md`; it creates no accounts or runtime state.
 The synthetic-only process scaffold is documented in
 `docs/PHASE_4_GATEWAY_PROCESS.md`; its production entry point deliberately exits
@@ -260,16 +267,18 @@ not-ready before opening a socket.
 The closed synthetic registry and renderer evidence is documented in
 `docs/PHASE_4_PROFILE_RENDERER.md`.
 The runtime-readiness checkpoint is documented in
-`docs/PHASE_4_RUNTIME_READINESS.md`; it validates but does not install or start
-the package, and the production gateway remains closed.
+`docs/PHASE_4_RUNTIME_READINESS.md`; the llama.cpp package now exercises it in
+the manually dispatched installed-evidence workflow, while default builds
+remain closed.
 The synthetic gateway-to-adapter checkpoint is documented in
 `docs/PHASE_4_GATEWAY_ADAPTERS.md`; it carries developer-authored fixture input
 only and does not enable the release gateway.
 The current exit audit and exact unresolved gates are recorded in
 `docs/PHASE_4_EXIT_AUDIT.md`.
 The pinned llama.cpp registry/package checkpoint is documented in
-`docs/PHASE_4_PRODUCTION_REGISTRY.md`; Ollama packaging, gateway admission and
-target-Linux runtime evidence remain unresolved.
+`docs/PHASE_4_PRODUCTION_REGISTRY.md`; installed gateway admission and offline
+llama.cpp inference passed on target Linux, while Ollama packaging/evidence and
+the remaining adversarial cases are unresolved.
 ADR-0014 corrects the production identity representation: canonical profiles
 bind fixed service account names, while target-assigned numeric IDs are resolved
 from root-owned account data and retained only as readiness evidence.
