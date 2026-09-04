@@ -713,11 +713,9 @@ mod tests {
     fn production_socket_is_exact_rejects_stale_path_and_cleans_up() {
         use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 
-        let directory = std::env::temp_dir().join(format!(
-            "blossom-production-socket-{}-{}",
-            std::process::id(),
-            std::thread::current().name().unwrap_or("unnamed")
-        ));
+        // Keep the fixture well below Linux's AF_UNIX pathname limit. The full
+        // Rust test name can make an otherwise valid temporary path unbindable.
+        let directory = std::env::temp_dir().join(format!("blossom-sock-{}", std::process::id()));
         std::fs::create_dir(&directory).unwrap();
         let path = directory.join("inference.sock");
         let uid = nix::unistd::geteuid().as_raw();
