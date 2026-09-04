@@ -278,6 +278,8 @@ orchestration state machine and truthful terminal outcomes.
   recovery and rollback limits, audit projection, and truthful summaries.
 - [x] Add the closed bounded plan schema, code-derived capability projection,
   monotonic step lifecycle, terminal taxonomy, and truthful aggregate core.
+- [x] Record plan acceptance, every step state, and the final typed aggregate in
+  the engine's hash-chained, content-redacted audit log.
 - [ ] Integrate intent, per-step policy, approval, execution, verification, and
   truthful-summary states over existing typed operations.
 - [ ] Handle dependency blocking, partial completion, rollback opportunities,
@@ -286,7 +288,8 @@ orchestration state machine and truthful terminal outcomes.
   end-to-end orchestration tests and record the exit audit.
 
 Protected checkpoints: `docs/PHASE_5_PLAN_CORE.md` and
-`docs/PHASE_5_TYPED_ORCHESTRATOR.md`.
+`docs/PHASE_5_TYPED_ORCHESTRATOR.md`, plus
+`docs/PHASE_5_ORCHESTRATION_AUDIT.md`.
 
 Exit: Blossom never reports success solely because a command was issued.
 

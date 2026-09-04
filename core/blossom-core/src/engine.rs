@@ -890,6 +890,10 @@ impl<
     V: ServiceStatusProvider,
 > TypedRequestEngine for BlossomEngine<E, O, U, M, S, P, L, F, W, V>
 {
+    fn record_orchestration(&mut self, event: AuditEvent) {
+        self.audit.append(event);
+    }
+
     fn begin_typed(
         &mut self,
         request: ToolRequest,
