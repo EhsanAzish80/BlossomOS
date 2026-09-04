@@ -102,7 +102,8 @@ jobs:
             HOME=/home/blossom-ci \
             XDG_RUNTIME_DIR=/run/user/1000 \
             dbus-run-session -- bash -eo pipefail -c '
-              weston --backend=headless-backend.so --renderer=pixman \
+              LIBGL_ALWAYS_SOFTWARE=1 weston \
+                --backend=headless-backend.so --renderer=gl \
                 --socket=wayland-parent \
                 --idle-time=0 --log="$XDG_RUNTIME_DIR/weston.log" &
               weston_pid=$!
@@ -131,7 +132,7 @@ jobs:
                 sleep 0.1
               done
               test -S "$XDG_RUNTIME_DIR/wayland-parent"
-              WAYLAND_DISPLAY=wayland-parent Hyprland \
+              LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY=wayland-parent Hyprland \
                 --config "'$RUNNER_TEMP'/hyprland.conf" >"$XDG_RUNTIME_DIR/hyprland.log" 2>&1 &
               hyprland_pid=$!
               for attempt in $(seq 1 200); do
