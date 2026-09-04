@@ -509,12 +509,17 @@ pub fn run_production() -> Result<(), GatewayProcessError> {
         };
         use std::path::Path;
 
-        let specification = production_provider_profile(GatewayProfile::LlamaCppCpuV1)
-            .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
-            .ok_or(GatewayProcessError::ProfileRegistryUnavailable)?;
+        let specifications = [
+            production_provider_profile(GatewayProfile::LlamaCppCpuV1)
+                .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
+                .ok_or(GatewayProcessError::ProfileRegistryUnavailable)?,
+            production_provider_profile(GatewayProfile::OllamaCpuV1)
+                .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
+                .ok_or(GatewayProcessError::ProfileRegistryUnavailable)?,
+        ];
         let readiness = load_installed_runtime_readiness_from_set(
             Path::new(PRODUCTION_PROFILE_PATH),
-            &[specification],
+            &specifications,
         )
         .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?;
         let effective_uid = nix::unistd::geteuid().as_raw();
@@ -526,6 +531,8 @@ pub fn run_production() -> Result<(), GatewayProcessError> {
         }
         let model = ModelProfile::parse(readiness.profile().manifest().logical_model().to_owned())
             .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?;
+        let active_profile = readiness.profile().manifest().profile();
+        let active_provider = readiness.profile().manifest().provider();
         let (boot_id_sha256, instance_nonce) = process_identity()?;
         let instance_sha256 = domain_digest("gateway_instance", &instance_nonce, b"instance");
         let mut audit = FileGatewayAudit::create(
@@ -587,8 +594,8 @@ pub fn run_production() -> Result<(), GatewayProcessError> {
             let _ = serve_authorized_private_connection(
                 stream,
                 PrivateConnectionContext {
-                    profile: GatewayProfile::LlamaCppCpuV1,
-                    provider: ModelProviderKind::LlamaCpp,
+                    profile: active_profile,
+                    provider: active_provider.clone(),
                     model: model.clone(),
                     boot_id_sha256: &boot_id_sha256,
                     instance_nonce: &instance_nonce,

@@ -58,4 +58,10 @@ IPAddressAllow=localhost
 IPAddressDeny=any
 Environment=HOME=/var/lib/blossom/model-provider/ollama
 Environment=OLLAMA_HOST=127.0.0.1:11434
+Environment=OLLAMA_LLM_LIBRARY=x64
+Environment=OLLAMA_MAX_LOADED_MODELS=1
+Environment=OLLAMA_MAX_QUEUE=4
 Environment=OLLAMA_MODELS=@MODEL_DIRECTORY@
+Environment=OLLAMA_NOPRUNE=1
+Environment=OLLAMA_NO_CLOUD=1
+Environment=OLLAMA_NUM_PARALLEL=1

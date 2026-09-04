@@ -62,6 +62,7 @@ fn expect_rejected() -> Result<(), String> {
     match stream.read(&mut byte) {
         Ok(0) => Ok(()),
         Ok(_) => Err("rejected client received gateway bytes".into()),
+        Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset => Ok(()),
         Err(_) => Err("rejection was not observable".into()),
     }
 }
@@ -99,13 +100,14 @@ fn exhaust_audit() -> Result<(), String> {
         match stream.read(&mut byte) {
             Ok(0) => completed += 1,
             Ok(_) => return Err("rejected client received gateway bytes".into()),
+            Err(error) if error.kind() == std::io::ErrorKind::ConnectionReset => completed += 1,
             Err(_) => return Err("rejection was not observable".into()),
         }
     }
     Err("gateway exceeded the closed audit capacity".into())
 }
 
-fn infer() -> Result<(), String> {
+fn infer(profile: GatewayProfile) -> Result<(), String> {
     let mut stream = UnixStream::connect(PRODUCTION_SOCKET_PATH).map_err(|_| "connect failed")?;
     stream
         .set_read_timeout(Some(Duration::from_secs(130)))
@@ -115,7 +117,7 @@ fn infer() -> Result<(), String> {
         .map_err(|_| "timeout setup failed")?;
     let mut reader = Reader::new();
     let hello = reader.read_one(&mut stream)?;
-    decode_gateway_hello(&hello, GatewayProfile::LlamaCppCpuV1).map_err(|_| "invalid hello")?;
+    decode_gateway_hello(&hello, profile).map_err(|_| "invalid hello")?;
     let request_id = InferenceRequestId::parse("installed-evidence-1".into())
         .map_err(|_| "request id rejected")?;
     let messages = [ConversationMessage::new(
@@ -178,7 +180,7 @@ enum CancelPoint {
     FirstDelta,
 }
 
-fn cancel(point: CancelPoint) -> Result<(), String> {
+fn cancel(point: CancelPoint, profile: GatewayProfile) -> Result<(), String> {
     let mut stream = UnixStream::connect(PRODUCTION_SOCKET_PATH).map_err(|_| "connect failed")?;
     stream
         .set_read_timeout(Some(Duration::from_secs(30)))
@@ -188,7 +190,7 @@ fn cancel(point: CancelPoint) -> Result<(), String> {
         .map_err(|_| "timeout setup failed")?;
     let mut reader = Reader::new();
     let hello = reader.read_one(&mut stream)?;
-    decode_gateway_hello(&hello, GatewayProfile::LlamaCppCpuV1).map_err(|_| "invalid hello")?;
+    decode_gateway_hello(&hello, profile).map_err(|_| "invalid hello")?;
     let request_id = InferenceRequestId::parse(
         match point {
             CancelPoint::Immediate => "installed-cancel-immediate",
@@ -269,7 +271,7 @@ fn cancel(point: CancelPoint) -> Result<(), String> {
     Err("request ended without cancellation".into())
 }
 
-fn refuse_terminal_write() -> Result<(), String> {
+fn refuse_terminal_write(profile: GatewayProfile) -> Result<(), String> {
     let mut stream = UnixStream::connect(PRODUCTION_SOCKET_PATH).map_err(|_| "connect failed")?;
     stream
         .set_read_timeout(Some(Duration::from_secs(15)))
@@ -279,7 +281,7 @@ fn refuse_terminal_write() -> Result<(), String> {
         .map_err(|_| "timeout setup failed")?;
     let mut reader = Reader::new();
     let hello = reader.read_one(&mut stream)?;
-    decode_gateway_hello(&hello, GatewayProfile::LlamaCppCpuV1).map_err(|_| "invalid hello")?;
+    decode_gateway_hello(&hello, profile).map_err(|_| "invalid hello")?;
     let request_id = InferenceRequestId::parse("installed-terminal-write-refusal".into())
         .map_err(|_| "request id rejected")?;
     let messages = [ConversationMessage::new(
@@ -323,14 +325,22 @@ fn refuse_terminal_write() -> Result<(), String> {
 }
 
 fn main() {
+    let profile = match std::env::args().nth(2).as_deref() {
+        None | Some("llama-cpp") => GatewayProfile::LlamaCppCpuV1,
+        Some("ollama") => GatewayProfile::OllamaCpuV1,
+        Some(_) => {
+            eprintln!("installed gateway probe failed: unknown provider profile");
+            std::process::exit(1);
+        }
+    };
     let result = match std::env::args().nth(1).as_deref() {
         Some("expect-rejected") => expect_rejected(),
         Some("exhaust-audit") => exhaust_audit(),
-        Some("infer") => infer(),
-        Some("cancel") => cancel(CancelPoint::Immediate),
-        Some("cancel-delayed") => cancel(CancelPoint::Delayed),
-        Some("cancel-after-delta") => cancel(CancelPoint::FirstDelta),
-        Some("refuse-terminal-write") => refuse_terminal_write(),
+        Some("infer") => infer(profile),
+        Some("cancel") => cancel(CancelPoint::Immediate, profile),
+        Some("cancel-delayed") => cancel(CancelPoint::Delayed, profile),
+        Some("cancel-after-delta") => cancel(CancelPoint::FirstDelta, profile),
+        Some("refuse-terminal-write") => refuse_terminal_write(profile),
         _ => Err(
             "expected expect-rejected, exhaust-audit, infer, cancel, cancel-delayed, cancel-after-delta, or refuse-terminal-write"
                 .into(),
