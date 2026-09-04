@@ -29,6 +29,8 @@ file access, privileged operation, or graphical implementation.
    Rust schema is implemented on the Phase 6 IPC branch; D-Bus transport and
    installed evidence remain pending.
 2. Implement the unprivileged Rust session service over the existing engine.
+   The connection-bound pending-approval state core is implemented; engine and
+   audit integration plus real transport remain pending.
 3. Prove hostile-client, replay, expiry, disconnect, and service-loss behavior.
 4. Add a minimal Quickshell approval and activity surface for the fixed slice.
 5. Package the pinned Hyprland, Quickshell, D-Bus, and Blossom service boundary.
