@@ -89,6 +89,7 @@ jobs:
       - name: Build narrow QML client plugin
         run: |
           python3 scripts/ci/check_shell_client_plugin.py
+          python3 scripts/ci/check_shell_qml.py
           cmake -S system/shell/client-plugin -B /tmp/blossom-shell-client-build -G Ninja
           cmake --build /tmp/blossom-shell-client-build
 
