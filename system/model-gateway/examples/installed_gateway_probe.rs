@@ -3,8 +3,8 @@
 use blossom_core::{
     ConversationMessage, ConversationRole, GatewayEventValidator, GatewayFrame,
     GatewayFrameDecoder, GatewayProfile, InferenceOutputMode, InferenceRequestId,
-    NormalizedStreamKind, TurnIntentCatalogue, decode_gateway_event, decode_gateway_hello,
-    encode_gateway_private_request,
+    NormalizedCompletion, NormalizedStreamKind, ProviderFailureCategory, TurnIntentCatalogue,
+    decode_gateway_event, decode_gateway_hello, encode_gateway_private_request,
 };
 use blossom_model_gateway::PRODUCTION_SOCKET_PATH;
 use std::collections::VecDeque;
@@ -95,21 +95,39 @@ fn infer() -> Result<(), String> {
         .map_err(|_| "request write failed")?;
     let mut validator = GatewayEventValidator::new(&request_id);
     let mut completed_text = false;
+    let mut terminal_category = "missing";
     while !validator.is_terminal() {
         let event =
             decode_gateway_event(&reader.read_one(&mut stream)?).map_err(|_| "invalid event")?;
         validator.accept(&event).map_err(|_| "invalid sequence")?;
-        if let NormalizedStreamKind::Finished { completion } = event.event {
-            completed_text = matches!(
-                completion,
-                blossom_core::NormalizedCompletion::Text { ref content } if !content.is_empty()
-            );
+        match &event.event {
+            NormalizedStreamKind::Finished {
+                completion: NormalizedCompletion::Text { content },
+            } if !content.is_empty() => {
+                completed_text = true;
+                terminal_category = "completed_text";
+            }
+            NormalizedStreamKind::Finished {
+                completion: NormalizedCompletion::ToolIntents { .. },
+            } => terminal_category = "completed_tool_intents",
+            NormalizedStreamKind::Cancelled => terminal_category = "cancelled",
+            NormalizedStreamKind::Failed { category } => {
+                terminal_category = match category {
+                    ProviderFailureCategory::Unavailable => "failed_unavailable",
+                    ProviderFailureCategory::TimedOut => "failed_timed_out",
+                    ProviderFailureCategory::Disconnected => "failed_disconnected",
+                    ProviderFailureCategory::Malformed => "failed_malformed",
+                    ProviderFailureCategory::ProviderFailed => "failed_provider",
+                    ProviderFailureCategory::OutputLimit => "failed_output_limit",
+                };
+            }
+            _ => {}
         }
     }
     if completed_text {
         Ok(())
     } else {
-        Err("inference did not complete with validated text".into())
+        Err(format!("inference terminal category: {terminal_category}"))
     }
 }
 
