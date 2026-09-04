@@ -225,13 +225,7 @@ jobs:
           systemctl is-active --quiet blossom-model-netns.service
           systemctl is-active --quiet blossom-model-llama-cpp.service
           test ! -e /run/blossom-model-gateway/inference.sock
-          test "$(sudo wc -l "$audit" | awk '{print $1}')" -ge 1000
-          test "$(sudo stat -c %s "$audit")" -le 1048576
-          if sudo grep -Eq \
-            'Reply with one short greeting|Write the numbers from one to one hundred|blossom-evidence|blossom-ai|reasoning_text|tool_arguments|/home/' \
-            "$audit"; then
-            exit 1
-          fi
+          test ! -e "$audit"
 
       - name: Verify orderly cleanup and stale socket refusal
         run: |
