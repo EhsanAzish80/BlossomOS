@@ -311,7 +311,9 @@ currently implemented.
 
 - [x] Review and accept the shell IPC and approval-surface ADR.
 - [ ] Freeze a closed, authenticated, versioned, size-bounded session IPC
-  schema for only the existing fixed diagnostic slice.
+  schema for only the existing fixed diagnostic slice. The closed Rust schema
+  and adversarial decoder tests are implemented; authentication and real D-Bus
+  transport evidence remain pending before this item can be checked.
 - [ ] Implement the unprivileged session service without moving authorization,
   token custody, execution, verification, or audit authority into QML.
 - [ ] Prove hostile same-user caller, replay, mutation, expiry, disconnect,
