@@ -101,10 +101,10 @@ jobs:
           test "$(stat -c %a /run/blossom-model-gateway/inference.sock)" = 660
           gateway_pid=$(systemctl show --property MainPID --value blossom-model-gateway.service)
           provider_pid=$(systemctl show --property MainPID --value blossom-model-llama-cpp.service)
-          test "$(stat -Lc %i /proc/$gateway_pid/ns/net)" = \
-            "$(stat -Lc %i /proc/$provider_pid/ns/net)"
-          test "$(stat -Lc %i /proc/1/ns/net)" != \
-            "$(stat -Lc %i /proc/$provider_pid/ns/net)"
+          test "$(sudo stat -Lc %i /proc/$gateway_pid/ns/net)" = \
+            "$(sudo stat -Lc %i /proc/$provider_pid/ns/net)"
+          test "$(sudo stat -Lc %i /proc/1/ns/net)" != \
+            "$(sudo stat -Lc %i /proc/$provider_pid/ns/net)"
           test "$(systemctl show --property TasksMax --value blossom-model-gateway.service)" = 32
           test "$(systemctl show --property MemoryMax --value blossom-model-gateway.service)" = 268435456
           test "$(systemctl show --property TasksMax --value blossom-model-llama-cpp.service)" = 64
