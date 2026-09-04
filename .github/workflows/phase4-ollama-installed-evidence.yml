@@ -202,12 +202,11 @@ jobs:
           sudo test -s "$audit"
           sudo grep -q '"outcome":"completed_text"' "$audit"
           sudo grep -q '"outcome":"cancelled"' "$audit"
-          sudo grep -q '"outcome":"failed_unavailable"' "$audit" || true
           ! sudo grep -F 'Reply with one short greeting.' "$audit"
           ! sudo grep -F 'Write the numbers' "$audit"
           sudo -u blossom-evidence-allowed target/release/examples/installed_gateway_probe infer ollama || true
           systemctl is-active --quiet blossom-model-gateway.service
-          sudo grep -q '"outcome":"failed_unavailable"' "$audit"
+          sudo grep -q '"outcome":"provider_failed"' "$audit"
 
       - name: Verify orderly cleanup and stale socket refusal
         run: |
