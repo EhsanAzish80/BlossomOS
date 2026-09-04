@@ -40,12 +40,13 @@ controls from evidence that does not yet exist.
 - Inactive sysusers and hardened systemd templates pass repository drift checks
   and `systemd-analyze verify` in Linux CI.
 - Release/default gateway startup exits not-ready before creating a listener.
-- Merged commit `bba9aea` has passing disposable x86-64 Linux installed-system
+- Merged commit `22e82dc` has passing disposable x86-64 Linux installed-system
   evidence in workflow run
-  [`33847719169`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33847719169).
+  [`33850900756`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33850900756).
   The pinned llama.cpp package passed installation, distinct service identity,
   private namespace and external-network denial, socket admission, real offline
-  inference, audit isolation/redaction and provider-loss non-success checks.
+  inference, audit isolation/redaction, provider-loss non-success, orderly
+  socket cleanup and stale-path-refusal checks.
 
 ## Unsatisfied production gates
 
@@ -68,8 +69,7 @@ controls from evidence that does not yet exist.
 - The installed journal passed ownership, access-denial and redaction checks;
   audit-capacity failure and all terminal-write failure paths remain unproved.
 - No pinned real Ollama package or installed Ollama inference evidence exists.
-- Cancellation races and stale-socket recovery still lack installed-service
-  evidence.
+- Cancellation races still lack installed-service evidence.
 
 ## Exit decision
 
