@@ -1,0 +1,164 @@
+name: Phase 6 installed shell evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase6-installed-shell-evidence
+  cancel-in-progress: false
+
+jobs:
+  arch-x86-64:
+    name: Installed Arch Hyprland Quickshell boundary
+    runs-on: [self-hosted, linux, x64, blossom-gpu]
+    container:
+      image: archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34
+      options: --device /dev/dri
+    timeout-minutes: 30
+    steps:
+      - name: Establish target Arch userspace
+        run: |
+          grep -qx 'ID=arch' /etc/os-release
+          test "$(uname -m)" = x86_64
+          pacman -Syu --noconfirm \
+            base-devel bubblewrap cage cmake dbus-broker hyprland jq mesa ninja \
+            python qt6-base qt6-declarative quickshell rust weston
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Require the evidence-only parent compositor versions
+        run: |
+          lock=system/shell/evidence/parent-compositors-arch-x86_64.lock.json
+          for package in cage weston; do
+            expected=$(jq -r --arg package "$package" \
+              '.packages[] | select(.name == $package) | .version' "$lock")
+            actual=$(pacman -Q "$package" | cut -d ' ' -f 2)
+            test -n "$expected"
+            test "$actual" = "$expected"
+          done
+
+      - name: Require the reviewed package versions
+        run: |
+          lock=system/shell/registry/arch-x86_64.lock.json
+          for package in hyprland quickshell systemd dbus-broker; do
+            expected=$(jq -r --arg package "$package" \
+              '.packages[] | select(.name == $package) | .version' "$lock")
+            actual=$(pacman -Q "$package" | cut -d ' ' -f 2)
+            test -n "$expected"
+            test "$actual" = "$expected"
+          done
+
+      - name: Build the gated service and narrow QML plugin
+        run: |
+          useradd --create-home --shell /usr/bin/nologin blossom-ci
+          chown -R blossom-ci:blossom-ci "$GITHUB_WORKSPACE"
+          runuser -u blossom-ci -- env HOME=/home/blossom-ci \
+            cargo build --locked --release --package blossom-shell-service \
+            --features production-dbus-service
+          install -d -o blossom-ci -g blossom-ci -m 0755 \
+            "$RUNNER_TEMP/blossom-shell-client-build"
+          runuser -u blossom-ci -- env HOME=/home/blossom-ci \
+            cmake -S system/shell/client-plugin \
+            -B "$RUNNER_TEMP/blossom-shell-client-build" -G Ninja
+          runuser -u blossom-ci -- env HOME=/home/blossom-ci \
+            cmake --build "$RUNNER_TEMP/blossom-shell-client-build"
+          test -f "$RUNNER_TEMP/blossom-shell-client-build/qml/Blossom/Shell/qmldir"
+          find "$RUNNER_TEMP/blossom-shell-client-build/qml/Blossom/Shell" \
+            -maxdepth 1 -type f -name '*.so' | grep -q .
+
+      - name: Install the closed shell package tree
+        run: |
+          install -D -o root -g root -m 0755 \
+            target/release/blossom-shell-service \
+            /usr/lib/blossom-os/blossom-shell-service
+          install -D -o root -g root -m 0644 \
+            system/shell/packaging/blossom-shell-service.service \
+            /usr/lib/systemd/user/blossom-shell-service.service
+          install -D -o root -g root -m 0644 \
+            system/shell/packaging/org.blossomos.Shell1.service \
+            /usr/share/dbus-1/services/org.blossomos.Shell1.service
+          install -d -o root -g root -m 0755 \
+            /usr/lib/qt6/qml/Blossom/Shell /usr/share/blossom-os/shell
+          cp -a "$RUNNER_TEMP/blossom-shell-client-build/qml/Blossom/Shell/." \
+            /usr/lib/qt6/qml/Blossom/Shell/
+          cp -a system/shell/qml/. /usr/share/blossom-os/shell/
+          chown -R root:root /usr/lib/qt6/qml/Blossom /usr/share/blossom-os
+          find /usr/lib/qt6/qml/Blossom /usr/share/blossom-os -type d -exec chmod 0755 {} +
+          find /usr/lib/qt6/qml/Blossom /usr/share/blossom-os -type f -exec chmod 0644 {} +
+          chmod 0755 /usr/lib/qt6/qml/Blossom/Shell/*.so
+          install -d -o blossom-ci -g blossom-ci -m 0700 /run/user/1000
+          test "$(id -u blossom-ci)" = 1000
+          runuser -u blossom-ci -- env XDG_RUNTIME_DIR=/run/user/1000 \
+            systemd-analyze --user verify \
+            /usr/lib/systemd/user/blossom-shell-service.service
+          ! ldd /usr/lib/blossom-os/blossom-shell-service | grep -q 'not found'
+          ! ldd /usr/lib/qt6/qml/Blossom/Shell/*.so | grep -q 'not found'
+
+      - name: Load the installed surface in nested Hyprland
+        run: |
+          install -o blossom-ci -g blossom-ci -m 0644 \
+            system/shell/evidence/hyprland-nested.conf "$RUNNER_TEMP/hyprland.conf"
+          runuser -u blossom-ci -- env \
+            HOME=/home/blossom-ci \
+            XDG_RUNTIME_DIR=/run/user/1000 \
+            dbus-run-session -- bash -eo pipefail -c '
+              LIBGL_ALWAYS_SOFTWARE=1 weston \
+                --backend=headless-backend.so --renderer=gl \
+                --socket=wayland-parent \
+                --idle-time=0 --log="$XDG_RUNTIME_DIR/weston.log" &
+              weston_pid=$!
+              cage_pid=""
+              cleanup() {
+                status=$?
+                kill $weston_pid $cage_pid 2>/dev/null || true
+                if test "$status" -ne 0; then
+                  echo "::group::Weston log"
+                  cat "$XDG_RUNTIME_DIR/weston.log" 2>/dev/null || true
+                  echo "::endgroup::"
+                  echo "::group::Cage and nested Hyprland log"
+                  cat "$XDG_RUNTIME_DIR/cage.log" 2>/dev/null || true
+                  echo "::endgroup::"
+                  echo "::group::Hyprland launcher log"
+                  cat "$XDG_RUNTIME_DIR/hyprland.log" 2>/dev/null || true
+                  echo "::endgroup::"
+                  echo "::group::Hyprland runtime logs"
+                  find "$XDG_RUNTIME_DIR/hypr" -type f -maxdepth 3 \
+                    -exec sh -c '"'"'echo "--- $1"; cat "$1"'"'"' sh {} \; \
+                    2>/dev/null || true
+                  echo "::endgroup::"
+                fi
+                exit "$status"
+              }
+              trap cleanup EXIT
+              for attempt in $(seq 1 100); do
+                test -S "$XDG_RUNTIME_DIR/wayland-parent" && break
+                sleep 0.1
+              done
+              test -S "$XDG_RUNTIME_DIR/wayland-parent"
+              LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY=wayland-parent cage -D -- \
+                Hyprland --config "'$RUNNER_TEMP'/hyprland.conf" \
+                >"$XDG_RUNTIME_DIR/cage.log" 2>&1 &
+              cage_pid=$!
+              for attempt in $(seq 1 200); do
+                if pgrep -u "$(id -u)" -x quickshell >/dev/null; then break; fi
+                kill -0 "$cage_pid"
+                sleep 0.1
+              done
+              pgrep -u "$(id -u)" -x quickshell >/dev/null
+              for attempt in $(seq 1 100); do
+                busctl --user --quiet status org.blossomos.Shell1 >/dev/null 2>&1 && break
+                sleep 0.1
+              done
+              busctl --user --quiet status org.blossomos.Shell1 >/dev/null
+              ! grep -E "module .* is not installed|Type .* unavailable|failed to create root component" \
+                "$XDG_RUNTIME_DIR"/quickshell/by-id/*/log.qslog
+            '
+
+      - name: State evidence limits
+        run: |
+          echo 'Evidence uses a nested real Hyprland and real Quickshell in Arch userspace.'
+          echo 'It does not claim GPU, hardware, input, installer, ArchISO, or release proof.'

@@ -307,8 +307,9 @@ Exit: Blossom never reports success solely because a command was issued.
 ## Phase 6: Blossom Shell
 
 Status: active. ADR-0021 is accepted. A Linux-only unprivileged session IPC
-service is implemented behind an inactive production feature; no graphical
-shell or installed-runtime evidence is currently claimed.
+service and the first narrow Quickshell presentation surface are implemented
+behind inactive production gates; no passing installed-runtime or graphical
+interaction evidence is currently claimed.
 
 - [x] Review and accept the shell IPC and approval-surface ADR.
 - [x] Freeze a closed, authenticated, versioned, size-bounded session IPC
@@ -338,6 +339,9 @@ shell or installed-runtime evidence is currently claimed.
 - [ ] Add launcher, notifications, system status, and agent surfaces only as
   separately reviewed increments after the first slice preserves the boundary.
 - [ ] Produce installed target evidence and an independent Phase 6 exit audit.
+  The manual harness now requires a trusted ephemeral Linux runner exposing a
+  DRM render node. Hosted run `33890423701` is diagnostic failure evidence, not
+  an exit pass; the exact owner action is in `docs/PHASE_6_INSTALLED_EVIDENCE.md`.
 
 The active design baseline and exit evidence are tracked in
 `docs/PHASE_6_BASELINE.md`. Phase 6 adds no capability merely to make a UI

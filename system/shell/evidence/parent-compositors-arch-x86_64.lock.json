@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "purpose": "ci-parent-compositors-only",
+  "architecture": "x86_64",
+  "packages": [
+    {"name":"cage","version":"0.3.1-1","repository":"extra","source":"https://archlinux.org/packages/extra/x86_64/cage/"},
+    {"name":"weston","version":"15.0.1-3","repository":"extra","source":"https://archlinux.org/packages/extra/x86_64/weston/"}
+  ]
+}
