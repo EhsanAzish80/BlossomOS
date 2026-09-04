@@ -3,7 +3,7 @@ use blossom_core::{
     SHELL_BUS_NAME, SHELL_INTERFACE, SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellClientRequest,
     ShellDiagnosticService, ShellPeerId, decode_shell_client_request,
 };
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zbus::message::Header;
 use zbus::proxy::{Builder as ProxyBuilder, CacheProperties, MethodFlags};
@@ -34,7 +34,7 @@ pub trait ShellRequestHandler: Send {
         now_ms: u64,
     ) -> Result<Vec<u8>, HandlerError>;
     fn activity(&mut self, after: Option<u64>, limit: u16) -> Result<Vec<u8>, HandlerError>;
-    fn disconnect(&mut self, peer: &ShellPeerId, now_ms: u64);
+    fn disconnect(&mut self, peer: &ShellPeerId, now_ms: u64) -> Result<(), HandlerError>;
 }
 
 impl ShellRequestHandler for ShellDiagnosticService<BubblewrapExecutor> {
@@ -84,8 +84,10 @@ impl ShellRequestHandler for ShellDiagnosticService<BubblewrapExecutor> {
         encode(&self.read_activity(after, limit).map_err(|_| HandlerError)?)
     }
 
-    fn disconnect(&mut self, peer: &ShellPeerId, now_ms: u64) {
-        let _ = self.disconnect(peer, now_ms);
+    fn disconnect(&mut self, peer: &ShellPeerId, now_ms: u64) -> Result<(), HandlerError> {
+        self.disconnect(peer, now_ms)
+            .map(|_| ())
+            .map_err(|_| HandlerError)
     }
 }
 
@@ -98,14 +100,18 @@ fn encode(value: &impl serde::Serialize) -> Result<Vec<u8>, HandlerError> {
 }
 
 pub struct ShellBusService {
-    handler: Mutex<Box<dyn ShellRequestHandler>>,
+    handler: Arc<Mutex<Box<dyn ShellRequestHandler>>>,
 }
 
 impl ShellBusService {
     pub fn new(handler: impl ShellRequestHandler + 'static) -> Self {
         Self {
-            handler: Mutex::new(Box::new(handler)),
+            handler: Arc::new(Mutex::new(Box::new(handler))),
         }
+    }
+
+    fn shared_handler(&self) -> Arc<Mutex<Box<dyn ShellRequestHandler>>> {
+        Arc::clone(&self.handler)
     }
 }
 
@@ -236,6 +242,51 @@ fn failed() -> zbus::fdo::Error {
     zbus::fdo::Error::Failed("shell service unavailable".into())
 }
 
+fn lost_unique_owner(
+    name: &str,
+    old_owner: Option<&str>,
+    new_owner: Option<&str>,
+) -> Option<ShellPeerId> {
+    if !name.starts_with(':') || old_owner != Some(name) || new_owner.is_some() {
+        return None;
+    }
+    ShellPeerId::from_bus_unique_name(name).ok()
+}
+
+fn disconnect_match_rule() -> Result<zbus::MatchRule<'static>, ShellProcessError> {
+    zbus::MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(DBUS_DESTINATION)
+        .and_then(|builder| builder.interface(DBUS_INTERFACE))
+        .and_then(|builder| builder.member("NameOwnerChanged"))
+        .map(|builder| builder.build().to_owned())
+        .map_err(|_| ShellProcessError::SessionBusUnavailable)
+}
+
+fn monitor_disconnects(
+    mut messages: zbus::blocking::MessageIterator,
+    handler: Arc<Mutex<Box<dyn ShellRequestHandler>>>,
+) -> Result<(), ShellProcessError> {
+    for message in &mut messages {
+        let message = message.map_err(|_| ShellProcessError::SessionBusUnavailable)?;
+        let signal = zbus::fdo::NameOwnerChanged::from_message(message)
+            .ok_or(ShellProcessError::SessionBusUnavailable)?;
+        let args = signal
+            .args()
+            .map_err(|_| ShellProcessError::SessionBusUnavailable)?;
+        let old_owner = args.old_owner().as_ref().map(|owner| owner.as_str());
+        let new_owner = args.new_owner().as_ref().map(|owner| owner.as_str());
+        if let Some(peer) = lost_unique_owner(args.name().as_str(), old_owner, new_owner) {
+            handler
+                .lock()
+                .map_err(|_| ShellProcessError::SessionBusUnavailable)?
+                .disconnect(&peer, now_ms())
+                .map_err(|_| ShellProcessError::SessionBusUnavailable)?;
+        }
+    }
+    Err(ShellProcessError::SessionBusUnavailable)
+}
+
 #[cfg(feature = "production-dbus-service")]
 pub fn run_production() -> Result<(), ShellProcessError> {
     let mut nonce = [0_u8; 8];
@@ -244,17 +295,35 @@ pub fn run_production() -> Result<(), ShellProcessError> {
         BubblewrapExecutor::phase1_default(),
         u64::from_ne_bytes(nonce),
     );
-    let _connection = zbus::blocking::connection::Builder::session()
-        .map_err(|_| ShellProcessError::SessionBusUnavailable)?
-        .name(SHELL_BUS_NAME)
-        .map_err(|_| ShellProcessError::SessionBusUnavailable)?
-        .serve_at(SHELL_OBJECT_PATH, ShellBusService::new(service))
+    let connection = zbus::blocking::connection::Builder::session()
         .map_err(|_| ShellProcessError::SessionBusUnavailable)?
         .build()
         .map_err(|_| ShellProcessError::SessionBusUnavailable)?;
-    loop {
-        std::thread::park();
-    }
+    let messages = zbus::blocking::MessageIterator::for_match_rule(
+        disconnect_match_rule()?,
+        &connection,
+        Some(64),
+    )
+    .map_err(|_| ShellProcessError::SessionBusUnavailable)?;
+    let interface = ShellBusService::new(service);
+    let handler = interface.shared_handler();
+    connection
+        .object_server()
+        .at(SHELL_OBJECT_PATH, interface)
+        .map_err(|_| ShellProcessError::SessionBusUnavailable)?;
+    connection
+        .request_name(SHELL_BUS_NAME)
+        .map_err(|_| ShellProcessError::SessionBusUnavailable)?;
+    let (fatal_sender, fatal_receiver) = std::sync::mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name("blossom-shell-owner-monitor".into())
+        .spawn(move || {
+            let _ = fatal_sender.send(monitor_disconnects(messages, handler));
+        })
+        .map_err(|_| ShellProcessError::SessionBusUnavailable)?;
+    fatal_receiver
+        .recv()
+        .map_err(|_| ShellProcessError::SessionBusUnavailable)?
 }
 
 #[cfg(not(feature = "production-dbus-service"))]
@@ -267,8 +336,8 @@ mod tests {
     use super::*;
     use std::io::{BufRead, BufReader};
     use std::process::{Child, Command, Stdio};
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
 
     struct TestBus(Child);
 
@@ -281,6 +350,7 @@ mod tests {
 
     struct Handler {
         calls: Arc<AtomicUsize>,
+        disconnects: Arc<AtomicUsize>,
         expected_peer: String,
     }
 
@@ -299,7 +369,11 @@ mod tests {
         fn activity(&mut self, _: Option<u64>, _: u16) -> Result<Vec<u8>, HandlerError> {
             Err(HandlerError)
         }
-        fn disconnect(&mut self, _: &ShellPeerId, _: u64) {}
+        fn disconnect(&mut self, peer: &ShellPeerId, _: u64) -> Result<(), HandlerError> {
+            assert_eq!(peer.as_str(), self.expected_peer);
+            self.disconnects.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
     }
 
     fn test_bus() -> (TestBus, String) {
@@ -337,6 +411,7 @@ mod tests {
                 SHELL_OBJECT_PATH,
                 ShellBusService::new(Handler {
                     calls: calls.clone(),
+                    disconnects: Arc::new(AtomicUsize::new(0)),
                     expected_peer: sender,
                 }),
             )
@@ -357,5 +432,56 @@ mod tests {
         let unknown: Result<(), _> = proxy.call("Execute", &("/bin/sh",));
         assert!(unknown.is_err());
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn recognizes_only_complete_unique_name_loss() {
+        assert!(lost_unique_owner(":1.42", Some(":1.42"), None).is_some());
+        assert!(lost_unique_owner(":1.42", None, Some(":1.42")).is_none());
+        assert!(lost_unique_owner(":1.42", Some(":1.42"), Some(":1.43")).is_none());
+        assert!(lost_unique_owner("org.example.Client", Some(":1.42"), None).is_none());
+        assert!(lost_unique_owner(":1.42", Some(":1.41"), None).is_none());
+        assert!(lost_unique_owner(":malformed", Some(":malformed"), None).is_none());
+    }
+
+    #[test]
+    fn dropping_client_notifies_the_shared_handler() {
+        let (_bus, address) = test_bus();
+        let service_connection = zbus::blocking::connection::Builder::address(address.as_str())
+            .expect("service address")
+            .build()
+            .expect("service connection");
+        let messages = zbus::blocking::MessageIterator::for_match_rule(
+            disconnect_match_rule().expect("match rule"),
+            &service_connection,
+            Some(64),
+        )
+        .expect("disconnect subscription");
+        let client = zbus::blocking::connection::Builder::address(address.as_str())
+            .expect("client address")
+            .build()
+            .expect("client");
+        let sender = client
+            .inner()
+            .unique_name()
+            .expect("unique name")
+            .to_string();
+        let disconnects = Arc::new(AtomicUsize::new(0));
+        let interface = ShellBusService::new(Handler {
+            calls: Arc::new(AtomicUsize::new(0)),
+            disconnects: Arc::clone(&disconnects),
+            expected_peer: sender,
+        });
+        let handler = interface.shared_handler();
+        let monitor = std::thread::spawn(move || monitor_disconnects(messages, handler));
+
+        drop(client);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while disconnects.load(Ordering::SeqCst) == 0 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(disconnects.load(Ordering::SeqCst), 1);
+        drop(service_connection);
+        drop(monitor);
     }
 }

@@ -306,23 +306,26 @@ Exit: Blossom never reports success solely because a command was issued.
 
 ## Phase 6: Blossom Shell
 
-Status: active. ADR-0021 is accepted; no graphical shell or IPC service is
-currently implemented.
+Status: active. ADR-0021 is accepted. A Linux-only unprivileged session IPC
+service is implemented behind an inactive production feature; no graphical
+shell or installed-runtime evidence is currently claimed.
 
 - [x] Review and accept the shell IPC and approval-surface ADR.
-- [ ] Freeze a closed, authenticated, versioned, size-bounded session IPC
-  schema for only the existing fixed diagnostic slice. The closed Rust schema
-  and adversarial decoder tests are implemented; authentication and real D-Bus
-  transport evidence remain pending before this item can be checked.
-- [ ] Implement the unprivileged session service without moving authorization,
+- [x] Freeze a closed, authenticated, versioned, size-bounded session IPC
+  schema for only the existing fixed diagnostic slice. The closed Rust schema,
+  adversarial decoder tests, real sender authentication, and private-bus
+  transport test are implemented.
+- [x] Implement the unprivileged session service without moving authorization,
   token custody, execution, verification, or audit authority into QML. The
   connection-bound pending state and fixed-diagnostic engine bridge are
   implemented with a bounded redacted projection of authoritative audit stages.
   A Linux-only session D-Bus service adapter now exists behind an inactive
-  production feature; this item remains open until private-bus and installed
-  evidence pass.
+  production feature. Installed evidence is tracked separately below.
 - [ ] Prove hostile same-user caller, replay, mutation, expiry, disconnect,
-  restart, cancellation, schema, and service-loss behavior fails closed.
+  restart, cancellation, schema, and service-loss behavior fails closed. Client
+  unique-name loss now cancels its pending approval through the audited engine
+  path, and loss of the owner-monitor stream terminates the service path; the
+  remaining adversarial and installed cases keep this item open.
 - [ ] Establish the pinned Arch + Hyprland + Quickshell development and package
   boundary.
 - [ ] Build exact approval preview and readable correlated activity UI for the
