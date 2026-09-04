@@ -86,14 +86,16 @@ jobs:
           find /usr/lib/qt6/qml/Blossom /usr/share/blossom-os -type d -exec chmod 0755 {} +
           find /usr/lib/qt6/qml/Blossom /usr/share/blossom-os -type f -exec chmod 0644 {} +
           chmod 0755 /usr/lib/qt6/qml/Blossom/Shell/*.so
-          systemd-analyze --user verify /usr/lib/systemd/user/blossom-shell-service.service
+          install -d -o blossom-ci -g blossom-ci -m 0700 /run/user/1000
+          test "$(id -u blossom-ci)" = 1000
+          runuser -u blossom-ci -- env XDG_RUNTIME_DIR=/run/user/1000 \
+            systemd-analyze --user verify \
+            /usr/lib/systemd/user/blossom-shell-service.service
           ! ldd /usr/lib/blossom-os/blossom-shell-service | grep -q 'not found'
           ! ldd /usr/lib/qt6/qml/Blossom/Shell/*.so | grep -q 'not found'
 
       - name: Load the installed surface in nested Hyprland
         run: |
-          install -d -o blossom-ci -g blossom-ci -m 0700 /run/user/1000
-          test "$(id -u blossom-ci)" = 1000
           install -o blossom-ci -g blossom-ci -m 0644 \
             system/shell/evidence/hyprland-nested.conf "$RUNNER_TEMP/hyprland.conf"
           runuser -u blossom-ci -- env \
