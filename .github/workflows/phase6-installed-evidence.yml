@@ -63,12 +63,22 @@ jobs:
             "$RUNNER_TEMP/blossom-shell-client-build"
           runuser -u blossom-ci -- env HOME=/home/blossom-ci \
             cmake -S system/shell/client-plugin \
-            -B "$RUNNER_TEMP/blossom-shell-client-build" -G Ninja
+            -B "$RUNNER_TEMP/blossom-shell-client-build" -G Ninja \
+            -DBLOSSOM_BUILD_CLIENT_BUS_TEST=ON
           runuser -u blossom-ci -- env HOME=/home/blossom-ci \
             cmake --build "$RUNNER_TEMP/blossom-shell-client-build"
           test -f "$RUNNER_TEMP/blossom-shell-client-build/qml/Blossom/Shell/qmldir"
+          test -f "$RUNNER_TEMP/blossom-shell-client-build/qml/Blossom/Shell/libblossom-shell-client-plugin.so"
+          test -f "$RUNNER_TEMP/blossom-shell-client-build/qml/Blossom/Shell/libblossom-shell-client-pluginplugin.so"
           find "$RUNNER_TEMP/blossom-shell-client-build/qml/Blossom/Shell" \
             -maxdepth 1 -type f -name '*.so' | grep -q .
+
+      - name: Exercise the real Qt client wire types against the Rust service
+        run: |
+          runuser -u blossom-ci -- env HOME=/home/blossom-ci \
+            dbus-run-session -- bash system/shell/tests/run-client-bus.sh \
+            "$GITHUB_WORKSPACE/target/release/blossom-shell-service" \
+            "$RUNNER_TEMP/blossom-shell-client-build/blossom-client-bus-test"
 
       - name: Install the closed shell package tree
         run: |
@@ -97,6 +107,9 @@ jobs:
             /usr/lib/systemd/user/blossom-shell-service.service
           ! ldd /usr/lib/blossom-os/blossom-shell-service | grep -q 'not found'
           ! ldd /usr/lib/qt6/qml/Blossom/Shell/*.so | grep -q 'not found'
+          for library in /usr/lib/qt6/qml/Blossom/Shell/*.so; do
+            readelf -d "$library" | grep -F 'Library runpath: [$ORIGIN]'
+          done
 
       - name: Load the installed surface in nested Hyprland
         run: |

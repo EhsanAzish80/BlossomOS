@@ -34,7 +34,10 @@ ShellRoot {
             Button {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Request kernel identity"
-                enabled: BlossomBroker.state !== "waiting" && BlossomBroker.state !== "submitting"
+                enabled: BlossomBroker.state !== "requesting"
+                    && BlossomBroker.state !== "waiting"
+                    && BlossomBroker.state !== "submitting"
+                    && BlossomBroker.state !== "cancelling"
                 onClicked: BlossomBroker.requestSystemUname()
             }
 

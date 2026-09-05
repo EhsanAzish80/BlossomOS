@@ -52,12 +52,16 @@ pub fn validate_phase1_command(command: &CommandSpec) -> Result<(), ExecutorErro
 
 pub fn bubblewrap_arguments(command: &CommandSpec) -> Result<Vec<OsString>, ExecutorError> {
     validate_phase1_command(command)?;
+    // Do not add `--disable-userns`: Bubblewrap implements it by writing
+    // /proc/sys/user/max_user_namespaces, which is intentionally read-only under
+    // the service's ProtectKernelTunables hardening. This executor remains narrow:
+    // it selects the fixed trusted executable and arguments, creates private
+    // namespaces, drops every capability, and exposes only read-only runtime files.
     let mut arguments = [
         "--die-with-parent",
         "--new-session",
         "--unshare-all",
         "--unshare-user",
-        "--disable-userns",
         "--cap-drop",
         "ALL",
         "--clearenv",
@@ -70,12 +74,6 @@ pub fn bubblewrap_arguments(command: &CommandSpec) -> Result<Vec<OsString>, Exec
         "--symlink",
         "usr/lib64",
         "/lib64",
-        "--proc",
-        "/proc",
-        "--dev",
-        "/dev",
-        "--tmpfs",
-        "/tmp",
         "--chdir",
         "/",
     ]
@@ -239,9 +237,24 @@ mod tests {
             .collect::<Vec<_>>();
         assert!(arguments.contains(&"--unshare-all".into()));
         assert!(arguments.contains(&"--unshare-user".into()));
-        assert!(arguments.contains(&"--disable-userns".into()));
+        assert!(
+            !arguments.contains(&"--disable-userns".into()),
+            "the hardened service makes the kernel tunable used by this option read-only"
+        );
         assert!(arguments.contains(&"--clearenv".into()));
         assert!(arguments.contains(&"--ro-bind".into()));
+        assert!(
+            !arguments.contains(&"--proc".into()),
+            "the fixed uname capability must not expose procfs"
+        );
+        assert!(
+            !arguments.contains(&"--dev".into()),
+            "the fixed uname capability must not expose devices"
+        );
+        assert!(
+            !arguments.contains(&"--tmpfs".into()),
+            "the fixed uname capability does not need a writable temporary filesystem"
+        );
         assert!(!arguments.contains(&"--share-net".into()));
         assert!(arguments.ends_with(&["--".into(), "/usr/bin/uname".into(), "-s".into()]));
     }

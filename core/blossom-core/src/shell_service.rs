@@ -79,7 +79,7 @@ impl<E: Executor> ShellDiagnosticService<E> {
                     Ok(resolved) => resolved,
                     Err(ShellSessionError::ApprovalExpired) => {
                         self.expire_pending(peer, now_ms)?;
-                        return Err(ShellSessionError::ApprovalExpired.into());
+                        return Ok(ShellServiceOutcome::Expired);
                     }
                     Err(error) => return Err(error.into()),
                 };
@@ -107,7 +107,7 @@ impl<E: Executor> ShellDiagnosticService<E> {
                         Ok(cancelled) => cancelled,
                         Err(ShellSessionError::ApprovalExpired) => {
                             self.expire_pending(peer, now_ms)?;
-                            return Err(ShellSessionError::ApprovalExpired.into());
+                            return Ok(ShellServiceOutcome::Expired);
                         }
                         Err(error) => return Err(error.into()),
                     };
@@ -192,6 +192,7 @@ pub enum ShellServiceOutcome {
     AwaitingApproval(Box<ShellApprovalPreview>),
     Denied,
     Cancelled,
+    Expired,
     Verified,
     VerificationFailed,
 }
@@ -349,16 +350,16 @@ mod tests {
         else {
             panic!("approval")
         };
-        assert!(matches!(
-            service.handle_client_request(
-                &owner,
-                decision(&expiring, "approve_once"),
-                3_000 + SHELL_APPROVAL_TTL_MS + 1
-            ),
-            Err(ShellServiceError::Session(
-                ShellSessionError::ApprovalExpired
-            ))
-        ));
+        assert_eq!(
+            service
+                .handle_client_request(
+                    &owner,
+                    decision(&expiring, "approve_once"),
+                    3_000 + SHELL_APPROVAL_TTL_MS + 1
+                )
+                .expect("expired outcome"),
+            ShellServiceOutcome::Expired
+        );
         assert_eq!(calls.get(), 0);
     }
 
@@ -400,16 +401,16 @@ mod tests {
         ));
         assert_eq!(service.audit().records().len(), records_before_replacement);
 
-        assert!(matches!(
-            service.handle_client_request(
-                &owner,
-                decision(&preview, "approve_once"),
-                1_000 + SHELL_APPROVAL_TTL_MS + 1
-            ),
-            Err(ShellServiceError::Session(
-                ShellSessionError::ApprovalExpired
-            ))
-        ));
+        assert_eq!(
+            service
+                .handle_client_request(
+                    &owner,
+                    decision(&preview, "approve_once"),
+                    1_000 + SHELL_APPROVAL_TTL_MS + 1
+                )
+                .expect("expired outcome"),
+            ShellServiceOutcome::Expired
+        );
         let events: Vec<_> = service
             .audit()
             .records()

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <QObject>
+#include <QDBusServiceWatcher>
 #include <QQmlEngine>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -32,6 +34,7 @@ signals:
     void activityChanged();
 
 private:
+    void armExpiryTimer();
     void submitDecision(const QString &decision);
     void handleOutcome(const QByteArray &bytes);
     void failClosed();
@@ -40,4 +43,7 @@ private:
     QString m_state = QStringLiteral("idle");
     QVariantMap m_preview;
     QVariantList m_activity;
+    QDBusServiceWatcher m_serviceWatcher;
+    QTimer m_expiryTimer;
+    quint64 m_serviceGeneration = 0;
 };

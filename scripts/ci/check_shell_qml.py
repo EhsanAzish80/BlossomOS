@@ -58,7 +58,16 @@ def main() -> None:
         require(forbidden not in qml, f"forbidden QML authority: {forbidden}")
     require(qml.count('text: "Approve once"') == 1, "approve control drift")
     require("Keys.onEscapePressed" in qml, "Escape must cancel pending approval")
+    require('sequence: "Escape"' in qml, "approval must provide a window Escape shortcut")
+    require("autoRepeat: false" in qml, "Escape cancellation must not auto-repeat")
+    require("approvalFocus.forceActiveFocus(Qt.ActiveWindowFocusReason)" in qml,
+            "approval must acquire an explicit item focus target")
+    require("requestActivate()" in qml, "approval window must request activation when shown")
     require("WlrKeyboardFocus.Exclusive" in qml, "approval must request explicit keyboard focus")
+    shell = (QML / "shell.qml").read_text()
+    for state in ["requesting", "waiting", "submitting", "cancelling"]:
+        require(f'BlossomBroker.state !== "{state}"' in shell,
+                f"request control must be disabled while {state}")
 
 
 if __name__ == "__main__":

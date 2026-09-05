@@ -27,5 +27,21 @@ deferred because the fixed Bubblewrap executor must create its code-owned
 namespaces. Installed evidence must prove the combined systemd and Bubblewrap
 boundary before additional hardening is accepted.
 
+The unit permits `AF_NETLINK` only because Bubblewrap needs a `NETLINK_ROUTE`
+socket while constructing its private network namespace. It does not permit
+`AF_INET` or `AF_INET6`, and `IPAddressDeny=any` remains in force.
+`RestrictSUIDSGID=` is also deliberately absent: current systemd implements it
+by denying `openat2()`, while Bubblewrap uses `openat2()` for safe source-path
+resolution. The service remains unprivileged, has an empty capability set,
+cannot gain privileges, and sees read-only system and hidden home trees.
+
+The fixed executor deliberately omits Bubblewrap's `--disable-userns`: that
+option writes `/proc/sys/user/max_user_namespaces`, while
+`ProtectKernelTunables=yes` makes the tunable read-only. The executor still
+unshares all namespaces including the user namespace, drops all capabilities,
+selects the fixed trusted `/usr/bin/uname -s` command itself, exposes `/usr`
+read-only, and exposes no network, procfs, devices, or writable temporary
+filesystem.
+
 This checkpoint does not package QML, start Hyprland or Quickshell, establish a
 graphical session, or claim installed compatibility.
