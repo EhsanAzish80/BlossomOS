@@ -71,10 +71,20 @@ def check_activation() -> None:
 
 def check_unit() -> None:
     text = (PACKAGE / UNIT).read_text()
-    required = ["Type=dbus", f"BusName={BUS_NAME}", f"ExecStart={BINARY}", "Restart=no", "NoNewPrivileges=yes", "CapabilityBoundingSet=\n", "AmbientCapabilities=\n", "PrivateDevices=yes", "ProtectSystem=strict", "ProtectHome=yes", "RestrictAddressFamilies=AF_UNIX", "MemoryDenyWriteExecute=yes", "IPAddressDeny=any"]
+    required = ["Type=dbus", f"BusName={BUS_NAME}", f"ExecStart={BINARY}", "Restart=no", "NoNewPrivileges=yes", "CapabilityBoundingSet=\n", "AmbientCapabilities=\n", "PrivateDevices=yes", "ProtectSystem=strict", "ProtectHome=tmpfs", "RestrictAddressFamilies=AF_UNIX AF_NETLINK", "MemoryDenyWriteExecute=yes", "IPAddressDeny=any"]
     for value in required:
         require(value in text, f"missing shell unit boundary: {value.strip()}")
+    exposure = [line.strip() for line in text.splitlines()
+                if line.strip().startswith(("BindPaths=", "BindReadOnlyPaths=", "ReadWritePaths=", "ReadOnlyPaths=", "ProtectHome="))]
+    require(exposure == ["ProtectHome=tmpfs", "BindReadOnlyPaths=%t/bus"],
+            "shell may expose only the required user bus socket through hidden homes")
     require("[Install]" not in text, "checkpoint must not be enableable")
+    families = [line.strip() for line in text.splitlines()
+                if line.strip().startswith("RestrictAddressFamilies=")]
+    require(families == ["RestrictAddressFamilies=AF_UNIX AF_NETLINK"],
+            "shell service address-family boundary drift")
+    require("RestrictSUIDSGID=" not in text,
+            "RestrictSUIDSGID blocks Bubblewrap's required openat2 syscall")
     for value in ["User=root", "sudo", "pkexec", "/bin/sh", "sh -c", "bash", "systemctl", "RestrictNamespaces="]:
         require(value not in text, f"forbidden shell package surface: {value}")
 

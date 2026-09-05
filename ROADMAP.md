@@ -308,8 +308,10 @@ Exit: Blossom never reports success solely because a command was issued.
 
 Status: active. ADR-0021 is accepted. A Linux-only unprivileged session IPC
 service and the first narrow Quickshell presentation surface are implemented
-behind inactive production gates; no passing installed-runtime or graphical
-interaction evidence is currently claimed.
+behind inactive production gates. The ARM64 experiment now has installed
+graphical preview, denial, Escape-cancellation, approve-once verification,
+no-touch expiry, and fail-closed service-loss evidence; the complete
+installed-runtime matrix and independent exit audit remain open.
 
 - [x] Review and accept the shell IPC and approval-surface ADR.
 - [x] Freeze a closed, authenticated, versioned, size-bounded session IPC
@@ -334,11 +336,32 @@ interaction evidence is currently claimed.
   boundary. The accepted exact stable-repository versions, closed lock schema,
   inactive user service, D-Bus activation metadata, and drift checker are
   committed; installed compatibility remains a separate exit gate.
-- [ ] Build exact approval preview and readable correlated activity UI for the
-  fixed diagnostic.
+- [x] Build exact approval preview and readable correlated activity UI for the
+  fixed diagnostic. The ARM64 guest renders every fixed preview field and the
+  correlated authoritative activity projection. Installed denial and
+  Escape-cancellation terminate without execution or verification events.
 - [ ] Add launcher, notifications, system status, and agent surfaces only as
   separately reviewed increments after the first slice preserves the boundary.
 - [ ] Produce installed target evidence and an independent Phase 6 exit audit.
+  A separate Apple Silicon ARM64 VM experiment has verified its isolated
+  image-builder boot. A frozen September 3 snapshot resolved the initial ARM
+  Hyprland/Aquamarine mismatch; all 279 diagnostic packages passed signature
+  and integrity checks, the installed versions match, and an ext4 image was
+  assembled. The ARM guest now reaches a serial login prompt and the host ANGLE
+  backend initializes on Metal. Owner screenshots verify visible Hyprland 0.56.1
+  rendering and DRM/VirGL diagnostics. The ARM service/plugin build and 26
+  selected tests pass. Installed graphical preview, denial, and keyboard Escape
+  cancellation now pass after correcting service-bus isolation, D-Bus wire
+  typing, plugin linkage, explicit expiry reporting, approval focus, and narrow
+  Bubblewrap/systemd namespace integration. The fixed approve-once workflow now
+  reaches terminal verification with a seven-record correlated audit sequence.
+  A bounded native-client timer now triggers backend-authoritative expiry; the
+  installed graphical panel closes with terminal cancellation and no execution.
+  A fixed-name owner watcher now closes pending UI and reports unavailable when
+  the broker disappears. Broader keyboard/close behavior, durable audit recovery,
+  and the complete installed evidence matrix remain open. See
+  `docs/PHASE_6_APPLE_SILICON_VALIDATION.md`. ARM evidence does not replace the
+  x86-64 gate.
   The manual harness now requires a trusted ephemeral Linux runner exposing a
   DRM render node. Hosted run `33890423701` is diagnostic failure evidence, not
   an exit pass; the exact owner action is in `docs/PHASE_6_INSTALLED_EVIDENCE.md`.
