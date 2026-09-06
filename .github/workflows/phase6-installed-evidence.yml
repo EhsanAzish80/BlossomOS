@@ -166,6 +166,11 @@ jobs:
                 exit "$status"
               }
               trap cleanup EXIT
+              # Qt only joins AT-SPI during process startup.  Warm the
+              # session accessibility bus before Hyprland launches
+              # Quickshell so the installed shell is present in the tree.
+              python3 -c "import pyatspi; pyatspi.Registry.getDesktop(0)"
+              busctl --user --quiet status org.a11y.Bus >/dev/null
               WAYLAND_DISPLAY=blossom-parent wayland-info \
                 >"$XDG_RUNTIME_DIR/host-wayland.log" 2>&1
               grep -A3 "interface: '\''wl_compositor'\''" \

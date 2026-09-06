@@ -95,6 +95,11 @@ def main() -> None:
     ]:
         require(required in accessibility_test,
                 f"missing installed accessibility assertion: {required}")
+    workflow = (ROOT / ".github" / "workflows" / "phase6-installed-evidence.yml").read_text()
+    require('pyatspi.Registry.getDesktop(0)' in workflow,
+            "installed evidence must start AT-SPI before launching Quickshell")
+    require('status org.a11y.Bus' in workflow,
+            "installed evidence must verify the accessibility bus is available")
     shell = (QML / "shell.qml").read_text()
     for state in ["requesting", "waiting", "submitting", "cancelling"]:
         require(f'BlossomBroker.state !== "{state}"' in shell,
