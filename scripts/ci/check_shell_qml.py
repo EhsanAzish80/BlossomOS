@@ -13,7 +13,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
-    expected = {"shell.qml", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "README.md"}
+    expected = {"shell.qml", "quickshell.qml", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "README.md"}
     require({path.name for path in QML.iterdir()} == expected, "unexpected QML surface")
     qml = "\n".join((QML / name).read_text() for name in expected if name.endswith(".qml"))
     for field in [
@@ -63,11 +63,13 @@ def main() -> None:
     require("denyButton.forceActiveFocus(Qt.ActiveWindowFocusReason)" in qml,
             "approval must acquire the safe decision control as its focus target")
     require("requestActivate()" in qml, "approval window must request activation when shown")
-    require("WlrKeyboardFocus.Exclusive" in qml, "approval must request explicit keyboard focus")
-    require((QML / "shell.qml").read_text().startswith("//@ pragma UseQApplication"),
-            "shell must enable Quickshell's QApplication runtime for accessibility")
-    require("onClosed:" in qml,
-            "Quickshell window close must cancel pending approval")
+    require("Qt.ApplicationModal" in qml, "approval must request application-modal keyboard focus")
+    require("onClosing:" in qml,
+            "standard Qt window close must cancel pending approval")
+    require("PanelWindow" not in qml,
+            "security controls must not use the inaccessible proxy-window hierarchy")
+    require('ShellRoot {}' in (QML / "quickshell.qml").read_text(),
+            "the pinned Quickshell runtime must remain independently loadable")
     require("Accessible.defaultButton: true" in qml,
             "denial must be the accessible default action")
     require(qml.count("Accessible.onPressAction") == 2,
@@ -114,6 +116,8 @@ def main() -> None:
             "installed evidence must verify the accessibility bus is available")
     require('check_accessibility_probe.py' in workflow,
             "installed evidence must isolate standard Qt from the shell runtime")
+    require('/usr/lib/blossom-os/blossom-shell-ui' in workflow,
+            "installed evidence must launch the dedicated accessible UI host")
     shell = (QML / "shell.qml").read_text()
     for state in ["requesting", "waiting", "submitting", "cancelling"]:
         require(f'BlossomBroker.state !== "{state}"' in shell,

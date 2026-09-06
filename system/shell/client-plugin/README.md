@@ -12,5 +12,9 @@ executor, verifier, or audit writer. A malformed, oversized, unknown, or failed
 reply clears the preview and becomes `unavailable`.
 
 QML receives the exact service-authored preview and redacted activity only.
-This build checkpoint does not claim that the plugin is installed or loaded by
-the pinned Quickshell runtime.
+The same build produces `blossom-shell-ui`, a standard Qt application host that
+loads only the fixed installed QML entrypoint. The host adds no callable API or
+authority. It exists because the pinned Quickshell release does not publish its
+QML child controls through Linux AT-SPI; the standard Qt host does. Quickshell
+remains a separate, pinned, independently load-tested desktop presentation
+process.

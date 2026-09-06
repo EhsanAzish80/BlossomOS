@@ -1,82 +1,79 @@
-//@ pragma UseQApplication
-
 import QtQuick
 import QtQuick.Controls
-import Quickshell
+import QtQuick.Window
 import Blossom.Shell
 
-ShellRoot {
+ApplicationWindow {
+    id: commandBar
+    visible: true
+    x: 0
+    y: 0
+    width: screen ? screen.width : 800
+    height: 52
+    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+    color: "#11151c"
+    title: "Blossom OS"
+
     Component.onCompleted: BlossomBroker.refreshActivity()
 
-    PanelWindow {
-        id: commandBar
+    Row {
         anchors {
-            top: true
-            left: true
-            right: true
+            fill: parent
+            leftMargin: 18
+            rightMargin: 18
         }
-        implicitHeight: 52
-        color: "#11151c"
+        spacing: 16
+        Accessible.role: Accessible.Grouping
+        Accessible.name: "Blossom OS controls"
+        Accessible.ignored: false
 
-        Row {
-            anchors {
-                fill: parent
-                leftMargin: 18
-                rightMargin: 18
-            }
-            spacing: 16
-            Accessible.role: Accessible.Grouping
-            Accessible.name: "Blossom OS controls"
+        Label {
+            anchors.verticalCenter: parent.verticalCenter
+            color: "#f4f7fb"
+            font.bold: true
+            text: "Blossom OS"
+        }
+
+        Button {
+            id: requestButton
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Request kernel identity"
+            enabled: BlossomBroker.state !== "requesting"
+                && BlossomBroker.state !== "waiting"
+                && BlossomBroker.state !== "submitting"
+                && BlossomBroker.state !== "cancelling"
+            activeFocusOnTab: true
+            KeyNavigation.tab: refreshButton
+            KeyNavigation.backtab: refreshButton
+            Accessible.name: text
+            Accessible.description: "Request the fixed kernel identity diagnostic."
+            Accessible.role: Accessible.Button
             Accessible.ignored: false
+            onClicked: BlossomBroker.requestSystemUname()
+        }
 
-            Label {
-                anchors.verticalCenter: parent.verticalCenter
-                color: "#f4f7fb"
-                font.bold: true
-                text: "Blossom OS"
-            }
+        Label {
+            id: statusLabel
+            anchors.verticalCenter: parent.verticalCenter
+            color: BlossomBroker.state === "unavailable" ? "#ff8a80" : "#b8c4d6"
+            text: "Status: " + BlossomBroker.state
+            Accessible.role: Accessible.AlertMessage
+            Accessible.name: text
+            Accessible.ignored: false
+        }
 
-            Button {
-                id: requestButton
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Request kernel identity"
-                enabled: BlossomBroker.state !== "requesting"
-                    && BlossomBroker.state !== "waiting"
-                    && BlossomBroker.state !== "submitting"
-                    && BlossomBroker.state !== "cancelling"
-                activeFocusOnTab: true
-                KeyNavigation.tab: refreshButton
-                KeyNavigation.backtab: refreshButton
-                Accessible.name: text
-                Accessible.description: "Request the fixed kernel identity diagnostic."
-                Accessible.role: Accessible.Button
-                Accessible.ignored: false
-                onClicked: BlossomBroker.requestSystemUname()
-            }
-
-            Label {
-                id: statusLabel
-                anchors.verticalCenter: parent.verticalCenter
-                color: BlossomBroker.state === "unavailable" ? "#ff8a80" : "#b8c4d6"
-                text: "Status: " + BlossomBroker.state
-                Accessible.role: Accessible.AlertMessage
-                Accessible.name: text
-                Accessible.ignored: false
-            }
-
-            Button {
-                id: refreshButton
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Refresh activity"
-                activeFocusOnTab: true
-                KeyNavigation.tab: requestButton
-                KeyNavigation.backtab: requestButton
-                Accessible.name: text
-                Accessible.description: "Refresh the bounded authoritative activity list."
-                Accessible.role: Accessible.Button
-                Accessible.ignored: false
-                onClicked: BlossomBroker.refreshActivity()
-            }
+        Button {
+            id: refreshButton
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Refresh activity"
+            activeFocusOnTab: true
+            KeyNavigation.tab: requestButton
+            KeyNavigation.backtab: requestButton
+            Accessible.name: text
+            Accessible.description: "Refresh the bounded authoritative activity list."
+            Accessible.role: Accessible.Button
+            Accessible.ignored: false
+            onClicked: BlossomBroker.refreshActivity()
         }
     }
 

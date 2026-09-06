@@ -50,7 +50,9 @@ file access, privileged operation, or graphical implementation.
    its service is absent, remains invalid in a replacement service instance,
    and starts nothing after session-bus loss. Graphical close and focus-loss
    behavior remains part of the UI checkpoint.
-4. Add a minimal Quickshell approval and activity surface for the fixed slice.
+4. Add a minimal approval and activity surface for the fixed slice. Quickshell
+   remains the pinned desktop presentation runtime; the security ceremony uses
+   a dedicated standard Qt host so the complete control tree reaches AT-SPI.
    The required narrow native Qt/QML transport plugin is implemented and built
    in CI. It compiles in only the four fixed service calls and five UI-facing
    operations; it has no generic D-Bus, process, file, network, policy, token,

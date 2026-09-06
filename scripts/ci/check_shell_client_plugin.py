@@ -13,7 +13,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
-    expected = {"CMakeLists.txt", "README.md", "blossombroker.cpp", "blossombroker.h"}
+    expected = {"CMakeLists.txt", "README.md", "blossombroker.cpp", "blossombroker.h", "shellmain.cpp"}
     require({path.name for path in PLUGIN.iterdir()} == expected, "unexpected client plugin surface")
     text = "\n".join((PLUGIN / name).read_text() for name in expected)
     for fixed in [
@@ -72,6 +72,13 @@ def main() -> None:
         'INSTALL_RPATH "$ORIGIN"',
     ]:
         require(setting in cmake, f"missing relocatable plugin packaging: {setting}")
+    host = (PLUGIN / "shellmain.cpp").read_text()
+    require('file:///usr/share/blossom-os/shell/shell.qml' in host,
+            "UI host must load only the fixed installed QML entrypoint")
+    require("QApplication application" in host,
+            "UI host must provide the standard Qt accessibility runtime")
+    require("argc" in host and "argv" in host,
+            "UI host must initialize Qt from the process arguments")
 
 
 if __name__ == "__main__":

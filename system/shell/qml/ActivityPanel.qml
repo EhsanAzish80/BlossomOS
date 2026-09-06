@@ -1,18 +1,16 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Quickshell
+import QtQuick.Window
 import Blossom.Shell
 
-PanelWindow {
-    anchors {
-        top: true
-        right: true
-        bottom: true
-    }
-    margins.top: 60
-    implicitWidth: 340
-    exclusiveZone: 0
+Window {
+    visible: true
+    width: Math.min(340, screen ? screen.width : 800)
+    height: Math.max(1, (screen ? screen.height : 600) - 60)
+    x: Math.max(0, (screen ? screen.width : 800) - width)
+    y: 60
+    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     color: "#f2171d27"
 
     ColumnLayout {

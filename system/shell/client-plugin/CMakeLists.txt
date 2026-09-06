@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 set(QML_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml")
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core DBus Qml)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core DBus Qml Quick Widgets)
 
 qt_add_qml_module(blossom-shell-client-plugin
     URI Blossom.Shell
@@ -20,6 +20,10 @@ qt_add_qml_module(blossom-shell-client-plugin
 
 target_link_libraries(blossom-shell-client-plugin PRIVATE Qt6::Core Qt6::DBus Qt6::Qml)
 target_compile_options(blossom-shell-client-plugin PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
+add_executable(blossom-shell-ui shellmain.cpp)
+target_link_libraries(blossom-shell-ui PRIVATE Qt6::Core Qt6::Qml Qt6::Quick Qt6::Widgets)
+target_compile_options(blossom-shell-ui PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 option(BLOSSOM_BUILD_CLIENT_BUS_TEST "Build isolated real-service client test" OFF)
 if(BLOSSOM_BUILD_CLIENT_BUS_TEST)
