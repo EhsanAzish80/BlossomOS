@@ -26,11 +26,19 @@ jobs:
           grep -qx 'ID=arch' /etc/os-release
           test "$(uname -m)" = x86_64
           pacman -Syu --noconfirm \
-            base-devel bubblewrap cmake dbus-broker hyprland jq mesa ninja \
+            base-devel bubblewrap cmake dbus-broker hyprland jq mesa ninja niri \
             python qt6-base qt6-declarative quickshell rust wayland-utils
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Require the evidence-only parent compositor version
+        run: |
+          lock=system/shell/evidence/parent-compositors-arch-x86_64.lock.json
+          expected=$(jq -r '.packages[] | select(.name == "niri") | .version' "$lock")
+          actual=$(pacman -Q niri | cut -d ' ' -f 2)
+          test -n "$expected"
+          test "$actual" = "$expected"
 
       - name: Require the reviewed package versions
         run: |
@@ -125,15 +133,25 @@ jobs:
             HOME=/home/blossom-ci \
             XDG_RUNTIME_DIR=/run/user/1000 \
             dbus-run-session -- bash -eo pipefail -c '
+              niri_pid=""
               hyprland_pid=""
               cleanup() {
                 status=$?
                 if test -n "$hyprland_pid"; then
                   kill "$hyprland_pid" 2>/dev/null || true
                 fi
+                if test -n "$niri_pid"; then
+                  kill "$niri_pid" 2>/dev/null || true
+                fi
                 if test "$status" -ne 0; then
-                  echo "::group::Parent Wayland globals"
-                  cat "$XDG_RUNTIME_DIR/parent-wayland.log" 2>/dev/null || true
+                  echo "::group::Host Wayland globals"
+                  cat "$XDG_RUNTIME_DIR/host-wayland.log" 2>/dev/null || true
+                  echo "::endgroup::"
+                  echo "::group::Niri log"
+                  cat "$XDG_RUNTIME_DIR/niri.log" 2>/dev/null || true
+                  echo "::endgroup::"
+                  echo "::group::Nested parent Wayland globals"
+                  cat "$XDG_RUNTIME_DIR/nested-wayland.log" 2>/dev/null || true
                   echo "::endgroup::"
                   echo "::group::Hyprland launcher log"
                   cat "$XDG_RUNTIME_DIR/hyprland.log" 2>/dev/null || true
@@ -148,14 +166,35 @@ jobs:
               }
               trap cleanup EXIT
               WAYLAND_DISPLAY=blossom-parent wayland-info \
-                >"$XDG_RUNTIME_DIR/parent-wayland.log" 2>&1
+                >"$XDG_RUNTIME_DIR/host-wayland.log" 2>&1
               grep -A3 "interface: '\''wl_compositor'\''" \
-                "$XDG_RUNTIME_DIR/parent-wayland.log" | \
+                "$XDG_RUNTIME_DIR/host-wayland.log" | \
                 grep -Eq "version:[[:space:]]+([6-9]|[1-9][0-9]+)"
               grep -A3 "interface: '\''xdg_wm_base'\''" \
-                "$XDG_RUNTIME_DIR/parent-wayland.log" | \
+                "$XDG_RUNTIME_DIR/host-wayland.log" | \
                 grep -Eq "version:[[:space:]]+([6-9]|[1-9][0-9]+)"
-              WAYLAND_DISPLAY=blossom-parent \
+              WAYLAND_DISPLAY=blossom-parent niri \
+                >"$XDG_RUNTIME_DIR/niri.log" 2>&1 &
+              niri_pid=$!
+              for attempt in $(seq 1 200); do
+                if test -S "$XDG_RUNTIME_DIR/wayland-0"; then break; fi
+                kill -0 "$niri_pid"
+                sleep 0.1
+              done
+              test -S "$XDG_RUNTIME_DIR/wayland-0"
+              WAYLAND_DISPLAY=wayland-0 wayland-info \
+                >"$XDG_RUNTIME_DIR/nested-wayland.log" 2>&1
+              for interface in wl_compositor xdg_wm_base; do
+                grep -A3 "interface: '\''$interface'\''" \
+                  "$XDG_RUNTIME_DIR/nested-wayland.log" | \
+                  grep -Eq "version:[[:space:]]+([6-9]|[1-9][0-9]+)"
+              done
+              grep -A3 "interface: '\''wl_seat'\''" \
+                "$XDG_RUNTIME_DIR/nested-wayland.log" | \
+                grep -Eq "version:[[:space:]]+([9]|[1-9][0-9]+)"
+              grep -q "interface: '\''zwp_linux_dmabuf_v1'\''" \
+                "$XDG_RUNTIME_DIR/nested-wayland.log"
+              WAYLAND_DISPLAY=wayland-0 \
                 Hyprland --config "'$RUNNER_TEMP'/hyprland.conf" \
                 >"$XDG_RUNTIME_DIR/hyprland.log" 2>&1 &
               hyprland_pid=$!
@@ -176,5 +215,5 @@ jobs:
 
       - name: State evidence limits
         run: |
-          echo 'Evidence uses real Hyprland and Quickshell in Arch userspace, nested in the trusted runner desktop.'
+          echo 'Evidence uses real Hyprland and Quickshell in Arch userspace, nested through a pinned compatibility parent in the trusted runner desktop.'
           echo 'It does not claim broad GPU, hardware, input, installer, ArchISO, or release proof.'

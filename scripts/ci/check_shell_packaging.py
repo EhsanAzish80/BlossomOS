@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SHELL = ROOT / "system" / "shell"
 PACKAGE = SHELL / "packaging"
 LOCK = SHELL / "registry" / "arch-x86_64.lock.json"
+EVIDENCE_LOCK = SHELL / "evidence" / "parent-compositors-arch-x86_64.lock.json"
 BUS_NAME = "org.blossomos.Shell1"
 BINARY = "/usr/lib/blossom-os/blossom-shell-service"
 UNIT = "blossom-shell-service.service"
@@ -37,6 +38,21 @@ def check_lock() -> None:
         require((item["version"], item["repository"]) == expected[name], f"package pin drift: {name}")
         require(item["repository"] in {"core", "extra"}, f"non-stable repository: {name}")
         require(item["source"] == f"https://archlinux.org/packages/{item['repository']}/x86_64/{name}/", f"package source drift: {name}")
+
+
+def check_evidence_lock() -> None:
+    require(EVIDENCE_LOCK.is_file() and not EVIDENCE_LOCK.is_symlink(), "missing regular evidence lock")
+    data = json.loads(EVIDENCE_LOCK.read_text())
+    require(set(data) == {"schema_version", "purpose", "architecture", "packages"}, "evidence lock schema drift")
+    require(data["schema_version"] == 1, "evidence lock version drift")
+    require(data["purpose"] == "ci-parent-compositors-only", "evidence lock purpose drift")
+    require(data["architecture"] == "x86_64", "unsupported evidence architecture")
+    packages = data["packages"]
+    require(len(packages) == 1, "evidence parent set drift")
+    item = packages[0]
+    require(set(item) == {"name", "version", "repository", "source"}, "evidence package schema drift")
+    require((item["name"], item["version"], item["repository"]) == ("niri", "26.04-1", "extra"), "evidence parent pin drift")
+    require(item["source"] == "https://archlinux.org/packages/extra/x86_64/niri/", "evidence source drift")
 
 
 def check_activation() -> None:
@@ -73,6 +89,7 @@ def check_unit() -> None:
 def main() -> None:
     require({path.name for path in PACKAGE.iterdir()} == {"README.md", UNIT, f"{BUS_NAME}.service"}, "unexpected shell package surface")
     check_lock()
+    check_evidence_lock()
     check_activation()
     check_unit()
 

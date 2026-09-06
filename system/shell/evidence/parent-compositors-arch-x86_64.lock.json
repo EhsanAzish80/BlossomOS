@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "purpose": "ci-parent-compositors-only",
+  "architecture": "x86_64",
+  "packages": [
+    {"name":"niri","version":"26.04-1","repository":"extra","source":"https://archlinux.org/packages/extra/x86_64/niri/"}
+  ]
+}

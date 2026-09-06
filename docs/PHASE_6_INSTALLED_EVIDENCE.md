@@ -136,7 +136,8 @@ input compatibility, durable audit recovery, and the x86-64 gate remain open.
 owner-provided GPU-runner gate. It creates a disposable official Arch x86-64
 userspace and fails unless the installed Hyprland, Quickshell, systemd, and
 dbus-broker versions exactly match the accepted production lock. The workflow
-builds the feature-gated Rust
+also pins its evidence-only Niri compatibility parent separately; this does not
+widen the closed production package set. The workflow builds the feature-gated Rust
 session service and native QML plugin, installs the fixed binary, user unit,
 D-Bus activation metadata, plugin module, and QML files under their intended
 root-owned paths, and checks unit and ELF dependencies.
@@ -145,11 +146,14 @@ The runner must expose `/dev/dri` and a logged-in Wayland desktop socket at
 `/run/user/1000/wayland-0` to the job container. Only that socket is mounted;
 the rest of the host runtime directory is not exposed. The harness verifies
 that the parent advertises `wl_compositor` and `xdg_wm_base` version 6 or newer,
-then runs the real pinned Hyprland nested in that desktop. Hyprland launches the
-real pinned Quickshell, which loads the installed Blossom QML and native plugin.
-The QML performs a bounded activity refresh, requiring the fixed D-Bus service
-to activate successfully. The harness rejects missing parent protocols, missing
-QML modules, unavailable types, or root-component creation failure.
+then starts the pinned evidence-only Niri parent nested in that desktop. The
+harness requires the nested parent to expose `wl_compositor` and `xdg_wm_base`
+version 6 or newer, `wl_seat` version 9 or newer, and Linux DMA-BUF before it
+starts the real pinned Hyprland. Hyprland launches the real pinned Quickshell,
+which loads the installed Blossom QML and native plugin. The QML performs a
+bounded activity refresh, requiring the fixed D-Bus service to activate
+successfully. The harness rejects missing parent protocols, missing QML modules,
+unavailable types, or root-component creation failure.
 
 Hosted-runner investigation is recorded by failed run `33890423701`: Cage and
 Hyprland were real installed binaries, but the hosted container had no DRM
