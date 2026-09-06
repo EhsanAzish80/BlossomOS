@@ -60,10 +60,41 @@ def main() -> None:
     require("Keys.onEscapePressed" in qml, "Escape must cancel pending approval")
     require('sequence: "Escape"' in qml, "approval must provide a window Escape shortcut")
     require("autoRepeat: false" in qml, "Escape cancellation must not auto-repeat")
-    require("approvalFocus.forceActiveFocus(Qt.ActiveWindowFocusReason)" in qml,
-            "approval must acquire an explicit item focus target")
+    require("denyButton.forceActiveFocus(Qt.ActiveWindowFocusReason)" in qml,
+            "approval must acquire the safe decision control as its focus target")
     require("requestActivate()" in qml, "approval window must request activation when shown")
     require("WlrKeyboardFocus.Exclusive" in qml, "approval must request explicit keyboard focus")
+    require("onClosed:" in qml,
+            "Quickshell window close must cancel pending approval")
+    require("Accessible.defaultButton: true" in qml,
+            "denial must be the accessible default action")
+    require(qml.count("Accessible.onPressAction") == 2,
+            "both approval actions must support assistive activation")
+    for snippet in [
+        'Accessible.name: "Approval required"',
+        'Accessible.description: "Deny this request without starting execution."',
+        'Accessible.description: "Approve only this exact request for one execution."',
+        'Accessible.description: "Request the fixed kernel identity diagnostic."',
+        'Accessible.description: "Refresh the bounded authoritative activity list."',
+    ]:
+        require(snippet in qml, f"missing accessibility contract: {snippet}")
+    for target in ["approveButton", "denyButton", "refreshButton", "requestButton"]:
+        require(f"KeyNavigation.tab: {target}" in qml,
+                f"missing deterministic keyboard navigation to {target}")
+    require("Accessible.AlertMessage" in qml,
+            "authoritative outcome state must be exposed as an accessibility alert")
+    accessibility_test = (ROOT / "system" / "shell" / "tests" / "check_accessibility.py").read_text()
+    for required in [
+        'wait_for("Request kernel identity")',
+        'wait_for("Approval required")',
+        'wait_for("Deny")',
+        'wait_for("Approve once")',
+        "STATE_FOCUSED",
+        "REQUIRED_PREVIEW_FIELDS",
+        'wait_for("Status: denied")',
+    ]:
+        require(required in accessibility_test,
+                f"missing installed accessibility assertion: {required}")
     shell = (QML / "shell.qml").read_text()
     for state in ["requesting", "waiting", "submitting", "cancelling"]:
         require(f'BlossomBroker.state !== "{state}"' in shell,

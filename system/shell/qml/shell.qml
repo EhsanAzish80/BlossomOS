@@ -32,24 +32,39 @@ ShellRoot {
             }
 
             Button {
+                id: requestButton
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Request kernel identity"
                 enabled: BlossomBroker.state !== "requesting"
                     && BlossomBroker.state !== "waiting"
                     && BlossomBroker.state !== "submitting"
                     && BlossomBroker.state !== "cancelling"
+                activeFocusOnTab: true
+                KeyNavigation.tab: refreshButton
+                KeyNavigation.backtab: refreshButton
+                Accessible.name: text
+                Accessible.description: "Request the fixed kernel identity diagnostic."
                 onClicked: BlossomBroker.requestSystemUname()
             }
 
             Label {
+                id: statusLabel
                 anchors.verticalCenter: parent.verticalCenter
                 color: BlossomBroker.state === "unavailable" ? "#ff8a80" : "#b8c4d6"
                 text: "Status: " + BlossomBroker.state
+                Accessible.role: Accessible.AlertMessage
+                Accessible.name: text
             }
 
             Button {
+                id: refreshButton
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Refresh activity"
+                activeFocusOnTab: true
+                KeyNavigation.tab: requestButton
+                KeyNavigation.backtab: requestButton
+                Accessible.name: text
+                Accessible.description: "Refresh the bounded authoritative activity list."
                 onClicked: BlossomBroker.refreshActivity()
             }
         }

@@ -27,6 +27,8 @@ PanelWindow {
             font.bold: true
             font.pixelSize: 18
             text: "Authoritative activity"
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
         }
 
         ListView {
@@ -54,6 +56,8 @@ PanelWindow {
                     wrapMode: Text.Wrap
                     text: "Audit sequence #" + modelData.sequence + "  " + modelData.kind + "\n" +
                           modelData.category + "  ·  " + modelData.request_id
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
                 }
             }
         }

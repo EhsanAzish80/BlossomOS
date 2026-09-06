@@ -26,10 +26,16 @@ PanelWindow {
         right: 120
     }
 
+    onClosed: {
+        if (BlossomBroker.state === "waiting") {
+            BlossomBroker.cancelPending();
+        }
+    }
+
     onVisibleChanged: {
         if (visible) {
             requestActivate();
-            approvalFocus.forceActiveFocus(Qt.ActiveWindowFocusReason);
+            denyButton.forceActiveFocus(Qt.ActiveWindowFocusReason);
         }
     }
 
@@ -45,6 +51,9 @@ PanelWindow {
         id: approvalFocus
         anchors.fill: parent
         focus: approvalWindow.visible
+        Accessible.role: Accessible.Dialog
+        Accessible.name: "Approval required"
+        Accessible.description: "Review the fixed security fields, then deny or approve this request once."
 
         Keys.onEscapePressed: event => {
             if (BlossomBroker.state === "waiting") {
@@ -73,6 +82,8 @@ PanelWindow {
                     font.pixelSize: 24
                     font.bold: true
                     text: "Approval required"
+                    Accessible.role: Accessible.Heading
+                    Accessible.name: text
                 }
 
                 Label {
@@ -80,6 +91,8 @@ PanelWindow {
                     color: "#ffcc80"
                     wrapMode: Text.WordWrap
                     text: "Review every fixed security field. This request can be approved once or denied."
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
                 }
 
                 GridLayout {
@@ -111,14 +124,37 @@ PanelWindow {
                     spacing: 12
 
                     Button {
+                        id: denyButton
                         text: "Deny"
                         enabled: BlossomBroker.state === "waiting"
+                        activeFocusOnTab: true
+                        KeyNavigation.tab: approveButton
+                        KeyNavigation.backtab: approveButton
+                        Accessible.name: text
+                        Accessible.description: "Deny this request without starting execution."
+                        Accessible.defaultButton: true
+                        Accessible.onPressAction: {
+                            if (enabled) {
+                                clicked();
+                            }
+                        }
                         onClicked: BlossomBroker.deny()
                     }
 
                     Button {
+                        id: approveButton
                         text: "Approve once"
                         enabled: BlossomBroker.state === "waiting"
+                        activeFocusOnTab: true
+                        KeyNavigation.tab: denyButton
+                        KeyNavigation.backtab: denyButton
+                        Accessible.name: text
+                        Accessible.description: "Approve only this exact request for one execution."
+                        Accessible.onPressAction: {
+                            if (enabled) {
+                                clicked();
+                            }
+                        }
                         onClicked: BlossomBroker.approveOnce()
                     }
                 }

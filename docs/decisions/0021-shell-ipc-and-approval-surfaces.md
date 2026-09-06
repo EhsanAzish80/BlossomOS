@@ -173,7 +173,11 @@ or physical-machine compromise.
 
 Activity remains privacy-sensitive. Its projection is bounded, local-only, and
 content-minimized. The initial surface exposes no prompts, file contents,
-credentials, tokens, raw output, or provider reasoning.
+credentials, tokens, raw output, provider reasoning, service names, process
+data, or raw audit records. Phase 6 deliberately provides no durable activity
+recovery: a service restart creates an empty projection, invalidates every old
+preview, and starts nothing. Persistence or replay across restart requires a
+separate reviewed ADR and cannot be inferred by the client.
 
 ## Operational consequences
 

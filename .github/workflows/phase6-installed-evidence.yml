@@ -26,8 +26,9 @@ jobs:
           grep -qx 'ID=arch' /etc/os-release
           test "$(uname -m)" = x86_64
           pacman -Syu --noconfirm \
-            base-devel bubblewrap cmake dbus-broker hyprland jq mesa ninja niri \
-            python qt6-base qt6-declarative quickshell rust wayland-utils
+          base-devel bubblewrap cmake dbus-broker hyprland jq mesa ninja niri \
+          python python-atspi qt6-base qt6-declarative quickshell rust \
+          wayland-utils
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -217,6 +218,7 @@ jobs:
               busctl --user --quiet status org.blossomos.Shell1 >/dev/null
               ! grep -E "module .* is not installed|Type .* unavailable|failed to create root component" \
                 "$XDG_RUNTIME_DIR"/quickshell/by-id/*/log.qslog
+              python3 system/shell/tests/check_accessibility.py
             '
 
       - name: State evidence limits

@@ -669,6 +669,14 @@ mod tests {
         assert!(after_restart.is_err());
         assert_eq!(first_calls.load(Ordering::SeqCst), 0);
         assert_eq!(second_calls.load(Ordering::SeqCst), 0);
+
+        let activity: Vec<u8> = proxy
+            .call(
+                "ReadActivity1",
+                &(SHELL_PROTOCOL_VERSION, false, 0_u64, 16_u16),
+            )
+            .expect("fresh service activity");
+        assert_eq!(activity, b"[]");
     }
 
     #[test]
