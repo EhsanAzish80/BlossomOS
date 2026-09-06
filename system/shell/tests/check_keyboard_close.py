@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise keyboard-only and compositor-close paths on the installed shell."""
 
+import json
 import re
 import subprocess
 import time
@@ -67,6 +68,21 @@ def dispatch(name, argument=None):
     subprocess.run(command, check=True, stdout=subprocess.PIPE, text=True)
 
 
+def wait_compositor_window(title):
+    deadline = time.monotonic() + TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        result = subprocess.run(
+            ["hyprctl", "clients", "-j"],
+            check=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        if any(client.get("title") == title for client in json.loads(result.stdout)):
+            return
+        time.sleep(0.1)
+    raise AssertionError(f"compositor window did not appear: {title}")
+
+
 def focus_main_and_press(key):
     dispatch("focuswindow", "title:^(Blossom OS)$")
     wait_for("Request kernel identity")
@@ -75,6 +91,7 @@ def focus_main_and_press(key):
 
 def focus_approval():
     wait_for("Approval required")
+    wait_compositor_window("Blossom OS approval")
     dispatch("focuswindow", "title:^(Blossom OS approval)$")
     wait_focused("Deny")
 
