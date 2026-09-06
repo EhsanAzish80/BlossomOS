@@ -18,6 +18,7 @@ jobs:
       image: archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34
       options: >-
         --device /dev/dri
+        --security-opt apparmor=unconfined
         --volume /run/user/1000/wayland-0:/run/user/1000/blossom-parent
     timeout-minutes: 30
     steps:
@@ -80,6 +81,23 @@ jobs:
             dbus-run-session -- bash system/shell/tests/run-client-bus.sh \
             "$GITHUB_WORKSPACE/target/release/blossom-shell-service" \
             "$RUNNER_TEMP/blossom-shell-client-build/blossom-client-bus-test"
+
+      - name: Prove the fixed networkless executor sandbox
+        run: |
+          output=$(runuser -u blossom-ci -- \
+            bwrap \
+              --die-with-parent \
+              --new-session \
+              --unshare-all \
+              --unshare-user \
+              --cap-drop ALL \
+              --clearenv \
+              --ro-bind /usr /usr \
+              --symlink usr/lib /lib \
+              --symlink usr/lib64 /lib64 \
+              --chdir / \
+              -- /usr/bin/uname -s)
+          test "$output" = Linux
 
       - name: Install the closed shell package tree
         run: |
