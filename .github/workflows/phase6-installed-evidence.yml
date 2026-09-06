@@ -176,13 +176,19 @@ jobs:
               WAYLAND_DISPLAY=blossom-parent niri \
                 >"$XDG_RUNTIME_DIR/niri.log" 2>&1 &
               niri_pid=$!
+              nested_socket=""
               for attempt in $(seq 1 200); do
-                if test -S "$XDG_RUNTIME_DIR/wayland-0"; then break; fi
+                nested_socket=$(sed -n \
+                  "s/.*listening on Wayland socket: \([^[:space:]]*\).*/\1/p" \
+                  "$XDG_RUNTIME_DIR/niri.log" | tail -n 1)
+                if test -n "$nested_socket" && \
+                   test -S "$XDG_RUNTIME_DIR/$nested_socket"; then break; fi
                 kill -0 "$niri_pid"
                 sleep 0.1
               done
-              test -S "$XDG_RUNTIME_DIR/wayland-0"
-              WAYLAND_DISPLAY=wayland-0 wayland-info \
+              test -n "$nested_socket"
+              test -S "$XDG_RUNTIME_DIR/$nested_socket"
+              WAYLAND_DISPLAY="$nested_socket" wayland-info \
                 >"$XDG_RUNTIME_DIR/nested-wayland.log" 2>&1
               for interface in wl_compositor xdg_wm_base; do
                 grep -A3 "interface: '\''$interface'\''" \
@@ -194,7 +200,7 @@ jobs:
                 grep -Eq "version:[[:space:]]+([9]|[1-9][0-9]+)"
               grep -q "interface: '\''zwp_linux_dmabuf_v1'\''" \
                 "$XDG_RUNTIME_DIR/nested-wayland.log"
-              WAYLAND_DISPLAY=wayland-0 \
+              WAYLAND_DISPLAY="$nested_socket" \
                 Hyprland --config "'$RUNNER_TEMP'/hyprland.conf" \
                 >"$XDG_RUNTIME_DIR/hyprland.log" 2>&1 &
               hyprland_pid=$!
