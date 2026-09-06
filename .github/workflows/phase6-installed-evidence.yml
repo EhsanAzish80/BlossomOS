@@ -136,8 +136,12 @@ jobs:
             dbus-run-session -- bash -eo pipefail -c '
               niri_pid=""
               hyprland_pid=""
+              probe_pid=""
               cleanup() {
                 status=$?
+                if test -n "$probe_pid"; then
+                  kill "$probe_pid" 2>/dev/null || true
+                fi
                 if test -n "$hyprland_pid"; then
                   kill "$hyprland_pid" 2>/dev/null || true
                 fi
@@ -221,6 +225,16 @@ jobs:
                 sleep 0.1
               done
               busctl --user --quiet status org.blossomos.Shell1 >/dev/null
+              qml_runner=$(command -v qml6 || command -v qml)
+              WAYLAND_DISPLAY="$nested_socket" \
+                QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1 \
+                "$qml_runner" system/shell/tests/accessibility_probe.qml \
+                >"$XDG_RUNTIME_DIR/accessibility-probe.log" 2>&1 &
+              probe_pid=$!
+              python3 system/shell/tests/check_accessibility_probe.py
+              kill "$probe_pid"
+              wait "$probe_pid" 2>/dev/null || true
+              probe_pid=""
               ! grep -E "module .* is not installed|Type .* unavailable|failed to create root component" \
                 "$XDG_RUNTIME_DIR"/quickshell/by-id/*/log.qslog
               python3 system/shell/tests/check_accessibility.py
