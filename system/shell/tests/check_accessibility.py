@@ -78,14 +78,21 @@ if approve.description != "Approve only this exact request for one execution.":
 if not deny.getState().contains(pyatspi.STATE_FOCUSED):
     raise AssertionError("safe denial control did not receive initial focus")
 
-visible_fields = {
-    node.name.split(":", 1)[0]
+field_nodes = {
+    node.name: node
     for node in descendants(pyatspi.Registry.getDesktop(0))
-    if ":" in node.name
+    if node.name in REQUIRED_PREVIEW_FIELDS
 }
-missing = REQUIRED_PREVIEW_FIELDS - visible_fields
+missing = REQUIRED_PREVIEW_FIELDS - set(field_nodes)
 if missing:
     raise AssertionError(f"missing accessible security fields: {sorted(missing)}")
+empty_descriptions = sorted(
+    name for name, node in field_nodes.items() if not node.description
+)
+if empty_descriptions:
+    raise AssertionError(
+        f"security fields missing accessible values: {empty_descriptions}"
+    )
 
 invoke(deny)
 wait_for("Status: denied")
