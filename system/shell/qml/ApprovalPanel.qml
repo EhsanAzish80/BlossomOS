@@ -54,6 +54,7 @@ PanelWindow {
         Accessible.role: Accessible.Dialog
         Accessible.name: "Approval required"
         Accessible.description: "Review the fixed security fields, then deny or approve this request once."
+        Accessible.ignored: false
 
         Keys.onEscapePressed: event => {
             if (BlossomBroker.state === "waiting") {
@@ -132,6 +133,8 @@ PanelWindow {
                         KeyNavigation.backtab: approveButton
                         Accessible.name: text
                         Accessible.description: "Deny this request without starting execution."
+                        Accessible.role: Accessible.Button
+                        Accessible.ignored: false
                         Accessible.defaultButton: true
                         Accessible.onPressAction: {
                             if (enabled) {
@@ -150,6 +153,8 @@ PanelWindow {
                         KeyNavigation.backtab: denyButton
                         Accessible.name: text
                         Accessible.description: "Approve only this exact request for one execution."
+                        Accessible.role: Accessible.Button
+                        Accessible.ignored: false
                         Accessible.onPressAction: {
                             if (enabled) {
                                 clicked();

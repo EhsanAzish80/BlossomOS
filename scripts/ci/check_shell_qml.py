@@ -85,6 +85,10 @@ def main() -> None:
                 f"missing deterministic keyboard navigation to {target}")
     require("Accessible.AlertMessage" in qml,
             "authoritative outcome state must be exposed as an accessibility alert")
+    require('Accessible.name: "Blossom OS controls"' in qml,
+            "command controls must have an accessible grouping root")
+    require(qml.count("Accessible.ignored: false") >= 8,
+            "interactive and security content must remain in the accessibility tree")
     accessibility_test = (ROOT / "system" / "shell" / "tests" / "check_accessibility.py").read_text()
     for required in [
         'wait_for("Request kernel identity")',

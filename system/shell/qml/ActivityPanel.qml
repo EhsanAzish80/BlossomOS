@@ -21,6 +21,9 @@ PanelWindow {
             margins: 16
         }
         spacing: 10
+        Accessible.role: Accessible.Grouping
+        Accessible.name: "Authoritative activity"
+        Accessible.ignored: false
 
         Label {
             color: "#f4f7fb"

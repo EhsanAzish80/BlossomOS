@@ -11,6 +11,8 @@ Label {
     elide: Text.ElideMiddle
     textFormat: Text.PlainText
     text: label + ":  " + value
+    Accessible.role: Accessible.StaticText
     Accessible.name: label
     Accessible.description: value
+    Accessible.ignored: false
 }

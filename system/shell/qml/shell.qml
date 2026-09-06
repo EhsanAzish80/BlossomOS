@@ -25,6 +25,9 @@ ShellRoot {
                 rightMargin: 18
             }
             spacing: 16
+            Accessible.role: Accessible.Grouping
+            Accessible.name: "Blossom OS controls"
+            Accessible.ignored: false
 
             Label {
                 anchors.verticalCenter: parent.verticalCenter
@@ -46,6 +49,8 @@ ShellRoot {
                 KeyNavigation.backtab: refreshButton
                 Accessible.name: text
                 Accessible.description: "Request the fixed kernel identity diagnostic."
+                Accessible.role: Accessible.Button
+                Accessible.ignored: false
                 onClicked: BlossomBroker.requestSystemUname()
             }
 
@@ -56,6 +61,7 @@ ShellRoot {
                 text: "Status: " + BlossomBroker.state
                 Accessible.role: Accessible.AlertMessage
                 Accessible.name: text
+                Accessible.ignored: false
             }
 
             Button {
@@ -67,6 +73,8 @@ ShellRoot {
                 KeyNavigation.backtab: requestButton
                 Accessible.name: text
                 Accessible.description: "Refresh the bounded authoritative activity list."
+                Accessible.role: Accessible.Button
+                Accessible.ignored: false
                 onClicked: BlossomBroker.refreshActivity()
             }
         }
