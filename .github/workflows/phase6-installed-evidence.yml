@@ -11,8 +11,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  prepare-x86-64-host:
+    name: Prepare bounded user-namespace evidence prerequisite
+    runs-on: [self-hosted, linux, x64, blossom-gpu]
+    outputs:
+      apparmor_restriction: ${{ steps.sysctl.outputs.apparmor_restriction }}
+      unprivileged_clone: ${{ steps.sysctl.outputs.unprivileged_clone }}
+    steps:
+      - id: sysctl
+        name: Record and enable the user-namespace prerequisite
+        run: |
+          apparmor_restriction=$(sysctl -n kernel.apparmor_restrict_unprivileged_userns 2>/dev/null || printf absent)
+          unprivileged_clone=$(sysctl -n kernel.unprivileged_userns_clone 2>/dev/null || printf absent)
+          echo "apparmor_restriction=$apparmor_restriction" >> "$GITHUB_OUTPUT"
+          echo "unprivileged_clone=$unprivileged_clone" >> "$GITHUB_OUTPUT"
+          if test "$apparmor_restriction" != absent; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          if test "$unprivileged_clone" != absent; then
+            sudo sysctl -w kernel.unprivileged_userns_clone=1
+          fi
+
   arch-x86-64:
     name: Installed Arch Hyprland Quickshell boundary
+    needs: prepare-x86-64-host
     runs-on: [self-hosted, linux, x64, blossom-gpu]
     container:
       image: archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34
@@ -276,3 +298,21 @@ jobs:
         run: |
           echo 'Evidence uses real Hyprland and Quickshell in Arch userspace, nested through a pinned compatibility parent in the trusted runner desktop.'
           echo 'It does not claim broad GPU, hardware, input, installer, ArchISO, or release proof.'
+
+  restore-x86-64-host:
+    name: Restore user-namespace host policy
+    if: ${{ always() }}
+    needs: [prepare-x86-64-host, arch-x86-64]
+    runs-on: [self-hosted, linux, x64, blossom-gpu]
+    steps:
+      - name: Restore recorded sysctl values
+        env:
+          APPARMOR_RESTRICTION: ${{ needs.prepare-x86-64-host.outputs.apparmor_restriction }}
+          UNPRIVILEGED_CLONE: ${{ needs.prepare-x86-64-host.outputs.unprivileged_clone }}
+        run: |
+          if test "$APPARMOR_RESTRICTION" = 0 || test "$APPARMOR_RESTRICTION" = 1; then
+            sudo sysctl -w "kernel.apparmor_restrict_unprivileged_userns=$APPARMOR_RESTRICTION"
+          fi
+          if test "$UNPRIVILEGED_CLONE" = 0 || test "$UNPRIVILEGED_CLONE" = 1; then
+            sudo sysctl -w "kernel.unprivileged_userns_clone=$UNPRIVILEGED_CLONE"
+          fi
