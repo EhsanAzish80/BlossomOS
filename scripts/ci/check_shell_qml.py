@@ -99,7 +99,9 @@ def main() -> None:
         'wait_for("Approve once")',
         "STATE_FOCUSED",
         "REQUIRED_PREVIEW_FIELDS",
-        'wait_for("Status: denied")',
+        'require_alert("Status: denied")',
+        'require_alert("Status: verified")',
+        "STATE_ENABLED",
     ]:
         require(required in accessibility_test,
                 f"missing installed accessibility assertion: {required}")

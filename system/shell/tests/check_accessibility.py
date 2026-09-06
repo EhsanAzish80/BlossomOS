@@ -63,6 +63,31 @@ def invoke(node):
         raise AssertionError(f"accessible action failed: {node.name}")
 
 
+def require_alert(name):
+    node = wait_for(name)
+    if node.getRole() != pyatspi.ROLE_ALERT:
+        raise AssertionError(f"terminal state is not an accessibility alert: {name}")
+    return node
+
+
+def require_preview_fields():
+    field_nodes = {
+        node.name: node
+        for node in descendants(pyatspi.Registry.getDesktop(0))
+        if node.name in REQUIRED_PREVIEW_FIELDS
+    }
+    missing = REQUIRED_PREVIEW_FIELDS - set(field_nodes)
+    if missing:
+        raise AssertionError(f"missing accessible security fields: {sorted(missing)}")
+    empty_descriptions = sorted(
+        name for name, node in field_nodes.items() if not node.description
+    )
+    if empty_descriptions:
+        raise AssertionError(
+            f"security fields missing accessible values: {empty_descriptions}"
+        )
+
+
 request = wait_for("Request kernel identity")
 if request.description != "Request the fixed kernel identity diagnostic.":
     raise AssertionError("request control description drift")
@@ -77,22 +102,18 @@ if approve.description != "Approve only this exact request for one execution.":
     raise AssertionError("approval description drift")
 if not deny.getState().contains(pyatspi.STATE_FOCUSED):
     raise AssertionError("safe denial control did not receive initial focus")
+if request.getState().contains(pyatspi.STATE_ENABLED):
+    raise AssertionError("pending request can be replaced from the shell")
 
-field_nodes = {
-    node.name: node
-    for node in descendants(pyatspi.Registry.getDesktop(0))
-    if node.name in REQUIRED_PREVIEW_FIELDS
-}
-missing = REQUIRED_PREVIEW_FIELDS - set(field_nodes)
-if missing:
-    raise AssertionError(f"missing accessible security fields: {sorted(missing)}")
-empty_descriptions = sorted(
-    name for name, node in field_nodes.items() if not node.description
-)
-if empty_descriptions:
-    raise AssertionError(
-        f"security fields missing accessible values: {empty_descriptions}"
-    )
+require_preview_fields()
 
 invoke(deny)
-wait_for("Status: denied")
+require_alert("Status: denied")
+
+request = wait_for("Request kernel identity")
+invoke(request)
+wait_for("Approval required")
+approve = wait_for("Approve once")
+require_preview_fields()
+invoke(approve)
+require_alert("Status: verified")
