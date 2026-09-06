@@ -45,7 +45,16 @@ def wait_for(name):
         if matches:
             return matches[0]
         time.sleep(0.1)
-    raise AssertionError(f"accessible object did not appear: {name}")
+    observed = sorted(
+        {
+            node.name
+            for node in descendants(pyatspi.Registry.getDesktop(0))
+            if node.name
+        }
+    )
+    raise AssertionError(
+        f"accessible object did not appear: {name}; observed names: {observed}"
+    )
 
 
 def invoke(node):

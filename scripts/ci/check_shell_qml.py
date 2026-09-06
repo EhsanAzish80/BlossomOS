@@ -64,6 +64,8 @@ def main() -> None:
             "approval must acquire the safe decision control as its focus target")
     require("requestActivate()" in qml, "approval window must request activation when shown")
     require("WlrKeyboardFocus.Exclusive" in qml, "approval must request explicit keyboard focus")
+    require((QML / "shell.qml").read_text().startswith("//@ pragma UseQApplication"),
+            "shell must enable Quickshell's QApplication runtime for accessibility")
     require("onClosed:" in qml,
             "Quickshell window close must cancel pending approval")
     require("Accessible.defaultButton: true" in qml,
