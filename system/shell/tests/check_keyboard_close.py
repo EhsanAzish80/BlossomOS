@@ -50,6 +50,16 @@ def wait_absent(name):
     raise AssertionError(f"accessible object remained visible: {name}")
 
 
+def wait_focused(name):
+    deadline = time.monotonic() + TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        for node in named(name):
+            if node.getState().contains(pyatspi.STATE_FOCUSED):
+                return node
+        time.sleep(0.1)
+    raise AssertionError(f"accessible object did not receive focus: {name}")
+
+
 def dispatch(name, argument=None):
     command = ["hyprctl", "dispatch", name]
     if argument is not None:
@@ -85,28 +95,26 @@ def activity_for_latest_request():
 
 # The command bar restores focus to its request button after each terminal state.
 # Return therefore starts a request without an assistive action invocation.
-focus_main_and_press("RETURN")
+focus_main_and_press("return")
 wait_for("Approval required")
-deny = wait_for("Deny")
-if not deny.getState().contains(pyatspi.STATE_FOCUSED):
-    raise AssertionError("keyboard denial did not start on the safe default")
-dispatch("sendshortcut", ",RETURN,activewindow")
+wait_focused("Deny")
+dispatch("sendshortcut", ",return,activewindow")
 require_alert("Status: denied")
 
 # Tab has a closed two-control cycle and reaches approve exactly once.
-focus_main_and_press("RETURN")
+focus_main_and_press("return")
 wait_for("Approval required")
-dispatch("sendshortcut", ",TAB,activewindow")
-approve = wait_for("Approve once")
-if not approve.getState().contains(pyatspi.STATE_FOCUSED):
-    raise AssertionError("Tab did not move focus from deny to approve")
-dispatch("sendshortcut", ",RETURN,activewindow")
+wait_focused("Deny")
+dispatch("sendshortcut", ",tab,activewindow")
+wait_focused("Approve once")
+dispatch("sendshortcut", ",return,activewindow")
 require_alert("Status: verified")
 
 # Escape is a global window shortcut and must cancel without execution.
-focus_main_and_press("RETURN")
+focus_main_and_press("return")
 wait_for("Approval required")
-dispatch("sendshortcut", ",ESCAPE,activewindow")
+wait_focused("Deny")
+dispatch("sendshortcut", ",escape,activewindow")
 wait_absent("Approval required")
 require_alert("Status: cancelled")
 escape_records = activity_for_latest_request()
@@ -119,8 +127,9 @@ if [record[2] for record in escape_records] != [
     raise AssertionError(f"Escape path activity drift: {escape_records}")
 
 # A compositor close request follows QML onClosing and must also cancel.
-focus_main_and_press("RETURN")
+focus_main_and_press("return")
 wait_for("Approval required")
+wait_focused("Deny")
 dispatch("closewindow", "title:^(Blossom OS approval)$")
 wait_absent("Approval required")
 require_alert("Status: cancelled")

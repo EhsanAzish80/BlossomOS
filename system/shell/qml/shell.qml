@@ -14,6 +14,12 @@ ApplicationWindow {
     color: "#11151c"
     title: "Blossom OS"
 
+    onActiveChanged: {
+        if (active && requestButton.enabled) {
+            requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
+        }
+    }
+
     Component.onCompleted: {
         BlossomBroker.refreshActivity()
         requestActivate()

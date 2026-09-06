@@ -16,6 +16,12 @@ Window {
     color: "#e611151c"
     title: "Blossom OS approval"
 
+    onActiveChanged: {
+        if (active && denyButton.enabled) {
+            denyButton.forceActiveFocus(Qt.ActiveWindowFocusReason);
+        }
+    }
+
     onClosing: close => {
         if (BlossomBroker.state === "waiting") {
             BlossomBroker.cancelPending();
