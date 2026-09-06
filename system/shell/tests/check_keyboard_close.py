@@ -103,7 +103,7 @@ def press(key):
 def focus_main_and_press(key):
     wait_compositor_window("Blossom OS")
     dispatch("focuswindow", "title:^(Blossom OS)$")
-    wait_for("Request kernel identity")
+    wait_focused("Request kernel identity")
     press(key)
 
 
