@@ -2,20 +2,21 @@
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Window as QtWindow
 import Quickshell
 import Blossom.Shell
 
 ShellRoot {
     Component.onCompleted: BlossomBroker.refreshActivity()
 
-    PanelWindow {
+    QtWindow.Window {
         id: commandBar
-        anchors {
-            top: true
-            left: true
-            right: true
-        }
-        implicitHeight: 52
+        visible: true
+        x: 0
+        y: 0
+        width: screen ? screen.width : 800
+        height: 52
+        flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
         color: "#11151c"
 
         Row {

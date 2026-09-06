@@ -1,35 +1,26 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window as QtWindow
 import Quickshell
-import Quickshell.Wayland
 import Blossom.Shell
 
-PanelWindow {
+QtWindow.Window {
     id: approvalWindow
     visible: BlossomBroker.state === "waiting" || BlossomBroker.state === "submitting" || BlossomBroker.state === "cancelling"
-    focusable: true
+    x: Math.max(0, Math.round(((screen ? screen.width : 800) - width) / 2))
+    y: Math.max(52, Math.round(((screen ? screen.height : 600) - height) / 2))
+    width: Math.max(640, Math.min(1040, (screen ? screen.width : 800) - 120))
+    height: Math.max(440, Math.min(656, (screen ? screen.height : 600) - 144))
+    flags: Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+    modality: Qt.ApplicationModal
     color: "#e611151c"
-    exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
-    anchors {
-        top: true
-        bottom: true
-        left: true
-        right: true
-    }
-    margins {
-        top: 72
-        bottom: 72
-        left: 120
-        right: 120
-    }
 
-    onClosed: {
+    onClosing: close => {
         if (BlossomBroker.state === "waiting") {
             BlossomBroker.cancelPending();
         }
+        close.accepted = false;
     }
 
     onVisibleChanged: {

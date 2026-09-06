@@ -63,11 +63,15 @@ def main() -> None:
     require("denyButton.forceActiveFocus(Qt.ActiveWindowFocusReason)" in qml,
             "approval must acquire the safe decision control as its focus target")
     require("requestActivate()" in qml, "approval window must request activation when shown")
-    require("WlrKeyboardFocus.Exclusive" in qml, "approval must request explicit keyboard focus")
+    require("Qt.ApplicationModal" in qml, "approval must request application-modal keyboard focus")
     require((QML / "shell.qml").read_text().startswith("//@ pragma UseQApplication"),
             "shell must enable Quickshell's QApplication runtime for accessibility")
-    require("onClosed:" in qml,
-            "Quickshell window close must cancel pending approval")
+    require("onClosing:" in qml,
+            "native approval window close must cancel pending approval")
+    require(qml.count("QtWindow.Window {") == 3,
+            "all shell surfaces must use native accessible Qt windows")
+    require("PanelWindow" not in qml,
+            "security controls must not return to inaccessible proxy windows")
     require("Accessible.defaultButton: true" in qml,
             "denial must be the accessible default action")
     require(qml.count("Accessible.onPressAction") == 2,
