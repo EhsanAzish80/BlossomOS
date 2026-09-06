@@ -73,6 +73,12 @@ def focus_main_and_press(key):
     dispatch("sendshortcut", f",{key},activewindow")
 
 
+def focus_approval():
+    wait_for("Approval required")
+    dispatch("focuswindow", "title:^(Blossom OS approval)$")
+    wait_focused("Deny")
+
+
 def require_alert(name):
     node = wait_for(name)
     if node.getRole() != pyatspi.ROLE_ALERT:
@@ -96,15 +102,13 @@ def activity_for_latest_request():
 # The command bar restores focus to its request button after each terminal state.
 # Return therefore starts a request without an assistive action invocation.
 focus_main_and_press("return")
-wait_for("Approval required")
-wait_focused("Deny")
+focus_approval()
 dispatch("sendshortcut", ",return,activewindow")
 require_alert("Status: denied")
 
 # Tab has a closed two-control cycle and reaches approve exactly once.
 focus_main_and_press("return")
-wait_for("Approval required")
-wait_focused("Deny")
+focus_approval()
 dispatch("sendshortcut", ",tab,activewindow")
 wait_focused("Approve once")
 dispatch("sendshortcut", ",return,activewindow")
@@ -112,8 +116,7 @@ require_alert("Status: verified")
 
 # Escape is a global window shortcut and must cancel without execution.
 focus_main_and_press("return")
-wait_for("Approval required")
-wait_focused("Deny")
+focus_approval()
 dispatch("sendshortcut", ",escape,activewindow")
 wait_absent("Approval required")
 require_alert("Status: cancelled")
@@ -128,8 +131,7 @@ if [record[2] for record in escape_records] != [
 
 # A compositor close request follows QML onClosing and must also cancel.
 focus_main_and_press("return")
-wait_for("Approval required")
-wait_focused("Deny")
+focus_approval()
 dispatch("closewindow", "title:^(Blossom OS approval)$")
 wait_absent("Approval required")
 require_alert("Status: cancelled")
