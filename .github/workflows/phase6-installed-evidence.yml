@@ -16,7 +16,9 @@ jobs:
     runs-on: [self-hosted, linux, x64, blossom-gpu]
     container:
       image: archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34
-      options: --device /dev/dri
+      options: >-
+        --device /dev/dri
+        --volume /run/user/1000/wayland-0:/run/user/1000/blossom-parent
     timeout-minutes: 30
     steps:
       - name: Establish target Arch userspace
@@ -25,21 +27,10 @@ jobs:
           test "$(uname -m)" = x86_64
           pacman -Syu --noconfirm \
             base-devel bubblewrap cmake dbus-broker hyprland jq mesa ninja \
-            python qt6-base qt6-declarative quickshell rust weston
+            python qt6-base qt6-declarative quickshell rust wayland-utils
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Require the evidence-only parent compositor versions
-        run: |
-          lock=system/shell/evidence/parent-compositors-arch-x86_64.lock.json
-          for package in weston; do
-            expected=$(jq -r --arg package "$package" \
-              '.packages[] | select(.name == $package) | .version' "$lock")
-            actual=$(pacman -Q "$package" | cut -d ' ' -f 2)
-            test -n "$expected"
-            test "$actual" = "$expected"
-          done
 
       - name: Require the reviewed package versions
         run: |
@@ -127,24 +118,26 @@ jobs:
           runuser -u blossom-ci -- test -w /dev/dri/card1
           runuser -u blossom-ci -- test -r /dev/dri/renderD128
           runuser -u blossom-ci -- test -w /dev/dri/renderD128
+          test -S /run/user/1000/blossom-parent
           install -o blossom-ci -g blossom-ci -m 0644 \
             system/shell/evidence/hyprland-nested.conf "$RUNNER_TEMP/hyprland.conf"
           runuser -u blossom-ci -- env \
             HOME=/home/blossom-ci \
             XDG_RUNTIME_DIR=/run/user/1000 \
             dbus-run-session -- bash -eo pipefail -c '
-              LIBGL_ALWAYS_SOFTWARE=1 weston \
-                --backend=headless-backend.so --renderer=gl \
-                --socket=wayland-parent \
-                --idle-time=0 --log="$XDG_RUNTIME_DIR/weston.log" &
-              weston_pid=$!
+              WAYLAND_DISPLAY=blossom-parent wayland-info \
+                >"$XDG_RUNTIME_DIR/parent-wayland.log" 2>&1
+              grep -A3 "interface: '\''wl_compositor'\''" \
+                "$XDG_RUNTIME_DIR/parent-wayland.log" | grep -Eq "version: ([6-9]|[1-9][0-9]+)"
+              grep -A3 "interface: '\''xdg_wm_base'\''" \
+                "$XDG_RUNTIME_DIR/parent-wayland.log" | grep -Eq "version: ([6-9]|[1-9][0-9]+)"
               hyprland_pid=""
               cleanup() {
                 status=$?
-                kill $weston_pid $hyprland_pid 2>/dev/null || true
+                kill $hyprland_pid 2>/dev/null || true
                 if test "$status" -ne 0; then
-                  echo "::group::Weston log"
-                  cat "$XDG_RUNTIME_DIR/weston.log" 2>/dev/null || true
+                  echo "::group::Parent Wayland globals"
+                  cat "$XDG_RUNTIME_DIR/parent-wayland.log" 2>/dev/null || true
                   echo "::endgroup::"
                   echo "::group::Hyprland launcher log"
                   cat "$XDG_RUNTIME_DIR/hyprland.log" 2>/dev/null || true
@@ -158,12 +151,7 @@ jobs:
                 exit "$status"
               }
               trap cleanup EXIT
-              for attempt in $(seq 1 100); do
-                test -S "$XDG_RUNTIME_DIR/wayland-parent" && break
-                sleep 0.1
-              done
-              test -S "$XDG_RUNTIME_DIR/wayland-parent"
-              LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY=wayland-parent \
+              WAYLAND_DISPLAY=blossom-parent \
                 Hyprland --config "'$RUNNER_TEMP'/hyprland.conf" \
                 >"$XDG_RUNTIME_DIR/hyprland.log" 2>&1 &
               hyprland_pid=$!
@@ -184,5 +172,5 @@ jobs:
 
       - name: State evidence limits
         run: |
-          echo 'Evidence uses a nested real Hyprland and real Quickshell in Arch userspace.'
-          echo 'It does not claim GPU, hardware, input, installer, ArchISO, or release proof.'
+          echo 'Evidence uses real Hyprland and Quickshell in Arch userspace, nested in the trusted runner desktop.'
+          echo 'It does not claim broad GPU, hardware, input, installer, ArchISO, or release proof.'
