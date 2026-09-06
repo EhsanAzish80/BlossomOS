@@ -14,6 +14,7 @@ Window {
     flags: Qt.Dialog | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     modality: Qt.ApplicationModal
     color: "#e611151c"
+    title: "Blossom OS approval"
 
     onClosing: close => {
         if (BlossomBroker.state === "waiting") {

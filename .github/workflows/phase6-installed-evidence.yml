@@ -270,6 +270,11 @@ jobs:
               ! grep -E "module .* is not installed|Type .* unavailable|failed to create root component" \
                 "$XDG_RUNTIME_DIR"/quickshell/by-id/*/log.qslog
               python3 system/shell/tests/check_accessibility.py
+              export HYPRLAND_INSTANCE_SIGNATURE
+              HYPRLAND_INSTANCE_SIGNATURE=$(find "$XDG_RUNTIME_DIR/hypr" \
+                -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | head -n 1)
+              test -n "$HYPRLAND_INSTANCE_SIGNATURE"
+              python3 system/shell/tests/check_keyboard_close.py
             '
 
       - name: State evidence limits

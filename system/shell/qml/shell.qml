@@ -14,7 +14,23 @@ ApplicationWindow {
     color: "#11151c"
     title: "Blossom OS"
 
-    Component.onCompleted: BlossomBroker.refreshActivity()
+    Component.onCompleted: {
+        BlossomBroker.refreshActivity()
+        requestActivate()
+        requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
+    }
+
+    Connections {
+        target: BlossomBroker
+        function onStateChanged() {
+            if (BlossomBroker.state !== "waiting"
+                    && BlossomBroker.state !== "submitting"
+                    && BlossomBroker.state !== "cancelling") {
+                commandBar.requestActivate()
+                requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
+            }
+        }
+    }
 
     Row {
         anchors {
