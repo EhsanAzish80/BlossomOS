@@ -2,6 +2,7 @@
 """Exercise keyboard-only and compositor-close paths on the installed shell."""
 
 import json
+import os
 import re
 import subprocess
 import time
@@ -83,10 +84,27 @@ def wait_compositor_window(title):
     raise AssertionError(f"compositor window did not appear: {title}")
 
 
+def press(key):
+    instances = json.loads(
+        subprocess.run(
+            ["hyprctl", "instances", "-j"],
+            check=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        ).stdout
+    )
+    signature = os.environ["HYPRLAND_INSTANCE_SIGNATURE"]
+    instance = next(item for item in instances if item["instance"] == signature)
+    environment = os.environ.copy()
+    environment["WAYLAND_DISPLAY"] = instance["wl_socket"]
+    subprocess.run(["wtype", "-k", key], check=True, env=environment)
+
+
 def focus_main_and_press(key):
+    wait_compositor_window("Blossom OS")
     dispatch("focuswindow", "title:^(Blossom OS)$")
     wait_for("Request kernel identity")
-    dispatch("sendshortcut", f",{key},activewindow")
+    press(key)
 
 
 def focus_approval():
@@ -120,21 +138,21 @@ def activity_for_latest_request():
 # Return therefore starts a request without an assistive action invocation.
 focus_main_and_press("return")
 focus_approval()
-dispatch("sendshortcut", ",return,activewindow")
+press("return")
 require_alert("Status: denied")
 
 # Tab has a closed two-control cycle and reaches approve exactly once.
 focus_main_and_press("return")
 focus_approval()
-dispatch("sendshortcut", ",tab,activewindow")
+press("tab")
 wait_focused("Approve once")
-dispatch("sendshortcut", ",return,activewindow")
+press("return")
 require_alert("Status: verified")
 
 # Escape is a global window shortcut and must cancel without execution.
 focus_main_and_press("return")
 focus_approval()
-dispatch("sendshortcut", ",escape,activewindow")
+press("escape")
 wait_absent("Approval required")
 require_alert("Status: cancelled")
 escape_records = activity_for_latest_request()

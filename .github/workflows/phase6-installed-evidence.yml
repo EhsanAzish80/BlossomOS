@@ -30,7 +30,7 @@ jobs:
           pacman -Syu --noconfirm \
           base-devel bubblewrap cmake dbus-broker hyprland jq mesa ninja niri \
           python python-atspi qt6-base qt6-declarative quickshell rust \
-          wayland-utils
+          wayland-utils wtype
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -269,12 +269,12 @@ jobs:
               probe_pid=""
               ! grep -E "module .* is not installed|Type .* unavailable|failed to create root component" \
                 "$XDG_RUNTIME_DIR"/quickshell/by-id/*/log.qslog
-              python3 system/shell/tests/check_accessibility.py
               export HYPRLAND_INSTANCE_SIGNATURE
               HYPRLAND_INSTANCE_SIGNATURE=$(find "$XDG_RUNTIME_DIR/hypr" \
                 -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | head -n 1)
               test -n "$HYPRLAND_INSTANCE_SIGNATURE"
               python3 system/shell/tests/check_keyboard_close.py
+              python3 system/shell/tests/check_accessibility.py
             '
 
       - name: State evidence limits
