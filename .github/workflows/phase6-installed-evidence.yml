@@ -19,6 +19,7 @@ jobs:
       options: >-
         --device /dev/dri
         --security-opt apparmor=unconfined
+        --security-opt seccomp=unconfined
         --volume /run/user/1000/wayland-0:/run/user/1000/blossom-parent
     timeout-minutes: 30
     steps:
