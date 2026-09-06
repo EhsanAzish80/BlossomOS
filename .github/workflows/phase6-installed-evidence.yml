@@ -24,7 +24,7 @@ jobs:
           grep -qx 'ID=arch' /etc/os-release
           test "$(uname -m)" = x86_64
           pacman -Syu --noconfirm \
-            base-devel bubblewrap cage cmake dbus-broker hyprland jq mesa ninja \
+            base-devel bubblewrap cmake dbus-broker hyprland jq mesa ninja \
             python qt6-base qt6-declarative quickshell rust weston
 
       - name: Check out repository
@@ -33,7 +33,7 @@ jobs:
       - name: Require the evidence-only parent compositor versions
         run: |
           lock=system/shell/evidence/parent-compositors-arch-x86_64.lock.json
-          for package in cage weston; do
+          for package in weston; do
             expected=$(jq -r --arg package "$package" \
               '.packages[] | select(.name == $package) | .version' "$lock")
             actual=$(pacman -Q "$package" | cut -d ' ' -f 2)
@@ -138,16 +138,13 @@ jobs:
                 --socket=wayland-parent \
                 --idle-time=0 --log="$XDG_RUNTIME_DIR/weston.log" &
               weston_pid=$!
-              cage_pid=""
+              hyprland_pid=""
               cleanup() {
                 status=$?
-                kill $weston_pid $cage_pid 2>/dev/null || true
+                kill $weston_pid $hyprland_pid 2>/dev/null || true
                 if test "$status" -ne 0; then
                   echo "::group::Weston log"
                   cat "$XDG_RUNTIME_DIR/weston.log" 2>/dev/null || true
-                  echo "::endgroup::"
-                  echo "::group::Cage and nested Hyprland log"
-                  cat "$XDG_RUNTIME_DIR/cage.log" 2>/dev/null || true
                   echo "::endgroup::"
                   echo "::group::Hyprland launcher log"
                   cat "$XDG_RUNTIME_DIR/hyprland.log" 2>/dev/null || true
@@ -166,13 +163,13 @@ jobs:
                 sleep 0.1
               done
               test -S "$XDG_RUNTIME_DIR/wayland-parent"
-              LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY=wayland-parent cage -D -- \
+              LIBGL_ALWAYS_SOFTWARE=1 WAYLAND_DISPLAY=wayland-parent \
                 Hyprland --config "'$RUNNER_TEMP'/hyprland.conf" \
-                >"$XDG_RUNTIME_DIR/cage.log" 2>&1 &
-              cage_pid=$!
+                >"$XDG_RUNTIME_DIR/hyprland.log" 2>&1 &
+              hyprland_pid=$!
               for attempt in $(seq 1 200); do
                 if pgrep -u "$(id -u)" -x quickshell >/dev/null; then break; fi
-                kill -0 "$cage_pid"
+                kill -0 "$hyprland_pid"
                 sleep 0.1
               done
               pgrep -u "$(id -u)" -x quickshell >/dev/null
