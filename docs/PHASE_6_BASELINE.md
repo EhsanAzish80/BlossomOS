@@ -2,8 +2,10 @@
 
 Status: active. ADR-0021 is accepted. The closed Rust protocol, unprivileged
 engine bridge, redacted activity projection, and Linux session D-Bus adapter
-are implemented. The first narrow graphical surface is implemented, but no
-passing installed-runtime or graphical-interaction evidence is claimed.
+are implemented. The first narrow graphical surface, ARM64 interaction
+evidence, and x86-64 installed compatibility evidence are recorded. Phase 6
+remains active pending the open interaction and recovery gates in the exit
+audit.
 
 Phase 6 begins from the completed Phase 5 orchestration boundary. Accepted
 ADR-0021 defines the shell as an untrusted presentation client and selects a
@@ -29,7 +31,7 @@ file access, privileged operation, or graphical implementation.
 
 1. Freeze the versioned session IPC schema and test bindings. The first closed
    Rust schema and real private-bus transport tests are implemented; installed
-   evidence remains pending.
+   wire evidence passes in x86-64 run `34032625185`.
 2. Implement the unprivileged Rust session service over the existing engine.
    The connection-bound pending state and fixed-diagnostic engine bridge are
    implemented. They use the existing engine audit path, and a bounded closed
@@ -52,19 +54,21 @@ file access, privileged operation, or graphical implementation.
    The required narrow native Qt/QML transport plugin is implemented and built
    in CI. It compiles in only the four fixed service calls and five UI-facing
    operations; it has no generic D-Bus, process, file, network, policy, token,
-   execution, or audit authority. The actual narrow QML surface is implemented;
-   pinned-runtime and graphical-interaction evidence remain pending.
+   execution, or audit authority. The actual narrow QML surface is implemented.
+   ARM64 evidence covers the fixed approval interactions, and x86-64 installed
+   loading passes; the wider adversarial UI matrix remains pending.
 5. Package the pinned Hyprland, Quickshell, D-Bus, and Blossom service boundary.
    The first stable Arch x86-64 compatibility set is fixed to Hyprland
    `0.56.2-2`, Quickshell `0.3.1-1`, systemd `261.2-1`, and dbus-broker `37-3`.
    An inactive hardened user unit, session activation metadata, closed lock,
-   and CI drift validator are implemented. No installed compatibility is yet
-   claimed.
+   and CI drift validator are implemented. Installed compatibility passes in
+   x86-64 run `34032625185`.
 6. Produce installed Arch userspace evidence and an independent exit audit.
-   A disposable nested-compositor harness is implemented but requires an
-   owner-provided ephemeral Linux GPU runner and has not yet produced an
-   authoritative passing run. Its hosted-runner diagnostic failure, owner gate,
-   and evidence limits are documented in `docs/PHASE_6_INSTALLED_EVIDENCE.md`.
+   The disposable nested-compositor harness produced authoritative passing
+   x86-64 run `34032625185` on a trusted ephemeral Linux GPU runner. Its
+   evidence and limitations are documented in
+   `docs/PHASE_6_INSTALLED_EVIDENCE.md`; the independent decision and remaining
+   gates are in `docs/PHASE_6_EXIT_AUDIT.md`.
 
 ## Exit evidence required
 

@@ -1,15 +1,14 @@
 # Phase 6 installed shell evidence
 
-Status: partial ARM64 installed graphical evidence recorded; the x86-64 gate
-and complete graphical matrix remain open.
+Status: ARM64 graphical evidence and the x86-64 installed compatibility gate
+are recorded; the complete graphical interaction matrix remains open.
 
 An additional Apple Silicon ARM64 VM experiment is tracked in
 `docs/PHASE_6_APPLE_SILICON_VALIDATION.md`. The ARM guest reaches a serial login
 prompt; owner screenshots show Hyprland rendering, DRM/VirGL diagnostics, the
 installed Blossom preview, denial, Escape cancellation, and approve-once
-execution with successful verification. This does not
-replace the x86-64 gate below or require registering a personal Mac as a CI
-runner.
+execution with successful verification. This does not replace the separate
+x86-64 evidence below.
 The first ARM desktop assembly stopped at an incompatible Hyprland/Aquamarine
 package transaction. A frozen snapshot subsequently passed full 279-package
 authentication and image assembly; no dependency or signature check was
@@ -130,7 +129,31 @@ bounded test interval and status became `unavailable`. The activity projection
 was empty because its authoritative in-memory service had been deliberately
 terminated; this evidence therefore proves fail-closed client presentation, not
 durable audit persistence across broker loss. Assistive technology, broader
-input compatibility, durable audit recovery, and the x86-64 gate remain open.
+input compatibility, and durable audit recovery remain open.
+
+## Passing x86-64 installed compatibility evidence
+
+GitHub Actions run `34032625185` passed on 2026-09-06 at signed commit
+`41a84f7c4700242ee5d7f11fdce2c91c87b0155d`. The job ran on the trusted,
+ephemeral `blossom-x64-phase6` Linux runner and used the digest-pinned official
+Arch container declared by the workflow. Every workflow step completed in
+4 minutes 18 seconds.
+
+The run proved the exact production package versions, built the feature-gated
+Rust service and native QML plugin, passed the real Qt client/Rust service wire
+test, installed the closed package tree, and gave the non-root test account
+read/write access to the runner's DRM render node. It verified the host Wayland
+protocol floor, launched the separately pinned evidence-only Niri parent on its
+dynamically discovered socket, verified the nested compositor, shell, seat, and
+DMA-BUF protocol floors, and then launched the real pinned Hyprland and
+Quickshell. Quickshell loaded the installed Blossom QML/plugin and successfully
+activated `org.blossomos.Shell1`; the job rejected missing QML modules,
+unavailable types, and root-component creation failure.
+
+This is the authoritative x86-64 Arch-userspace compatibility and installed
+surface-load evidence. It does not add Niri to the production package set and
+does not prove the ARM graphical interaction cases on x86-64. The hardware,
+input, installer, distribution, and release limitations below still apply.
 
 `.github/workflows/phase6-installed-evidence.yml` is a manually dispatched,
 owner-provided GPU-runner gate. It creates a disposable official Arch x86-64
@@ -168,13 +191,13 @@ test machine's logged-in Wayland session, with Docker permission to pass
 workflow. Do not use a general-purpose personal workstation or a runner holding
 unrelated secrets.
 
-This will establish Arch userspace ABI, packaging, activation, nested
-compositor, and configuration-load evidence only after a passing run is
-recorded here. It will exercise a DRM render node but will not prove broad GPU
-compatibility, physical displays or input devices, compositor security, an Arch
+The passing run establishes Arch userspace ABI, packaging, activation, nested
+compositor, and configuration-load evidence. It exercises a DRM render node but
+does not prove broad GPU compatibility, physical displays or input devices,
+compositor security, an Arch
 kernel, installer, ArchISO, upgrade/rollback, distribution packaging, or release
 readiness. Escape focus/cancellation, fixed approve-once execution, no-touch
 graphical expiry, and fail-closed service-loss presentation are now exercised on
 the ARM64 experiment; other close paths, broader keyboard-only behavior,
-assistive technology, durable audit recovery, and the x86-64 evidence remain
-separate gates until explicitly exercised.
+assistive technology, and durable audit recovery remain separate gates until
+explicitly exercised.

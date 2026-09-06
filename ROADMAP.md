@@ -310,8 +310,9 @@ Status: active. ADR-0021 is accepted. A Linux-only unprivileged session IPC
 service and the first narrow Quickshell presentation surface are implemented
 behind inactive production gates. The ARM64 experiment now has installed
 graphical preview, denial, Escape-cancellation, approve-once verification,
-no-touch expiry, and fail-closed service-loss evidence; the complete
-installed-runtime matrix and independent exit audit remain open.
+no-touch expiry, and fail-closed service-loss evidence. The x86-64 installed
+compatibility gate now passes; the complete interaction matrix and independent
+exit audit remain open.
 
 - [x] Review and accept the shell IPC and approval-surface ADR.
 - [x] Freeze a closed, authenticated, versioned, size-bounded session IPC
@@ -358,13 +359,17 @@ installed-runtime matrix and independent exit audit remain open.
   A bounded native-client timer now triggers backend-authoritative expiry; the
   installed graphical panel closes with terminal cancellation and no execution.
   A fixed-name owner watcher now closes pending UI and reports unavailable when
-  the broker disappears. Broader keyboard/close behavior, durable audit recovery,
-  and the complete installed evidence matrix remain open. See
+  the broker disappears. Broader keyboard/close behavior, assistive-technology
+  behavior, and durable audit recovery remain open. See
   `docs/PHASE_6_APPLE_SILICON_VALIDATION.md`. ARM evidence does not replace the
-  x86-64 gate.
-  The manual harness now requires a trusted ephemeral Linux runner exposing a
-  DRM render node. Hosted run `33890423701` is diagnostic failure evidence, not
-  an exit pass; the exact owner action is in `docs/PHASE_6_INSTALLED_EVIDENCE.md`.
+  x86-64 gate. That separate gate passed in run `34032625185` at signed commit
+  `41a84f7`: the pinned Arch package set, installed service/plugin tree, real
+  Qt/D-Bus wire path, nested Niri parent, real Hyprland, Quickshell QML load,
+  and service activation all passed on a trusted ephemeral Linux runner with a
+  DRM render node. Hosted run `33890423701` remains diagnostic failure evidence.
+  The passing evidence and its limits are in
+  `docs/PHASE_6_INSTALLED_EVIDENCE.md`; remaining gates are recorded in
+  `docs/PHASE_6_EXIT_AUDIT.md`.
 
 The active design baseline and exit evidence are tracked in
 `docs/PHASE_6_BASELINE.md`. Phase 6 adds no capability merely to make a UI
