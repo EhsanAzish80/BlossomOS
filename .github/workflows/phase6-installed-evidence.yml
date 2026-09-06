@@ -125,16 +125,12 @@ jobs:
             HOME=/home/blossom-ci \
             XDG_RUNTIME_DIR=/run/user/1000 \
             dbus-run-session -- bash -eo pipefail -c '
-              WAYLAND_DISPLAY=blossom-parent wayland-info \
-                >"$XDG_RUNTIME_DIR/parent-wayland.log" 2>&1
-              grep -A3 "interface: '\''wl_compositor'\''" \
-                "$XDG_RUNTIME_DIR/parent-wayland.log" | grep -Eq "version: ([6-9]|[1-9][0-9]+)"
-              grep -A3 "interface: '\''xdg_wm_base'\''" \
-                "$XDG_RUNTIME_DIR/parent-wayland.log" | grep -Eq "version: ([6-9]|[1-9][0-9]+)"
               hyprland_pid=""
               cleanup() {
                 status=$?
-                kill $hyprland_pid 2>/dev/null || true
+                if test -n "$hyprland_pid"; then
+                  kill "$hyprland_pid" 2>/dev/null || true
+                fi
                 if test "$status" -ne 0; then
                   echo "::group::Parent Wayland globals"
                   cat "$XDG_RUNTIME_DIR/parent-wayland.log" 2>/dev/null || true
@@ -151,6 +147,14 @@ jobs:
                 exit "$status"
               }
               trap cleanup EXIT
+              WAYLAND_DISPLAY=blossom-parent wayland-info \
+                >"$XDG_RUNTIME_DIR/parent-wayland.log" 2>&1
+              grep -A3 "interface: '\''wl_compositor'\''" \
+                "$XDG_RUNTIME_DIR/parent-wayland.log" | \
+                grep -Eq "version:[[:space:]]+([6-9]|[1-9][0-9]+)"
+              grep -A3 "interface: '\''xdg_wm_base'\''" \
+                "$XDG_RUNTIME_DIR/parent-wayland.log" | \
+                grep -Eq "version:[[:space:]]+([6-9]|[1-9][0-9]+)"
               WAYLAND_DISPLAY=blossom-parent \
                 Hyprland --config "'$RUNNER_TEMP'/hyprland.conf" \
                 >"$XDG_RUNTIME_DIR/hyprland.log" 2>&1 &
