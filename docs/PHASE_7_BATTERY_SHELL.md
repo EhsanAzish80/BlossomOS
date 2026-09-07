@@ -1,8 +1,8 @@
 # Phase 7 battery shell projection
 
 Status: implemented and regression-tested as Phase 7 checkpoint 5 on
-2026-09-07. Real battery-present and valid no-battery evidence remain
-checkpoint 6.
+2026-09-07. Checkpoint 6 real battery-present and valid no-battery evidence now
+passes and is recorded in `docs/PHASE_7_BATTERY_INSTALLED_EVIDENCE.md`.
 
 The shell now receives one fixed, read-only battery projection through
 `ReadBatterySummary1`. The same-user session-bus service remains authoritative:
@@ -45,6 +45,6 @@ interval, commands, files, sockets, tokens, or raw provider response.
   Rust/Qt compilation, the real Qt-to-Rust session-bus test, Bubblewrap,
   package installation, and nested Hyprland loading.
 
-Installed battery-present evidence and installed no-battery evidence are
-intentionally deferred to checkpoint 6 and must pass before the first battery
-slice exits.
+Installed battery-present and no-battery evidence passed together in run
+`34117027739` at signed commit `225ac29`. The first fixed battery-summary slice
+therefore exits; broader Phase 7 context work remains active.

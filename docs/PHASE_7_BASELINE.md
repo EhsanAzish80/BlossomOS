@@ -1,7 +1,7 @@
 # Phase 7 structured system awareness baseline
 
-Status: active. ADR-0022 was accepted on 2026-09-07 after project-owner review.
-Implementation proceeds through the ordered checkpoints below.
+Status: first fixed battery-summary slice complete on 2026-09-07. Phase 7
+remains active for separately reviewed later sources.
 
 Phase 7 begins from the completed Phase 6 shell and session-service boundary.
 Its goal is to add typed, permissioned, observable, and testable context without
@@ -26,7 +26,8 @@ creating a generic discovery API or invisible personal history.
    remaining installed-test boundary are recorded in
    `docs/PHASE_7_BATTERY_SHELL.md`.
 6. Produce installed present-battery and no-battery evidence, protected
-   regression results, and an independent first-slice audit.
+   regression results, and an independent first-slice audit. Complete; evidence
+   is recorded in `docs/PHASE_7_BATTERY_INSTALLED_EVIDENCE.md`.
 7. Propose later sources one at a time. Private sources such as window titles,
    clipboard, notifications, selected files, and active projects require their
    own privacy and lifetime review.
@@ -67,6 +68,6 @@ notifications, file access, project discovery, or system mutation.
 The broader Phase 7 exit remains unchanged: every added context source must be
 typed, permissioned, observable, and testable.
 
-The next implementation checkpoint is 6: produce installed battery-present and
-valid no-battery evidence plus protected regression results and an independent
-first-slice audit.
+The next implementation checkpoint is 7: propose one later source with its own
+privacy, capability, lifetime, verification, audit, and evidence review before
+implementation.

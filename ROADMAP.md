@@ -384,8 +384,10 @@ fixed battery-summary slice; implementation proceeds one bounded checkpoint at
 a time. The core registry, typed observation, default-deny capability, strict
 validator, fixed UPower adapter, and closed policy/verification/audit route are
 implemented and tested. The narrow, fixed battery shell projection is now
-implemented without generic QML authority; installed present-battery and valid
-no-battery evidence are next.
+implemented without generic QML authority. Real present-battery and valid
+no-battery UPower evidence passed together in run `34117027739`; the first
+fixed battery-summary slice is complete. Later sources remain active and must
+be proposed and reviewed one at a time.
 
 - Add applications, windows, workspaces, hardware, battery, network, storage,
   services, clipboard, notifications, selected files, and active-project context.
