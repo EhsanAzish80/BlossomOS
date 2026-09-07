@@ -101,7 +101,7 @@ def main() -> None:
         "REQUIRED_PREVIEW_FIELDS",
         'require_alert("Status: denied")',
         'require_alert("Status: verified")',
-        'wait_absent("Approval required")',
+        'wait_hidden("Approval required")',
         "STATE_ENABLED",
     ]:
         require(required in accessibility_test,

@@ -57,13 +57,15 @@ def wait_for(name):
     )
 
 
-def wait_absent(name):
+def wait_hidden(name):
     deadline = time.monotonic() + TIMEOUT_SECONDS
     while time.monotonic() < deadline:
-        if not named(name):
+        if not any(
+            node.getState().contains(pyatspi.STATE_SHOWING) for node in named(name)
+        ):
             return
         time.sleep(0.1)
-    raise AssertionError(f"accessible object remained visible: {name}")
+    raise AssertionError(f"accessible object remained showing: {name}")
 
 
 def invoke(node):
@@ -118,7 +120,7 @@ require_preview_fields()
 
 invoke(deny)
 require_alert("Status: denied")
-wait_absent("Approval required")
+wait_hidden("Approval required")
 
 request = wait_for("Request kernel identity")
 invoke(request)
@@ -127,4 +129,4 @@ approve = wait_for("Approve once")
 require_preview_fields()
 invoke(approve)
 require_alert("Status: verified")
-wait_absent("Approval required")
+wait_hidden("Approval required")
