@@ -37,7 +37,8 @@ creating a generic discovery API or invisible personal history.
    validator, and deterministic tests for ADR-0023. Complete; evidence is in
    `docs/PHASE_7_NETWORK_CORE.md`.
 9. Add the fixed NetworkManager adapter and adversarial transport tests without
-   activating a public request.
+   activating a public request. Complete; Linux evidence is recorded in
+   `docs/PHASE_7_NETWORK_MANAGER.md`.
 10. Activate the argument-free request atomically with policy, verification,
     content-minimized audit, and failure routing.
 11. Add the narrow shell projection, then produce real installed offline and
