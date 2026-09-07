@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import time
 
 import pyatspi
@@ -170,46 +171,53 @@ def wait_for_latest_activity(expected_outcomes):
     raise AssertionError(f"activity projection drift: {latest_records}")
 
 
-# A compositor close request follows QML onClosing and must cancel without
-# depending on keyboard focus inherited from an earlier scenario.
-invoke("Request kernel identity")
-focus_approval()
-dispatch("closewindow", "title:^(Blossom OS approval)$")
-wait_compositor_window_absent("Blossom OS approval")
-require_alert("Status: cancelled")
-wait_for_latest_activity([
-    "accepted",
-    "policy_ask",
-    "approval_issued",
-    "cancelled",
-])
+scenario = sys.argv[1] if len(sys.argv) == 2 else ""
 
-# Escape is a global window shortcut and must cancel without execution.
-focus_main_and_press("space")
-focus_approval()
-press("Escape")
-wait_compositor_window_absent("Blossom OS approval")
-require_alert("Status: cancelled")
-wait_for_latest_activity([
-    "accepted",
-    "policy_ask",
-    "approval_issued",
-    "cancelled",
-])
+if scenario == "cancel-and-deny":
+    # A compositor close request follows QML onClosing and must cancel without
+    # depending on keyboard focus inherited from an earlier scenario.
+    invoke("Request kernel identity")
+    focus_approval()
+    dispatch("closewindow", "title:^(Blossom OS approval)$")
+    wait_compositor_window_absent("Blossom OS approval")
+    require_alert("Status: cancelled")
+    wait_for_latest_activity([
+        "accepted",
+        "policy_ask",
+        "approval_issued",
+        "cancelled",
+    ])
 
-# The command bar restores focus to its request button after each terminal state.
-# Space therefore starts a request without an assistive action invocation.
-focus_main_and_press("space")
-focus_approval()
-press("space")
-require_alert("Status: denied")
+    # Escape is a global window shortcut and must cancel without execution.
+    focus_main_and_press("space")
+    focus_approval()
+    press("Escape")
+    wait_compositor_window_absent("Blossom OS approval")
+    require_alert("Status: cancelled")
+    wait_for_latest_activity([
+        "accepted",
+        "policy_ask",
+        "approval_issued",
+        "cancelled",
+    ])
 
-# Tab has a closed two-control cycle and reaches approve exactly once.
-focus_main_and_press("space")
-focus_approval()
-press("Tab")
-wait_focused("Approve once")
-press("space")
-require_alert("Status: verified")
-
-print("installed keyboard and compositor-close matrix passed")
+    # The command bar restores focus to its request button after each terminal
+    # state. Space therefore starts and denies without an assistive invocation.
+    focus_main_and_press("space")
+    focus_approval()
+    press("space")
+    require_alert("Status: denied")
+    print("installed compositor-close, Escape, and keyboard-deny paths passed")
+elif scenario == "approve":
+    # Start this scenario in a fresh AT-SPI client process so accessibility
+    # objects destroyed by the three prior modal ceremonies cannot be reused.
+    # Tab has a closed two-control cycle and reaches approve exactly once.
+    focus_main_and_press("space")
+    focus_approval()
+    press("Tab")
+    wait_focused("Approve once")
+    press("space")
+    require_alert("Status: verified")
+    print("installed keyboard-approve path passed")
+else:
+    raise SystemExit("expected cancel-and-deny or approve")
