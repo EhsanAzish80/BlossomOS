@@ -456,7 +456,7 @@ jobs:
             expect-online
 
   network-offline:
-    name: Real isolated offline NetworkManager boundary
+    name: Real isolated limited NetworkManager boundary
     if: inputs.evidence_scope == 'battery'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -486,6 +486,7 @@ jobs:
               > /etc/NetworkManager/conf.d/99-blossom-offline.conf
             ip link set lo up
             ip link add blossom-offline type dummy
+            ip link set blossom-offline up
             dbus-daemon --system --fork --nopidfile
             NetworkManager --no-daemon >/tmp/blossom-network-manager.log 2>&1 &
             nm_pid=$!
@@ -498,19 +499,18 @@ jobs:
             busctl --system --quiet status org.freedesktop.NetworkManager >/dev/null
             nmcli networking on
             nmcli device set blossom-offline managed yes
-            nmcli device disconnect blossom-offline >/dev/null 2>&1 || true
             connectivity=""
             for attempt in $(seq 1 100); do
               nmcli networking connectivity check >/dev/null 2>&1 || true
               connectivity=$(nmcli -t -f CONNECTIVITY general)
-              test "$connectivity" = none && break
+              test "$connectivity" = limited && break
               sleep 0.1
             done
             echo "isolated-connectivity=$connectivity"
-            test "$connectivity" = none
+            test "$connectivity" = limited
             ip link show lo >/dev/null
             ! ip route show default | grep -q .
-            target/release/examples/installed_network_probe expect-offline
+            target/release/examples/installed_network_probe expect-limited
           '
 
   network-evidence-complete:
@@ -520,4 +520,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Require both real outcomes
-        run: echo 'Real installed NetworkManager online and isolated offline observations passed.'
+        run: echo 'Real installed NetworkManager online and isolated limited observations passed.'

@@ -10,9 +10,10 @@ fn main() {
     let expected = std::env::args().nth(1).unwrap_or_default();
     let expected = match expected.as_str() {
         "expect-offline" => NetworkConnectivity::Offline,
+        "expect-limited" => NetworkConnectivity::Limited,
         "expect-online" => NetworkConnectivity::Online,
         _ => {
-            eprintln!("usage: installed_network_probe expect-offline|expect-online");
+            eprintln!("usage: installed_network_probe expect-offline|expect-limited|expect-online");
             std::process::exit(64);
         }
     };

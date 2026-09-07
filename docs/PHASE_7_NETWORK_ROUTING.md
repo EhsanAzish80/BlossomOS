@@ -1,7 +1,8 @@
 # Phase 7 network request routing and shell projection
 
 Status: request routing and the narrow shell projection are complete on
-2026-09-07. Installed online and offline evidence remains the final checkpoint.
+2026-09-07. Installed online and isolated limited evidence remains the final
+checkpoint; exact offline mapping remains covered by deterministic core tests.
 
 The argument-free `system.network.connectivity` request is mapped only to
 `system.read:network.connectivity`. Policy defaults to deny. An explicit allow

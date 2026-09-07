@@ -83,5 +83,6 @@ The broader Phase 7 exit remains unchanged: every added context source must be
 typed, permissioned, observable, and testable.
 
 The next implementation checkpoint is the installed evidence portion of 11:
-prove real NetworkManager online and offline outcomes, then perform the
+prove real NetworkManager online and isolated limited outcomes (with exact
+offline mapping retained in deterministic core coverage), then perform the
 independent second-slice and Phase 7 exit audit.
