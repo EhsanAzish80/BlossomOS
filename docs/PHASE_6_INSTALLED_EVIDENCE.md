@@ -1,7 +1,7 @@
 # Phase 6 installed shell evidence
 
-Status: ARM64 graphical evidence and the x86-64 installed compatibility gate
-are recorded; the complete graphical interaction matrix remains open.
+Status: complete for the Phase 6 boundary. ARM64 development evidence and the
+authoritative x86-64 installed interaction gate are recorded below.
 
 An additional Apple Silicon ARM64 VM experiment is tracked in
 `docs/PHASE_6_APPLE_SILICON_VALIDATION.md`. The ARM guest reaches a serial login
@@ -128,10 +128,36 @@ In the installed graphical run, the open approval panel disappeared within the
 bounded test interval and status became `unavailable`. The activity projection
 was empty because its authoritative in-memory service had been deliberately
 terminated; this evidence therefore proves fail-closed client presentation, not
-durable audit persistence across broker loss. Assistive technology, broader
-input compatibility, and durable audit recovery remain open.
+durable audit persistence across broker loss. ADR-0021 deliberately excludes
+durable activity recovery; service replacement and bus-loss tests instead prove
+that old previews fail closed and no execution starts.
 
 ## Passing x86-64 installed compatibility evidence
+
+The final authoritative run is GitHub Actions run
+[`34102303699`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/34102303699),
+which passed on 2026-09-07 at signed commit
+`b3bd89eb30859bfc89aab98202e010b7825b9a17`. Its installed Arch x86-64 job
+completed in 4 minutes 6 seconds on the trusted `blossom-gpu` runner.
+
+The run passed the real Qt/Rust wire path, fixed Bubblewrap networkless
+`/usr/bin/uname -s` executor, package installation, service activation, and
+installed Hyprland/Quickshell surface. It then passed standard Qt accessibility
+and Blossom AT-SPI checks, compositor-close and Escape cancellation,
+keyboard-only denial and approve-once verification, and post-decision refresh.
+The accessibility probe observed the 14 fixed security fields, safe initial
+focus, keyboard activation, and denied and verified outcome announcements.
+
+The interaction groups restart only the installed UI client while preserving
+the authoritative service and its correlated audit chain. This isolates window
+lifecycle state without replacing the policy, token, executor, verification, or
+audit authority. Hidden approval state is asserted through AT-SPI
+`STATE_SHOWING`; it is not inferred from a destroyed accessibility object.
+
+This run supersedes the earlier compatibility-only run below for the Phase 6
+exit decision. Its evidence remains deliberately narrow: it does not prove
+broad hardware, physical input/display, installer, distribution image, or
+release readiness.
 
 GitHub Actions run `34032625185` passed on 2026-09-06 at signed commit
 `41a84f7c4700242ee5d7f11fdce2c91c87b0155d`. The job ran on the trusted,
@@ -150,10 +176,10 @@ Quickshell. Quickshell loaded the installed Blossom QML/plugin and successfully
 activated `org.blossomos.Shell1`; the job rejected missing QML modules,
 unavailable types, and root-component creation failure.
 
-This is the authoritative x86-64 Arch-userspace compatibility and installed
-surface-load evidence. It does not add Niri to the production package set and
-does not prove the ARM graphical interaction cases on x86-64. The hardware,
-input, installer, distribution, and release limitations below still apply.
+This earlier run is retained as compatibility history. It does not add Niri to
+the production package set. Run `34102303699` is the authoritative installed
+interaction evidence; the hardware, installer, distribution, and release
+limitations below still apply.
 
 `.github/workflows/phase6-installed-evidence.yml` is a manually dispatched,
 owner-provided GPU-runner gate. It creates a disposable official Arch x86-64
@@ -184,20 +210,19 @@ render node. Cage therefore used its Pixman/SHM allocator, while Aquamarine
 requires `zwp_linux_dmabuf_v1` and refused to start. That run is diagnostic
 evidence only and is not a passing installed-runtime claim.
 
-Owner action: register a trusted, ephemeral GitHub Actions runner with labels
-`self-hosted`, `linux`, `x64`, and `blossom-gpu`, from the dedicated installed
-test machine's logged-in Wayland session, with Docker permission to pass
-`/dev/dri` and its display socket into the container, then manually dispatch the
-workflow. Do not use a general-purpose personal workstation or a runner holding
-unrelated secrets.
+Reproduction requires a trusted GitHub Actions runner with labels `self-hosted`,
+`linux`, `x64`, and `blossom-gpu`, from a dedicated installed test machine's
+logged-in Wayland session, with Docker permission to pass `/dev/dri` and its
+display socket into the container. Do not use a general-purpose personal
+workstation or a runner holding unrelated secrets.
 
 The passing run establishes Arch userspace ABI, packaging, activation, nested
 compositor, and configuration-load evidence. It exercises a DRM render node but
 does not prove broad GPU compatibility, physical displays or input devices,
 compositor security, an Arch
 kernel, installer, ArchISO, upgrade/rollback, distribution packaging, or release
-readiness. Escape focus/cancellation, fixed approve-once execution, no-touch
-graphical expiry, and fail-closed service-loss presentation are now exercised on
-the ARM64 experiment; other close paths, broader keyboard-only behavior,
-assistive technology, and durable audit recovery remain separate gates until
-explicitly exercised.
+readiness. Escape and compositor-close cancellation, keyboard-only denial and
+approve-once execution, accessibility, no-touch expiry, and fail-closed
+service-loss presentation are exercised. Activity recovery is intentionally
+absent under ADR-0021; broad hardware, installer, distribution-image, and
+release proof remain outside this Phase 6 gate.

@@ -1,9 +1,9 @@
 # Phase 6 exit audit
 
-Status: incomplete on 2026-09-06. The architecture, authority boundary,
-installed compatibility, and fixed ARM64 approval slice have substantial
-passing evidence, but ADR-0021's complete adversarial UI and recovery matrix has
-not yet passed. Phase 6 remains active.
+Status: complete on 2026-09-07. The architecture, authority boundary,
+adversarial protocol suite, installed x86-64 interaction matrix, and protected
+repository checks have authoritative passing evidence. This closes Phase 6's
+reviewed boundary without activating a production gate.
 
 ## Passing boundary
 
@@ -19,28 +19,38 @@ not yet passed. Phase 6 remains active.
 - ARM64 installed graphical evidence covers preview integrity, pointer denial,
   keyboard Escape cancellation, approve-once verification, no-touch expiry,
   and fail-closed service loss.
-- x86-64 installed run `34032625185` passed at signed commit `41a84f7`. It
+- x86-64 installed run `34102303699` passed at signed commit `b3bd89e`. It
   verified the pinned Arch production versions, real Qt/Rust wire path,
-  installed package tree, DRM access, nested protocol requirements, real
-  Hyprland, Quickshell QML/plugin loading, and fixed service activation.
+  fixed Bubblewrap networkless executor, installed package tree, DRM access,
+  nested protocol requirements, real Hyprland, Quickshell QML/plugin loading,
+  and fixed service activation.
+- The same installed run exercised compositor close and Escape cancellation,
+  keyboard-only denial and approve-once execution, rapid ceremony replacement,
+  and post-decision refresh. Every unapproved path started nothing; approval
+  reached only the fixed `/usr/bin/uname -s` operation and ended verified.
+- Standard Qt and Blossom AT-SPI probes verified accessible naming, all 14
+  fixed security fields, safe initial focus, keyboard activation, and announced
+  denied and verified outcomes against the installed surface.
+- Service replacement, bus loss, and shell restart tests invalidate pending
+  previews and start nothing. ADR-0021 deliberately specifies no durable
+  activity recovery: a service restart produces an empty projection. The tests
+  prove this fail-closed non-recovery behavior rather than claiming persistence.
+- Quality, prior-phase regressions, dependency review, secret scan, and CodeQL
+  passed on the signed implementation commit. Required checks on the final
+  documentation commit remain the authoritative remote merge gate.
 
-## Open exit gates
+## Evidence limits outside Phase 6
 
-- Exercise close paths other than Escape and prove every unconsumed approval is
-  cancelled without execution.
-- Exercise default/global-key and rapid-overlay replacement behavior, including
-  a complete keyboard-only approve and deny flow.
-- Exercise assistive-technology naming, focus order, activation, and outcome
-  announcements against the installed surface.
-- Decide and test the durable audit behavior expected across service or bus
-  restart. Current in-memory activity loss is explicit and must not be presented
-  as recovery.
-- Re-run the protected Phase 1-5 regression, lint, dependency, secret, and
-  CodeQL checks at the final Phase 6 commit and verify the remote results.
+- This is Arch x86-64 userspace evidence on one trusted Intel GPU runner, not
+  broad GPU, display, input-device, kernel, firmware, or hardware support.
+- It is not installer, ArchISO, upgrade/rollback, distribution-image, or release
+  readiness evidence.
+- Durable activity persistence would require a separate reviewed ADR; it is not
+  part of the accepted Phase 6 contract.
 
 ## Decision
 
-The x86-64 installed compatibility gate is satisfied. Phase 6 itself is not yet
-complete because the remaining ADR-0021 interaction and recovery requirements
-above have no authoritative evidence. No production gate is activated by this
-audit.
+Phase 6 is complete at the accepted ADR-0021 boundary. The installed x86-64
+interaction gate is satisfied, the security invariants remain fail closed, and
+the remaining limitations are later product and release work. No production
+gate is activated by this audit.

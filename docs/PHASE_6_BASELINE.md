@@ -1,11 +1,10 @@
 # Phase 6 Blossom Shell baseline
 
-Status: active. ADR-0021 is accepted. The closed Rust protocol, unprivileged
-engine bridge, redacted activity projection, and Linux session D-Bus adapter
-are implemented. The first narrow graphical surface, ARM64 interaction
-evidence, and x86-64 installed compatibility evidence are recorded. Phase 6
-remains active pending the open interaction and recovery gates in the exit
-audit.
+Status: complete on 2026-09-07. ADR-0021 is accepted. The closed Rust protocol,
+unprivileged engine bridge, redacted activity projection, and Linux session
+D-Bus adapter are implemented. The first narrow graphical surface, ARM64
+interaction evidence, and x86-64 installed interaction evidence are recorded.
+The exit decision and evidence limits are in the exit audit.
 
 Phase 6 begins from the completed Phase 5 orchestration boundary. Accepted
 ADR-0021 defines the shell as an untrusted presentation client and selects a
@@ -31,7 +30,7 @@ file access, privileged operation, or graphical implementation.
 
 1. Freeze the versioned session IPC schema and test bindings. The first closed
    Rust schema and real private-bus transport tests are implemented; installed
-   wire evidence passes in x86-64 run `34032625185`.
+   wire evidence passes in final x86-64 run `34102303699`.
 2. Implement the unprivileged Rust session service over the existing engine.
    The connection-bound pending state and fixed-diagnostic engine bridge are
    implemented. They use the existing engine audit path, and a bounded closed
@@ -48,8 +47,8 @@ file access, privileged operation, or graphical implementation.
    mutation, decision replay, and cancellation replay cannot start additional
    execution. Further private-bus tests prove a pending preview is invalid while
    its service is absent, remains invalid in a replacement service instance,
-   and starts nothing after session-bus loss. Graphical close and focus-loss
-   behavior remains part of the UI checkpoint.
+   and starts nothing after session-bus loss. Installed compositor-close,
+   Escape, focus, and keyboard decision behavior passes in run `34102303699`.
 4. Add a minimal approval and activity surface for the fixed slice. Quickshell
    remains the pinned desktop presentation runtime; the security ceremony uses
    a dedicated standard Qt host so the complete control tree reaches AT-SPI.
@@ -57,20 +56,20 @@ file access, privileged operation, or graphical implementation.
    in CI. It compiles in only the four fixed service calls and five UI-facing
    operations; it has no generic D-Bus, process, file, network, policy, token,
    execution, or audit authority. The actual narrow QML surface is implemented.
-   ARM64 evidence covers the fixed approval interactions, and x86-64 installed
-   loading passes; the wider adversarial UI matrix remains pending.
+   ARM64 evidence covers the development sequence, and the x86-64 installed
+   adversarial interaction and accessibility matrix passes.
 5. Package the pinned Hyprland, Quickshell, D-Bus, and Blossom service boundary.
    The first stable Arch x86-64 compatibility set is fixed to Hyprland
    `0.56.2-2`, Quickshell `0.3.1-1`, systemd `261.2-1`, and dbus-broker `37-3`.
    An inactive hardened user unit, session activation metadata, closed lock,
    and CI drift validator are implemented. Installed compatibility passes in
-   x86-64 run `34032625185`.
+   x86-64 run `34102303699`.
 6. Produce installed Arch userspace evidence and an independent exit audit.
    The disposable nested-compositor harness produced authoritative passing
-   x86-64 run `34032625185` on a trusted ephemeral Linux GPU runner. Its
+   x86-64 run `34102303699` on a trusted Linux GPU runner. Its
    evidence and limitations are documented in
-   `docs/PHASE_6_INSTALLED_EVIDENCE.md`; the independent decision and remaining
-   gates are in `docs/PHASE_6_EXIT_AUDIT.md`.
+   `docs/PHASE_6_INSTALLED_EVIDENCE.md`; the independent completion decision and
+   evidence limits are in `docs/PHASE_6_EXIT_AUDIT.md`.
 
 ## Exit evidence required
 

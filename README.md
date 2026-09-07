@@ -172,9 +172,13 @@ verification-derived outcomes, hash-chained plan activity, and deterministic
 truthful reports. Its model bridge accepts only the six existing argument-free
 native read proposals; model output still grants no authorization. Recovery is
 in-memory only and active synchronous steps are not interruptible mid-call.
-Phase 6 is active under accepted ADR-0021, but no graphical shell or session IPC
-service is implemented yet. See
-`docs/PHASE_4_INSTALLED_EVIDENCE.md` and `docs/PHASE_5_EXIT_AUDIT.md`.
+Phase 6 is complete at the accepted ADR-0021 engineering boundary. The closed
+Qt/QML presentation host, authenticated versioned session service, fixed
+approval ceremony, accessibility path, and installed x86-64 interaction matrix
+are implemented and tested. This remains pre-alpha engineering evidence, not a
+finished operating-system image, installer, broad hardware claim, or release.
+See `docs/PHASE_6_EXIT_AUDIT.md` and
+`docs/PHASE_6_INSTALLED_EVIDENCE.md`.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.

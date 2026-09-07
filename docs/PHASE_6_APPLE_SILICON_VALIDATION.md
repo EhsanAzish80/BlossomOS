@@ -355,8 +355,9 @@ and exported checksums passed, with root filesystem hash
 Owner evidence shows the pending panel disappearing within the test interval
 and status becoming `unavailable`. Because the deliberately terminated service
 held its audit only in memory, the empty activity view does not establish
-durable audit recovery. These observations still do not establish accessibility,
-general hardware support, the x86-64 installed gate, or Phase 6 completion.
+durable audit recovery. These ARM observations alone do not establish
+accessibility, general hardware support, or the x86-64 installed gate; those
+separate Phase 6 results are recorded in `docs/PHASE_6_INSTALLED_EVIDENCE.md`.
 
 ## Ordered gates
 
