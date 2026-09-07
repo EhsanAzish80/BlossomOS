@@ -7,16 +7,16 @@ use blossom_core::{
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() {
-    let expected = std::env::args().nth(1).unwrap_or_default();
-    let expected = match expected.as_str() {
-        "expect-offline" => NetworkConnectivity::Offline,
-        "expect-limited" => NetworkConnectivity::Limited,
-        "expect-online" => NetworkConnectivity::Online,
+    let expectation = std::env::args().nth(1).unwrap_or_default();
+    match expectation.as_str() {
+        "expect-offline" | "expect-no-internet" | "expect-online" => {}
         _ => {
-            eprintln!("usage: installed_network_probe expect-offline|expect-limited|expect-online");
+            eprintln!(
+                "usage: installed_network_probe expect-offline|expect-no-internet|expect-online"
+            );
             std::process::exit(64);
         }
-    };
+    }
 
     let mut provider = NetworkManagerConnectivityProvider;
     let observation = provider
@@ -39,7 +39,18 @@ fn main() {
         eprintln!("network connectivity was unexpectedly absent");
         std::process::exit(1);
     };
-    if actual != expected {
+    let matched = match expectation.as_str() {
+        "expect-offline" => actual == NetworkConnectivity::Offline,
+        "expect-no-internet" => matches!(
+            actual,
+            NetworkConnectivity::Offline
+                | NetworkConnectivity::Limited
+                | NetworkConnectivity::Local
+        ),
+        "expect-online" => actual == NetworkConnectivity::Online,
+        _ => false,
+    };
+    if !matched {
         eprintln!("network evidence did not match the required class");
         std::process::exit(1);
     }

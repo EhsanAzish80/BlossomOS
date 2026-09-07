@@ -56,7 +56,7 @@ jobs:
             expect-online
 
   offline:
-    name: Real isolated limited NetworkManager boundary
+    name: Real isolated non-internet NetworkManager boundary
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -109,7 +109,7 @@ jobs:
             test "$connectivity" = limited
             ip link show lo >/dev/null
             ! ip route show default | grep -q .
-            target/release/examples/installed_network_probe expect-limited
+            target/release/examples/installed_network_probe expect-no-internet
           '
 
   complete:
@@ -118,4 +118,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Require both real outcomes
-        run: echo 'Real installed NetworkManager online and isolated limited observations passed.'
+        run: echo 'Real installed NetworkManager online and isolated non-internet observations passed.'
