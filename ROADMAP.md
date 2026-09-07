@@ -412,19 +412,20 @@ observable, and testable. Additional sources require separate future review.
 
 ## Phase 8: Memory and personalization
 
-Status: active. ADR-0024 is accepted for the first bounded slice: explicit
-user-approved durable notes. The ordered implementation and evidence gates are
-recorded in `docs/PHASE_8_BASELINE.md`.
+Status: complete for the accepted explicit durable-note boundary. ADR-0024
+defines creation and lifecycle; ADR-0025 defines bounded data-only recall. Exit
+evidence is recorded in `docs/PHASE_8_EXIT_AUDIT.md`.
 
 - [x] Accept the closed separation of session context, temporary memory,
   user-approved durable memory, project knowledge, and system history.
-- [ ] Implement disabled-by-default encrypted durable notes with exact
+- [x] Implement disabled-by-default encrypted durable notes with exact
   create/edit approval and no automatic capture, promotion, or model-authored
   persistence.
-- [ ] Add fixed inspect, edit, delete, export, disable, retention, and bounded
+- [x] Add fixed inspect, edit, delete, export, disable, retention, and bounded
   recall controls with adversarial and installed Linux evidence.
 
-Exit: no durable memory is created invisibly.
+Exit satisfied: no durable memory can be created invisibly. Automatic capture,
+broader memory classes, and public activation remain outside this boundary.
 
 ## Phase 9: Distribution and updates
 
