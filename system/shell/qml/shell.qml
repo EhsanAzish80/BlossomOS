@@ -29,6 +29,7 @@ ApplicationWindow {
 
     Component.onCompleted: {
         BlossomBroker.refreshActivity()
+        BlossomBroker.refreshBattery()
         requestActivate()
         requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
     }
@@ -62,6 +63,17 @@ ApplicationWindow {
             color: "#f4f7fb"
             font.bold: true
             text: "Blossom OS"
+        }
+
+        Label {
+            anchors.verticalCenter: parent.verticalCenter
+            color: "#b8c4d6"
+            text: BlossomBroker.battery.status === "present"
+                ? "Battery: " + BlossomBroker.battery.percentage + "% (" + BlossomBroker.battery.state + ")"
+                : BlossomBroker.battery.status === "absent" ? "Battery: none" : "Battery: unavailable"
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.ignored: false
         }
 
         Button {

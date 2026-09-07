@@ -116,8 +116,8 @@ pub use shell_activity::{ShellActivityError, project_shell_activity};
 pub use shell_ipc::{
     MAX_ACTIVITY_BATCH, MAX_SHELL_MESSAGE_BYTES, SHELL_BUS_NAME, SHELL_INTERFACE,
     SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellActivityCategory, ShellActivityKind,
-    ShellActivityProjection, ShellApprovalPreview, ShellClientRequest, ShellDecision,
-    ShellProtocolError, decode_shell_client_request,
+    ShellActivityProjection, ShellApprovalPreview, ShellBatteryProjection, ShellBatteryStatus,
+    ShellClientRequest, ShellDecision, ShellProtocolError, decode_shell_client_request,
 };
 pub use shell_service::{
     SHELL_APPROVAL_TTL_MS, ShellDiagnosticService, ShellServiceError, ShellServiceOutcome,

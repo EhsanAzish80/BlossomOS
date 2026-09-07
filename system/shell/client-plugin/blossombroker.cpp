@@ -18,6 +18,7 @@ constexpr quint16 ProtocolVersion = 1;
 constexpr qsizetype MaxReplyBytes = 32 * 1024;
 constexpr quint16 ActivityLimit = 64;
 constexpr qulonglong MaxApprovalDelayMs = 60 * 1000;
+constexpr qulonglong MaxBatteryLifetimeMs = 5 * 1000;
 
 QDBusInterface fixedInterface() {
     return QDBusInterface(QString::fromLatin1(BusName), QString::fromLatin1(ObjectPath),
@@ -50,11 +51,14 @@ BlossomBroker::BlossomBroker(QObject *parent) : QObject(parent) {
             });
     m_expiryTimer.setSingleShot(true);
     connect(&m_expiryTimer, &QTimer::timeout, this, &BlossomBroker::cancelPending);
+    m_batteryExpiryTimer.setSingleShot(true);
+    connect(&m_batteryExpiryTimer, &QTimer::timeout, this, &BlossomBroker::refreshBattery);
 }
 
 QString BlossomBroker::state() const { return m_state; }
 QVariantMap BlossomBroker::preview() const { return m_preview; }
 QVariantList BlossomBroker::activity() const { return m_activity; }
+QVariantMap BlossomBroker::battery() const { return m_battery; }
 
 void BlossomBroker::requestSystemUname() {
     if (m_state == QStringLiteral("requesting") || m_state == QStringLiteral("waiting") ||
@@ -178,6 +182,53 @@ void BlossomBroker::refreshActivity(qulonglong afterSequence, bool hasCursor) {
     });
 }
 
+void BlossomBroker::refreshBattery() {
+    const quint64 generation = m_serviceGeneration;
+    const quint64 batteryGeneration = ++m_batteryGeneration;
+    auto interface = fixedInterface();
+    auto *watcher = new QDBusPendingCallWatcher(
+        interface.asyncCall(QStringLiteral("ReadBatterySummary1"), QVariant::fromValue(ProtocolVersion)), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this, watcher, generation, batteryGeneration] {
+        const QDBusPendingReply<QByteArray> reply = *watcher;
+        watcher->deleteLater();
+        if (generation != m_serviceGeneration) {
+            failClosed();
+            return;
+        }
+        if (batteryGeneration != m_batteryGeneration) return;
+        bool parsed = false;
+        const auto object = boundedObject(reply.value(), &parsed);
+        const auto status = object.value(QStringLiteral("status")).toString();
+        const auto state = object.value(QStringLiteral("state")).toString();
+        const auto percentage = object.value(QStringLiteral("percentage"));
+        const auto expires = object.value(QStringLiteral("expires_at_ms"));
+        const bool present = status == QStringLiteral("present");
+        const bool absent = status == QStringLiteral("absent");
+        const bool validState = state == QStringLiteral("charging") ||
+            state == QStringLiteral("discharging") || state == QStringLiteral("full") ||
+            state == QStringLiteral("not_charging") || state == QStringLiteral("unknown");
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        bool validExpiry = false;
+        const qulonglong expiresAt = expires.toVariant().toULongLong(&validExpiry);
+        const qulonglong remaining = now >= 0 && expiresAt > static_cast<qulonglong>(now)
+            ? expiresAt - static_cast<qulonglong>(now) : 0;
+        const bool exactShape = object.size() == (present ? 5 : 3);
+        if (reply.isError() || !parsed || !validExpiry || !exactShape ||
+            object.value(QStringLiteral("version")).toInt() != ProtocolVersion ||
+            (!present && !absent) || (present && (!percentage.isDouble() ||
+            percentage.toInt() < 0 || percentage.toInt() > 100 || !validState)) ||
+            (absent && (object.contains(QStringLiteral("percentage")) || object.contains(QStringLiteral("state")))) ||
+            remaining == 0 || remaining > MaxBatteryLifetimeMs) {
+            clearBattery();
+            return;
+        }
+        m_battery = object.toVariantMap();
+        emit batteryChanged();
+        m_batteryExpiryTimer.start(std::chrono::milliseconds(remaining + 1));
+    });
+}
+
 void BlossomBroker::handleOutcome(const QByteArray &bytes) {
     bool ok = false;
     const auto object = boundedObject(bytes, &ok);
@@ -209,7 +260,16 @@ void BlossomBroker::failClosed() {
     m_expiryTimer.stop();
     m_preview.clear();
     emit previewChanged();
+    clearBattery();
     setState(QStringLiteral("unavailable"));
+}
+
+void BlossomBroker::clearBattery() {
+    m_batteryExpiryTimer.stop();
+    const QVariantMap unavailable{{QStringLiteral("status"), QStringLiteral("unavailable")}};
+    if (m_battery == unavailable) return;
+    m_battery = unavailable;
+    emit batteryChanged();
 }
 
 void BlossomBroker::setState(const QString &value) {

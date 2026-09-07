@@ -383,7 +383,9 @@ Status: active. ADR-0022 defines the accepted closed context registry and first
 fixed battery-summary slice; implementation proceeds one bounded checkpoint at
 a time. The core registry, typed observation, default-deny capability, strict
 validator, fixed UPower adapter, and closed policy/verification/audit route are
-implemented and tested. A narrow shell projection is next.
+implemented and tested. The narrow, fixed battery shell projection is now
+implemented without generic QML authority; installed present-battery and valid
+no-battery evidence are next.
 
 - Add applications, windows, workspaces, hardware, battery, network, storage,
   services, clipboard, notifications, selected files, and active-project context.

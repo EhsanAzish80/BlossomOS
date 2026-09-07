@@ -23,6 +23,7 @@ def main() -> None:
         '"SubmitDecision1"',
         '"CancelPending1"',
         '"ReadActivity1"',
+        '"ReadBatterySummary1"',
         'constexpr quint16 ProtocolVersion = 1',
         'constexpr quint16 ActivityLimit = 64',
     ]:
@@ -42,10 +43,10 @@ def main() -> None:
     ]:
         require(forbidden not in text, f"forbidden client authority: {forbidden}")
     header = (PLUGIN / "blossombroker.h").read_text()
-    require(header.count("Q_INVOKABLE") == 5, "client invokable surface drift")
+    require(header.count("Q_INVOKABLE") == 6, "client invokable surface drift")
     client = (PLUGIN / "blossombroker.cpp").read_text()
-    require(client.count("QVariant::fromValue(ProtocolVersion)") == 2,
-            "both version arguments must preserve unsigned 16-bit wire type")
+    require(client.count("QVariant::fromValue(ProtocolVersion)") == 3,
+            "all version arguments must preserve unsigned 16-bit wire type")
     require("QVariant::fromValue(ActivityLimit)" in client,
             "activity limit must preserve unsigned 16-bit wire type")
     require("m_expiryTimer.setSingleShot(true)" in client,
@@ -56,11 +57,15 @@ def main() -> None:
             "approval expiry must use the fixed preview deadline")
     require("MaxApprovalDelayMs" in client,
             "approval expiry timer must reject an unbounded deadline")
+    require("MaxBatteryLifetimeMs" in client and "object.size() == (present ? 5 : 3)" in client,
+            "battery projection must enforce fixed lifetime and exact schema")
+    require("&BlossomBroker::refreshBattery" in client,
+            "battery projection must refresh only on its code-owned expiry timer")
     require("QDBusServiceWatcher::WatchForUnregistration" in client,
             "native client must watch for loss of the fixed service owner")
     require("QDBusServiceWatcher::serviceUnregistered" in client,
             "service owner loss must trigger a fail-closed client transition")
-    require("++m_serviceGeneration" in client and client.count("generation != m_serviceGeneration") == 4,
+    require("++m_serviceGeneration" in client and client.count("generation != m_serviceGeneration") == 5,
             "all asynchronous replies must fail closed after service owner loss")
     require('setState(QStringLiteral("requesting"))' in client,
             "request start must close the rapid-click race")
