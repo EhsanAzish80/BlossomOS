@@ -46,4 +46,5 @@ private:
     QDBusServiceWatcher m_serviceWatcher;
     QTimer m_expiryTimer;
     quint64 m_serviceGeneration = 0;
+    quint64 m_activityGeneration = 0;
 };

@@ -144,15 +144,20 @@ void BlossomBroker::cancelPending() {
 
 void BlossomBroker::refreshActivity(qulonglong afterSequence, bool hasCursor) {
     const quint64 generation = m_serviceGeneration;
+    const quint64 activityGeneration = ++m_activityGeneration;
     auto interface = fixedInterface();
     auto *watcher = new QDBusPendingCallWatcher(
         interface.asyncCall(QStringLiteral("ReadActivity1"), QVariant::fromValue(ProtocolVersion), hasCursor,
                             QVariant::fromValue(afterSequence), QVariant::fromValue(ActivityLimit)), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, generation] {
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this, watcher, generation, activityGeneration] {
         const QDBusPendingReply<QByteArray> reply = *watcher;
         watcher->deleteLater();
         if (generation != m_serviceGeneration) {
             failClosed();
+            return;
+        }
+        if (activityGeneration != m_activityGeneration) {
             return;
         }
         if (reply.isError() || reply.value().size() > MaxReplyBytes) {
