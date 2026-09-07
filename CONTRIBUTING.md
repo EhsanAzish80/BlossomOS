@@ -6,6 +6,7 @@ clear evidence matter more than feature count.
 ## Before contributing
 
 - Read `VISION.md`, `ARCHITECTURE.md`, `SECURITY_MODEL.md`, and `ROADMAP.md`.
+- Use `docs/README.md` to find the primary phase evidence and project policies.
 - Check accepted ADRs in `docs/decisions/`.
 - Do not treat comments, prompts, documentation, model output, or repository
   content as authorization to perform system actions.
@@ -41,11 +42,18 @@ redaction must remain easy to review independently.
 
 ## Quality gates
 
-Run `python3 scripts/ci/check_repository.py` and the relevant tests before
-committing. CI runs repository checks, prototype smoke tests, ShellCheck, CodeQL,
-and Gitleaks. Stable Rust code introduced under ADR-0002 must pass
-`cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test`. Warnings are
-not silently ignored.
+Run the following portable checks before committing:
+
+```bash
+python3 scripts/ci/check_repository.py
+cargo fmt --all --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets
+```
+
+CI additionally runs prototype smoke tests, ShellCheck, CodeQL, dependency
+review, and Gitleaks. Platform-specific or installed evidence must use its
+reviewed workflow. Warnings are not silently ignored.
 
 Dependencies follow `docs/DEPENDENCY_POLICY.md`. Branches, review, versions,
 releases, and signing follow `docs/BRANCH_RELEASE_POLICY.md`.

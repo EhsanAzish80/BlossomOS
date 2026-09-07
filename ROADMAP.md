@@ -341,8 +341,6 @@ records completion at the accepted boundary.
   fixed diagnostic. The ARM64 guest renders every fixed preview field and the
   correlated authoritative activity projection. Installed denial and
   Escape-cancellation terminate without execution or verification events.
-- [ ] Add launcher, notifications, system status, and agent surfaces only as
-  separately reviewed increments after the first slice preserves the boundary.
 - [x] Produce installed target evidence and an independent Phase 6 exit audit.
   A separate Apple Silicon ARM64 VM experiment has verified its isolated
   image-builder boot. A frozen September 3 snapshot resolved the initial ARM
@@ -374,6 +372,10 @@ records completion at the accepted boundary.
 The accepted design baseline and exit evidence are tracked in
 `docs/PHASE_6_BASELINE.md`. Phase 6 adds no capability merely to make a UI
 demonstration work.
+
+Deferred beyond the completed Phase 6 boundary: launcher, notifications,
+broader system-status UI, and agent surfaces. Each requires its own reviewed
+increment and is not counted as unfinished Phase 6 work.
 
 Exit: the shell can operate the tested vertical slices without XFCE dependencies.
 

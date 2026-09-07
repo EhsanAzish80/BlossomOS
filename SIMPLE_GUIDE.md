@@ -1,5 +1,10 @@
 # BlossomOS - Easy Setup Guide
 
+> [!CAUTION]
+> Historical prototype guide. These commands are preserved for provenance and
+> are not a supported Blossom OS installation path. See [README.md](README.md)
+> and [ROADMAP.md](ROADMAP.md) for current status.
+
 ## 🚀 Quick Start (Simplified)
 
 From now on, just use these commands:

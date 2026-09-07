@@ -1,5 +1,11 @@
 # BlossomOS Architecture
 
+> [!CAUTION]
+> Historical prototype document. It describes the preserved XFCE/Python
+> experiment and is not the current architecture contract. See
+> [ARCHITECTURE.md](../ARCHITECTURE.md) for the reviewed target architecture and
+> [the documentation hub](README.md) for current evidence.
+
 ## System Overview
 
 ```
