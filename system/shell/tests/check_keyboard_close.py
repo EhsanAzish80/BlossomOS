@@ -17,8 +17,14 @@ ACTIVITY_PATTERN = re.compile(
 
 
 def descendants(root):
+    if root is None:
+        return
     yield root
-    for index in range(root.childCount):
+    try:
+        child_count = root.childCount
+    except (AttributeError, LookupError, RuntimeError):
+        return
+    for index in range(child_count):
         try:
             yield from descendants(root.getChildAtIndex(index))
         except (LookupError, RuntimeError):
@@ -26,11 +32,14 @@ def descendants(root):
 
 
 def named(name):
-    return [
-        node
-        for node in descendants(pyatspi.Registry.getDesktop(0))
-        if node.name == name
-    ]
+    matches = []
+    for node in descendants(pyatspi.Registry.getDesktop(0)):
+        try:
+            if node.name == name:
+                matches.append(node)
+        except (AttributeError, LookupError, RuntimeError):
+            continue
+    return matches
 
 
 def wait_for(name):
@@ -136,7 +145,10 @@ def invoke(name):
 def activity_for_latest_request():
     records = []
     for node in descendants(pyatspi.Registry.getDesktop(0)):
-        match = ACTIVITY_PATTERN.match(node.name or "")
+        try:
+            match = ACTIVITY_PATTERN.match(node.name or "")
+        except (AttributeError, LookupError, RuntimeError):
+            continue
         if match:
             records.append(
                 (int(match.group(1)), match.group(2), match.group(3), match.group(4))
