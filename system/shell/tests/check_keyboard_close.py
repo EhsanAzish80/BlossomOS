@@ -200,7 +200,7 @@ press("space")
 require_alert("Status: verified")
 
 # Escape is a global window shortcut and must cancel without execution.
-focus_main_and_press("space")
+invoke("Request kernel identity")
 focus_approval()
 press("Escape")
 wait_compositor_window_absent("Blossom OS approval")
