@@ -86,8 +86,12 @@ pub use model_runtime::{
 #[cfg(debug_assertions)]
 pub use model_runtime::{SyntheticProviderPackage, fixed_synthetic_provider_package};
 pub use network_connectivity::{
-    NetworkConnectivity, NetworkConnectivityObservation, NetworkConnectivityObservationError,
-    validate_network_connectivity_observation,
+    DBUS_PROPERTIES_INTERFACE as NETWORK_DBUS_PROPERTIES_INTERFACE,
+    NETWORK_CONNECTIVITY_READ_TIMEOUT_MS, NETWORK_MANAGER_DESTINATION, NETWORK_MANAGER_INTERFACE,
+    NETWORK_MANAGER_PATH, NetworkConnectivity, NetworkConnectivityObservation,
+    NetworkConnectivityObservationError, NetworkConnectivityProvider, NetworkConnectivityReadError,
+    NetworkManagerConnectivityProvider, SYSTEM_BUS_ADDRESS as NETWORK_SYSTEM_BUS_ADDRESS,
+    UnavailableNetworkConnectivityProvider, validate_network_connectivity_observation,
 };
 pub use orchestration::{
     MAX_PLAN_STEPS, OrchestrationError, OrchestrationEvent, PlanError, PlanId, PlanOrchestrator,
