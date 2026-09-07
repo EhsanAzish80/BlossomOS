@@ -1,8 +1,9 @@
 # Phase 7 battery context core
 
-Status: implemented as the first ADR-0022 checkpoint. No native adapter,
-production policy, shell projection, model context, or installed-runtime claim
-is included.
+Status: implemented as the first ADR-0022 checkpoint. The native adapter was
+added and independently evidenced in `docs/PHASE_7_BATTERY_UPOWER.md`. No
+production request route, shell projection, model context, or installed-runtime
+claim is included here.
 
 ## Closed registry
 
@@ -45,8 +46,8 @@ sockets and failed with `Operation not permitted`. The unchanged suite passed
 when rerun with the required local socket permission; this was an environment
 restriction, not a product failure.
 
-## Remaining gate
+## Next gate
 
-The next checkpoint is the fixed UPower system-D-Bus adapter. Until its owner,
-property, timeout, replacement, present/absent, and failure tests pass, this
-core schema makes no claim about reading a real battery.
+The next checkpoint routes the fixed request through policy, verification, and
+content-minimized audit. Until that boundary passes, the adapter is not a
+shell- or model-callable context service.

@@ -16,7 +16,8 @@ creating a generic discovery API or invisible personal history.
    first core checkpoint; evidence is recorded in
    `docs/PHASE_7_BATTERY_CORE.md`.
 3. Add the fixed UPower system-D-Bus adapter with peer checks, exact property
-   allowlist, timeout, reply bound, and private-bus adversarial tests.
+   allowlist, timeout, reply bound, and private-bus adversarial tests. Complete;
+   evidence is recorded in `docs/PHASE_7_BATTERY_UPOWER.md`.
 4. Route the battery request through existing policy, verification, and
    content-minimized audit paths. Add no command or executor fallback.
 5. Add a narrow shell projection only after the service boundary passes. Keep
@@ -62,3 +63,6 @@ notifications, file access, project discovery, or system mutation.
 
 The broader Phase 7 exit remains unchanged: every added context source must be
 typed, permissioned, observable, and testable.
+
+The next implementation checkpoint is 4: route the fixed battery request
+through the existing policy, verification, and content-minimized audit paths.
