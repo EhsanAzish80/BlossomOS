@@ -306,13 +306,13 @@ Exit: Blossom never reports success solely because a command was issued.
 
 ## Phase 6: Blossom Shell
 
-Status: active. ADR-0021 is accepted. A Linux-only unprivileged session IPC
-service and the first narrow Quickshell presentation surface are implemented
-behind inactive production gates. The ARM64 experiment now has installed
-graphical preview, denial, Escape-cancellation, approve-once verification,
+Status: complete (2026-09-07). ADR-0021 is accepted. A Linux-only unprivileged
+session IPC service and the first narrow Quickshell presentation surface are
+implemented behind inactive production gates. The ARM64 experiment now has
+installed graphical preview, denial, Escape-cancellation, approve-once verification,
 no-touch expiry, and fail-closed service-loss evidence. The x86-64 installed
-compatibility gate now passes; the complete interaction matrix and independent
-exit audit remain open.
+interaction and accessibility matrix passes, and the independent exit audit
+records completion at the accepted boundary.
 
 - [x] Review and accept the shell IPC and approval-surface ADR.
 - [x] Freeze a closed, authenticated, versioned, size-bounded session IPC
@@ -343,7 +343,7 @@ exit audit remain open.
   Escape-cancellation terminate without execution or verification events.
 - [ ] Add launcher, notifications, system status, and agent surfaces only as
   separately reviewed increments after the first slice preserves the boundary.
-- [ ] Produce installed target evidence and an independent Phase 6 exit audit.
+- [x] Produce installed target evidence and an independent Phase 6 exit audit.
   A separate Apple Silicon ARM64 VM experiment has verified its isolated
   image-builder boot. A frozen September 3 snapshot resolved the initial ARM
   Hyprland/Aquamarine mismatch; all 279 diagnostic packages passed signature
@@ -359,19 +359,19 @@ exit audit remain open.
   A bounded native-client timer now triggers backend-authoritative expiry; the
   installed graphical panel closes with terminal cancellation and no execution.
   A fixed-name owner watcher now closes pending UI and reports unavailable when
-  the broker disappears. Broader keyboard/close behavior, assistive-technology
-  behavior, and durable audit recovery remain open. See
+  the broker disappears. See
   `docs/PHASE_6_APPLE_SILICON_VALIDATION.md`. ARM evidence does not replace the
-  x86-64 gate. That separate gate passed in run `34032625185` at signed commit
-  `41a84f7`: the pinned Arch package set, installed service/plugin tree, real
-  Qt/D-Bus wire path, nested Niri parent, real Hyprland, Quickshell QML load,
-  and service activation all passed on a trusted ephemeral Linux runner with a
-  DRM render node. Hosted run `33890423701` remains diagnostic failure evidence.
-  The passing evidence and its limits are in
-  `docs/PHASE_6_INSTALLED_EVIDENCE.md`; remaining gates are recorded in
+  x86-64 gate. Final run `34102303699` passed at signed commit `b3bd89e`: the
+  pinned package set, installed service/plugin tree, real Qt/D-Bus path, fixed
+  networkless executor, nested compositor, real Hyprland and Quickshell,
+  keyboard close/deny/approve flows, and AT-SPI accessibility checks all passed
+  on the trusted Intel GPU runner. ADR-0021 intentionally provides no durable
+  activity recovery; replacement and bus-loss tests prove stale previews fail
+  closed. The passing evidence and its limits are in
+  `docs/PHASE_6_INSTALLED_EVIDENCE.md`; the completion decision is in
   `docs/PHASE_6_EXIT_AUDIT.md`.
 
-The active design baseline and exit evidence are tracked in
+The accepted design baseline and exit evidence are tracked in
 `docs/PHASE_6_BASELINE.md`. Phase 6 adds no capability merely to make a UI
 demonstration work.
 
