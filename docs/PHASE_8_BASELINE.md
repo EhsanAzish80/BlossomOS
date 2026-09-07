@@ -1,6 +1,6 @@
 # Phase 8 memory and personalization baseline
 
-Status: active; ADR-0024 is accepted for the first bounded slice.
+Status: complete on 2026-09-07 for the accepted bounded slice.
 
 Phase 8 begins from the completed typed context boundary in Phase 7. Its goal
 is to make memory useful without turning transient activity, model inference,
@@ -31,10 +31,12 @@ or security history into invisible durable profiling.
    shell-facing projections are complete; the existing public request registry
    remains inactive for this slice.
 8. Produce deterministic, adversarial, restart, corruption, migration,
-   deletion, encryption, and real installed Linux evidence. Deterministic and
-   local installed probes pass; the real x86-64 workflow is pending.
+   deletion, encryption, and real installed Linux evidence. Complete. Version
+   1 has no predecessor migration; incompatible schemas fail closed. Installed
+   x86-64 run `34134127972` passed.
 9. Perform an independent exit audit and update the roadmap only after
-   every required lifecycle control and evidence gate passes.
+   every required lifecycle control and evidence gate passes. Complete in
+   `docs/PHASE_8_EXIT_AUDIT.md`.
 
 ## First slice
 
@@ -69,4 +71,5 @@ audit reuse, behavioral profiles, or generic storage access.
 - Independent evidence document preserving distribution, backup, recovery,
   hardware, and release limitations.
 
-Phase 8 exits only when no durable memory can be created invisibly.
+Phase 8 exits with no path that can create durable memory invisibly. The public
+tool registry remains inactive for this bounded slice.
