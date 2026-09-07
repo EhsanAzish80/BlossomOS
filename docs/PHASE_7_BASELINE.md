@@ -33,8 +33,15 @@ creating a generic discovery API or invisible personal history.
    own privacy and lifetime review. ADR-0023 accepts the next bounded source,
    a fixed network-connectivity enum that exposes no network identifiers or
    external probe authority.
-8. Implement, route, project, and produce installed evidence for ADR-0023 using
-   the same core-to-host ordering as the first slice.
+8. Add the inactive closed registry member, capability, typed value, strict
+   validator, and deterministic tests for ADR-0023. Complete; evidence is in
+   `docs/PHASE_7_NETWORK_CORE.md`.
+9. Add the fixed NetworkManager adapter and adversarial transport tests without
+   activating a public request.
+10. Activate the argument-free request atomically with policy, verification,
+    content-minimized audit, and failure routing.
+11. Add the narrow shell projection, then produce real installed offline and
+    online-class evidence and an independent second-slice audit.
 
 ## First slice
 
@@ -72,6 +79,6 @@ notifications, file access, project discovery, or system mutation.
 The broader Phase 7 exit remains unchanged: every added context source must be
 typed, permissioned, observable, and testable.
 
-The next implementation checkpoint is 8: implement the accepted fixed network
-connectivity source from core registry through installed evidence without
-widening its native or presentation authority.
+The next implementation checkpoint is 9: add the fixed NetworkManager adapter
+and adversarial transport tests without widening native authority or activating
+a partially routed request.

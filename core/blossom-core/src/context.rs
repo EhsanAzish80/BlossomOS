@@ -4,24 +4,30 @@ use serde::Serialize;
 pub const CONTEXT_PROTOCOL_VERSION: u16 = 1;
 pub const BATTERY_MAX_AGE_MS: u64 = 5_000;
 pub const BATTERY_MIN_POLL_INTERVAL_MS: u64 = 1_000;
+pub const NETWORK_CONNECTIVITY_MAX_AGE_MS: u64 = 5_000;
+pub const NETWORK_CONNECTIVITY_MIN_POLL_INTERVAL_MS: u64 = 1_000;
 pub const MAX_CONTEXT_RESPONSE_BYTES: usize = 4 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum ContextSource {
     #[serde(rename = "system.battery.summary")]
     SystemBatterySummary,
+    #[serde(rename = "system.network.connectivity")]
+    SystemNetworkConnectivity,
 }
 
 impl ContextSource {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::SystemBatterySummary => "system.battery.summary",
+            Self::SystemNetworkConnectivity => "system.network.connectivity",
         }
     }
 
     pub fn capability(self) -> Capability {
         match self {
             Self::SystemBatterySummary => Capability::SystemReadBatterySummary,
+            Self::SystemNetworkConnectivity => Capability::SystemReadNetworkConnectivity,
         }
     }
 
@@ -32,12 +38,14 @@ impl ContextSource {
     pub fn max_age_ms(self) -> u64 {
         match self {
             Self::SystemBatterySummary => BATTERY_MAX_AGE_MS,
+            Self::SystemNetworkConnectivity => NETWORK_CONNECTIVITY_MAX_AGE_MS,
         }
     }
 
     pub fn min_poll_interval_ms(self) -> u64 {
         match self {
             Self::SystemBatterySummary => BATTERY_MIN_POLL_INTERVAL_MS,
+            Self::SystemNetworkConnectivity => NETWORK_CONNECTIVITY_MIN_POLL_INTERVAL_MS,
         }
     }
 }
@@ -110,6 +118,25 @@ mod tests {
         assert_eq!(
             policy.evaluate_capability(capability),
             PolicyDecision::Allow
+        );
+    }
+
+    #[test]
+    fn network_registry_metadata_is_fixed_and_default_deny() {
+        use crate::{PolicyDecision, PolicyEngine};
+
+        let source = ContextSource::SystemNetworkConnectivity;
+        assert_eq!(source.as_str(), "system.network.connectivity");
+        assert_eq!(
+            source.capability().as_str(),
+            "system.read:network.connectivity"
+        );
+        assert_eq!(source.schema_version(), 1);
+        assert_eq!(source.max_age_ms(), 5_000);
+        assert_eq!(source.min_poll_interval_ms(), 1_000);
+        assert_eq!(
+            PolicyEngine::default().evaluate_capability(source.capability()),
+            PolicyDecision::Deny
         );
     }
 }

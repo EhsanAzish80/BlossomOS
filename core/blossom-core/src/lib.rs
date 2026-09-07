@@ -9,6 +9,7 @@ pub mod executor;
 pub mod file_read;
 pub mod memory_summary;
 pub mod model_runtime;
+pub mod network_connectivity;
 pub mod orchestration;
 pub mod os_identity;
 pub mod policy;
@@ -37,7 +38,8 @@ pub use battery_summary::{
 };
 pub use context::{
     BATTERY_MAX_AGE_MS, BATTERY_MIN_POLL_INTERVAL_MS, CONTEXT_PROTOCOL_VERSION, ContextObservation,
-    ContextSource, ContextValue, MAX_CONTEXT_RESPONSE_BYTES,
+    ContextSource, ContextValue, MAX_CONTEXT_RESPONSE_BYTES, NETWORK_CONNECTIVITY_MAX_AGE_MS,
+    NETWORK_CONNECTIVITY_MIN_POLL_INTERVAL_MS,
 };
 pub use engine::{
     BeginOutcome, BlossomEngine, CompletionOutcome, EngineError, ToolOutput, command_for,
@@ -83,6 +85,10 @@ pub use model_runtime::{
 };
 #[cfg(debug_assertions)]
 pub use model_runtime::{SyntheticProviderPackage, fixed_synthetic_provider_package};
+pub use network_connectivity::{
+    NetworkConnectivity, NetworkConnectivityObservation, NetworkConnectivityObservationError,
+    validate_network_connectivity_observation,
+};
 pub use orchestration::{
     MAX_PLAN_STEPS, OrchestrationError, OrchestrationEvent, PlanError, PlanId, PlanOrchestrator,
     PlanOutcome, ProposedPlanStep, RecoveryDisposition, RetryDisposition, RollbackDisposition,

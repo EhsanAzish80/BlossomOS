@@ -9,6 +9,7 @@ pub enum Capability {
     SystemReadMemorySummary,
     SystemReadStorageSummary,
     SystemReadBatterySummary,
+    SystemReadNetworkConnectivity,
     ProcessReadSelf,
     ProcessReadList,
     FilesReadContent,
@@ -25,6 +26,7 @@ impl Capability {
             Self::SystemReadMemorySummary => "system.read:memory.summary",
             Self::SystemReadStorageSummary => "system.read:storage.summary",
             Self::SystemReadBatterySummary => "system.read:battery.summary",
+            Self::SystemReadNetworkConnectivity => "system.read:network.connectivity",
             Self::ProcessReadSelf => "process.read:self",
             Self::ProcessReadList => "process.read:list",
             Self::FilesReadContent => "files.read:content",
@@ -148,6 +150,10 @@ mod tests {
         );
         assert_eq!(
             PolicyEngine::default().evaluate_capability(Capability::SystemReadBatterySummary),
+            PolicyDecision::Deny
+        );
+        assert_eq!(
+            PolicyEngine::default().evaluate_capability(Capability::SystemReadNetworkConnectivity),
             PolicyDecision::Deny
         );
     }
