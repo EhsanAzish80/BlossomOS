@@ -1,4 +1,6 @@
 use crate::approval::ApprovalError;
+use crate::battery_summary::{BatteryObservation, BatteryReadError};
+use crate::context::{ContextSource, ContextValue};
 use crate::executor::{ExecutionResult, ExecutorError};
 use crate::file_read::{FileContent, FileReadError};
 use crate::memory_summary::{MemorySummary, MemorySummaryError};
@@ -18,6 +20,22 @@ use crate::workspace_create::{
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BatteryAuditStatus {
+    Present,
+    Absent,
+}
+
+impl BatteryAuditStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Present => "present",
+            Self::Absent => "absent",
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -114,6 +132,12 @@ pub enum AuditEvent {
         resource_path: String,
         source: String,
     },
+    BatterySummaryReadFinished {
+        request_id: String,
+        source: ContextSource,
+        schema_version: u16,
+        status: BatteryAuditStatus,
+    },
     ProcessSelfReadFinished {
         request_id: String,
         source: String,
@@ -180,6 +204,11 @@ pub enum AuditEvent {
         request_id: String,
         resource: String,
         error: StorageSummaryError,
+    },
+    BatterySummaryReadFailed {
+        request_id: String,
+        resource: ContextSource,
+        error: BatteryReadError,
     },
     ProcessSelfReadFailed {
         request_id: String,
@@ -262,6 +291,21 @@ impl AuditEvent {
             request_id: request.request_id().as_str().into(),
             resource_path: summary.resource_path.clone(),
             source: "statvfs".into(),
+        }
+    }
+
+    pub fn battery_summary_finished(
+        request: &ToolRequest,
+        observation: &BatteryObservation,
+    ) -> Self {
+        Self::BatterySummaryReadFinished {
+            request_id: request.request_id().as_str().into(),
+            source: observation.source,
+            schema_version: observation.schema_version,
+            status: match observation.observation {
+                ContextValue::Present(_) => BatteryAuditStatus::Present,
+                ContextValue::Absent => BatteryAuditStatus::Absent,
+            },
         }
     }
 
@@ -416,6 +460,30 @@ pub(crate) fn digest_bytes(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn battery_audit_records_boundary_metadata_not_battery_content() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-battery","tool":"system.battery.summary","arguments":{}}"#,
+        )
+        .expect("valid battery request");
+        let observation = crate::ContextObservation::new(
+            crate::ContextSource::SystemBatterySummary,
+            987_654_321,
+            crate::ContextValue::Present(crate::BatterySummary {
+                percentage: 73,
+                state: crate::BatteryState::Discharging,
+            }),
+        );
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::battery_summary_finished(&request, &observation));
+        let encoded = serde_json::to_string(audit.records()).expect("serializable audit records");
+        assert!(encoded.contains("system.battery.summary"));
+        assert!(encoded.contains("present"));
+        assert!(!encoded.contains("987654321"));
+        assert!(!encoded.contains("percentage"));
+        assert!(!encoded.contains("discharging"));
+    }
 
     #[test]
     fn chains_records_and_redacts_output_content() {

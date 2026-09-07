@@ -64,6 +64,7 @@ impl PolicyEngine {
             ToolRequest::SystemUptime { .. } => Capability::SystemReadUptime,
             ToolRequest::SystemMemorySummary { .. } => Capability::SystemReadMemorySummary,
             ToolRequest::SystemStorageSummary { .. } => Capability::SystemReadStorageSummary,
+            ToolRequest::SystemBatterySummary { .. } => Capability::SystemReadBatterySummary,
             ToolRequest::ProcessSelf { .. } => Capability::ProcessReadSelf,
             ToolRequest::ProcessList { .. } => Capability::ProcessReadList,
             ToolRequest::FilesReadContent { .. } => Capability::FilesReadContent,
@@ -192,6 +193,11 @@ mod tests {
                 ToolRequest::SystemStorageSummary { request_id: id() },
                 Capability::SystemReadStorageSummary,
                 "system.read:storage.summary",
+            ),
+            (
+                ToolRequest::SystemBatterySummary { request_id: id() },
+                Capability::SystemReadBatterySummary,
+                "system.read:battery.summary",
             ),
             (
                 ToolRequest::ProcessSelf { request_id: id() },

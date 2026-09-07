@@ -1061,6 +1061,16 @@ fn describe_event(event: &AuditEvent) -> String {
             resource_path,
             source,
         } => format!("request {request_id} read {resource_path} storage summary via {source}"),
+        AuditEvent::BatterySummaryReadFinished {
+            request_id,
+            source,
+            schema_version,
+            status,
+        } => format!(
+            "request {request_id} read {} battery summary schema={schema_version}, status={}",
+            source.as_str(),
+            status.as_str()
+        ),
         AuditEvent::ProcessSelfReadFinished { request_id, source } => {
             format!("request {request_id} read its own process identity via {source}")
         }
@@ -1125,7 +1135,10 @@ fn describe_event(event: &AuditEvent) -> String {
             request_id,
             resource,
             error,
-        } => format!("request {request_id} native read of {resource} failed ({error})"),
+        } => format!(
+            "request {request_id} native read of {} failed ({error})",
+            resource.as_str()
+        ),
         AuditEvent::UptimeReadFailed {
             request_id,
             resource,
@@ -1141,6 +1154,14 @@ fn describe_event(event: &AuditEvent) -> String {
             resource,
             error,
         } => format!("request {request_id} native read of {resource} failed ({error})"),
+        AuditEvent::BatterySummaryReadFailed {
+            request_id,
+            resource,
+            error,
+        } => format!(
+            "request {request_id} native read of {} failed ({error})",
+            resource.as_str()
+        ),
         AuditEvent::ProcessSelfReadFailed {
             request_id,
             resource,

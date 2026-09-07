@@ -27,7 +27,7 @@ pub mod verification;
 pub mod workspace_create;
 
 pub use approval::{ApprovalError, ApprovalStore, ApprovalToken};
-pub use audit::{AuditEvent, AuditLog, AuditRecord};
+pub use audit::{AuditEvent, AuditLog, AuditRecord, BatteryAuditStatus};
 pub use battery_summary::{
     BATTERY_READ_TIMEOUT_MS, BatteryObservation, BatteryObservationError, BatteryReadError,
     BatteryState, BatterySummary, BatterySummaryProvider, DBUS_PROPERTIES_INTERFACE,
@@ -135,9 +135,9 @@ pub use uptime::{
     UnavailableUptimeProvider, UptimeError, UptimeProvider, parse_proc_uptime,
 };
 pub use verification::{
-    Verification, verify_execution, verify_file_content, verify_memory_summary, verify_os_identity,
-    verify_process_list, verify_process_self, verify_service_status, verify_storage_summary,
-    verify_uptime, verify_workspace_file_created,
+    Verification, verify_battery_summary, verify_execution, verify_file_content,
+    verify_memory_summary, verify_os_identity, verify_process_list, verify_process_self,
+    verify_service_status, verify_storage_summary, verify_uptime, verify_workspace_file_created,
 };
 pub use workspace_create::{
     AtomicWorkspaceFileCreator, DirectoryIdentity, UnavailableWorkspaceCreateProvider,

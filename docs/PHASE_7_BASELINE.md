@@ -19,7 +19,8 @@ creating a generic discovery API or invisible personal history.
    allowlist, timeout, reply bound, and private-bus adversarial tests. Complete;
    evidence is recorded in `docs/PHASE_7_BATTERY_UPOWER.md`.
 4. Route the battery request through existing policy, verification, and
-   content-minimized audit paths. Add no command or executor fallback.
+   content-minimized audit paths. Add no command or executor fallback. Complete;
+   evidence is recorded in `docs/PHASE_7_BATTERY_ROUTING.md`.
 5. Add a narrow shell projection only after the service boundary passes. Keep
    generic D-Bus and registry discovery out of QML.
 6. Produce installed present-battery and no-battery evidence, protected
@@ -64,5 +65,5 @@ notifications, file access, project discovery, or system mutation.
 The broader Phase 7 exit remains unchanged: every added context source must be
 typed, permissioned, observable, and testable.
 
-The next implementation checkpoint is 4: route the fixed battery request
-through the existing policy, verification, and content-minimized audit paths.
+The next implementation checkpoint is 5: add a narrow shell projection without
+giving QML generic context, D-Bus, command, or registry-discovery authority.
