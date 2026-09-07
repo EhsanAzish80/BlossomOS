@@ -193,7 +193,9 @@ wait_for_latest_activity([
 ])
 
 # A compositor close request follows QML onClosing and must also cancel.
-focus_main_and_press("space")
+press("Tab")
+wait_focused("Request kernel identity")
+press("space")
 focus_approval()
 dispatch("closewindow", "title:^(Blossom OS approval)$")
 wait_compositor_window_absent("Blossom OS approval")
