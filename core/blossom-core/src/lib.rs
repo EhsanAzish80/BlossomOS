@@ -29,7 +29,10 @@ pub mod workspace_create;
 pub use approval::{ApprovalError, ApprovalStore, ApprovalToken};
 pub use audit::{AuditEvent, AuditLog, AuditRecord};
 pub use battery_summary::{
-    BatteryObservation, BatteryObservationError, BatteryState, BatterySummary,
+    BATTERY_READ_TIMEOUT_MS, BatteryObservation, BatteryObservationError, BatteryReadError,
+    BatteryState, BatterySummary, BatterySummaryProvider, DBUS_PROPERTIES_INTERFACE,
+    SYSTEM_BUS_ADDRESS as BATTERY_SYSTEM_BUS_ADDRESS, UPOWER_DESTINATION, UPOWER_DEVICE_INTERFACE,
+    UPOWER_DISPLAY_DEVICE_PATH, UnavailableBatterySummaryProvider, UpowerBatterySummaryProvider,
     validate_battery_observation,
 };
 pub use context::{
