@@ -126,6 +126,13 @@ def require_alert(name):
         raise AssertionError(f"terminal state is not an accessibility alert: {name}")
 
 
+def invoke(name):
+    node = wait_for(name)
+    action = node.queryAction()
+    if action.nActions < 1 or not action.doAction(0):
+        raise AssertionError(f"accessible action failed: {name}")
+
+
 def activity_for_latest_request():
     records = []
     for node in descendants(pyatspi.Registry.getDesktop(0)):
@@ -172,6 +179,7 @@ focus_approval()
 press("Escape")
 wait_compositor_window_absent("Blossom OS approval")
 require_alert("Status: cancelled")
+invoke("Refresh activity")
 wait_for_latest_activity([
     "accepted",
     "policy_ask",
@@ -185,6 +193,7 @@ focus_approval()
 dispatch("closewindow", "title:^(Blossom OS approval)$")
 wait_compositor_window_absent("Blossom OS approval")
 require_alert("Status: cancelled")
+invoke("Refresh activity")
 wait_for_latest_activity([
     "accepted",
     "policy_ask",
