@@ -47,8 +47,12 @@ existing model-adapter tests could not bind loopback sockets and reported
 `Operation not permitted`. The unchanged suite passed with the required local
 socket permission. This was an environment restriction, not a product failure.
 
-The final Linux x64 Quality run for the signed checkpoint is recorded after the
-remote gate completes.
+The authoritative Linux x64 Quality run is
+[`34109609660`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/34109609660)
+(job `101702546857`). It passed on signed implementation commit `49a1840` in 2
+minutes 41 seconds, including repository and packaging checks, the Linux-only
+UPower adapter tests, QML validation, smoke tests, ShellCheck, formatting,
+Clippy, the complete Rust suite, and the release fail-closed gate.
 
 ## Remaining boundary
 
