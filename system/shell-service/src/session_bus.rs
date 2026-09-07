@@ -1,8 +1,8 @@
 use blossom_core::executor::bubblewrap::BubblewrapExecutor;
 use blossom_core::{
-    BatterySummaryProvider, Executor, SHELL_BUS_NAME, SHELL_INTERFACE, SHELL_OBJECT_PATH,
-    SHELL_PROTOCOL_VERSION, ShellClientRequest, ShellDiagnosticService, ShellPeerId,
-    UpowerBatterySummaryProvider, decode_shell_client_request,
+    BatterySummaryProvider, Executor, NetworkManagerConnectivityProvider, SHELL_BUS_NAME,
+    SHELL_INTERFACE, SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellClientRequest,
+    ShellDiagnosticService, ShellPeerId, UpowerBatterySummaryProvider, decode_shell_client_request,
 };
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -36,6 +36,9 @@ pub trait ShellRequestHandler: Send {
     ) -> Result<Vec<u8>, HandlerError>;
     fn activity(&mut self, after: Option<u64>, limit: u16) -> Result<Vec<u8>, HandlerError>;
     fn battery(&mut self, _now_ms: u64) -> Result<Vec<u8>, HandlerError> {
+        Err(HandlerError)
+    }
+    fn network(&mut self, _now_ms: u64) -> Result<Vec<u8>, HandlerError> {
         Err(HandlerError)
     }
     fn disconnect(&mut self, peer: &ShellPeerId, now_ms: u64) -> Result<(), HandlerError>;
@@ -92,6 +95,10 @@ impl<E: Executor + Send, B: BatterySummaryProvider + Send> ShellRequestHandler
 
     fn battery(&mut self, now_ms: u64) -> Result<Vec<u8>, HandlerError> {
         encode(&self.read_battery(now_ms).map_err(|_| HandlerError)?)
+    }
+
+    fn network(&mut self, now_ms: u64) -> Result<Vec<u8>, HandlerError> {
+        encode(&self.read_network(now_ms).map_err(|_| HandlerError)?)
     }
 
     fn disconnect(&mut self, peer: &ShellPeerId, now_ms: u64) -> Result<(), HandlerError> {
@@ -207,6 +214,22 @@ impl ShellBusService {
             .battery(now_ms())
             .map_err(|_| denied())
     }
+
+    #[zbus(name = "ReadNetworkConnectivity1")]
+    async fn read_network_connectivity1(
+        &self,
+        version: u16,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> zbus::fdo::Result<Vec<u8>> {
+        check_version(version)?;
+        let _peer = authenticated_peer(&header, connection).await?;
+        self.handler
+            .lock()
+            .map_err(|_| failed())?
+            .network(now_ms())
+            .map_err(|_| denied())
+    }
 }
 
 fn check_version(version: u16) -> zbus::fdo::Result<()> {
@@ -317,9 +340,10 @@ fn monitor_disconnects(
 pub fn run_production() -> Result<(), ShellProcessError> {
     let mut nonce = [0_u8; 8];
     getrandom::fill(&mut nonce).map_err(|_| ShellProcessError::RandomnessUnavailable)?;
-    let service = ShellDiagnosticService::with_battery_summary(
+    let service = ShellDiagnosticService::with_context_providers(
         BubblewrapExecutor::phase1_default(),
         UpowerBatterySummaryProvider,
+        NetworkManagerConnectivityProvider,
         u64::from_ne_bytes(nonce),
     );
     let connection = zbus::blocking::connection::Builder::session()
@@ -418,6 +442,9 @@ mod tests {
         fn battery(&mut self, _: u64) -> Result<Vec<u8>, HandlerError> {
             Ok(br#"{"version":1,"status":"present","percentage":50,"state":"charging","expires_at_ms":5000}"#.to_vec())
         }
+        fn network(&mut self, _: u64) -> Result<Vec<u8>, HandlerError> {
+            Ok(br#"{"version":1,"connectivity":"online","expires_at_ms":5000}"#.to_vec())
+        }
         fn disconnect(&mut self, peer: &ShellPeerId, _: u64) -> Result<(), HandlerError> {
             assert_eq!(peer.as_str(), self.expected_peer);
             self.disconnects.fetch_add(1, Ordering::SeqCst);
@@ -488,6 +515,16 @@ mod tests {
         let wrong_battery_version: Result<Vec<u8>, _> =
             proxy.call("ReadBatterySummary1", &(2_u16,));
         assert!(wrong_battery_version.is_err());
+        let network: Vec<u8> = proxy
+            .call("ReadNetworkConnectivity1", &(SHELL_PROTOCOL_VERSION,))
+            .expect("fixed network call");
+        assert_eq!(
+            network,
+            br#"{"version":1,"connectivity":"online","expires_at_ms":5000}"#
+        );
+        let wrong_network_version: Result<Vec<u8>, _> =
+            proxy.call("ReadNetworkConnectivity1", &(2_u16,));
+        assert!(wrong_network_version.is_err());
         let unknown: Result<(), _> = proxy.call("Execute", &("/bin/sh",));
         assert!(unknown.is_err());
         assert_eq!(calls.load(Ordering::SeqCst), 1);

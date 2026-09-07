@@ -1,5 +1,8 @@
 use crate::request::{RequestError, RequestId};
-use crate::{BatteryObservation, BatteryState, ContextValue};
+use crate::{
+    BatteryObservation, BatteryState, ContextValue, NetworkConnectivity,
+    NetworkConnectivityObservation,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt::{self, Write};
@@ -48,6 +51,28 @@ impl ShellBatteryProjection {
                 .observed_at_unix_ms
                 .saturating_add(observation.max_age_ms),
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ShellNetworkProjection {
+    pub version: u16,
+    pub connectivity: NetworkConnectivity,
+    pub expires_at_ms: u64,
+}
+
+impl ShellNetworkProjection {
+    pub fn from_verified(observation: &NetworkConnectivityObservation) -> Option<Self> {
+        let ContextValue::Present(connectivity) = observation.observation else {
+            return None;
+        };
+        Some(Self {
+            version: SHELL_PROTOCOL_VERSION,
+            connectivity,
+            expires_at_ms: observation
+                .observed_at_unix_ms
+                .saturating_add(observation.max_age_ms),
+        })
     }
 }
 
@@ -466,5 +491,26 @@ mod tests {
                 "expires_at_ms": 15_000
             })
         );
+    }
+
+    #[test]
+    fn network_projection_contains_only_fixed_fresh_display_fields() {
+        let observation = crate::NetworkConnectivityObservation::new(
+            crate::ContextSource::SystemNetworkConnectivity,
+            10_000,
+            ContextValue::Present(crate::NetworkConnectivity::Limited),
+        );
+        let projection = ShellNetworkProjection::from_verified(&observation)
+            .expect("present verified network projection");
+        assert_eq!(projection.version, SHELL_PROTOCOL_VERSION);
+        assert_eq!(projection.connectivity, crate::NetworkConnectivity::Limited);
+        assert_eq!(projection.expires_at_ms, 15_000);
+        let encoded = serde_json::to_string(&projection).expect("projection serializes");
+        assert_eq!(
+            encoded,
+            r#"{"version":1,"connectivity":"limited","expires_at_ms":15000}"#
+        );
+        assert!(!encoded.contains("interface"));
+        assert!(!encoded.contains("address"));
     }
 }

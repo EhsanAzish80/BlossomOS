@@ -19,6 +19,7 @@ constexpr qsizetype MaxReplyBytes = 32 * 1024;
 constexpr quint16 ActivityLimit = 64;
 constexpr qulonglong MaxApprovalDelayMs = 60 * 1000;
 constexpr qulonglong MaxBatteryLifetimeMs = 5 * 1000;
+constexpr qulonglong MaxNetworkLifetimeMs = 5 * 1000;
 
 QDBusInterface fixedInterface() {
     return QDBusInterface(QString::fromLatin1(BusName), QString::fromLatin1(ObjectPath),
@@ -53,12 +54,15 @@ BlossomBroker::BlossomBroker(QObject *parent) : QObject(parent) {
     connect(&m_expiryTimer, &QTimer::timeout, this, &BlossomBroker::cancelPending);
     m_batteryExpiryTimer.setSingleShot(true);
     connect(&m_batteryExpiryTimer, &QTimer::timeout, this, &BlossomBroker::refreshBattery);
+    m_networkExpiryTimer.setSingleShot(true);
+    connect(&m_networkExpiryTimer, &QTimer::timeout, this, &BlossomBroker::refreshNetwork);
 }
 
 QString BlossomBroker::state() const { return m_state; }
 QVariantMap BlossomBroker::preview() const { return m_preview; }
 QVariantList BlossomBroker::activity() const { return m_activity; }
 QVariantMap BlossomBroker::battery() const { return m_battery; }
+QVariantMap BlossomBroker::network() const { return m_network; }
 
 void BlossomBroker::requestSystemUname() {
     if (m_state == QStringLiteral("requesting") || m_state == QStringLiteral("waiting") ||
@@ -229,6 +233,46 @@ void BlossomBroker::refreshBattery() {
     });
 }
 
+void BlossomBroker::refreshNetwork() {
+    const quint64 generation = m_serviceGeneration;
+    const quint64 networkGeneration = ++m_networkGeneration;
+    auto interface = fixedInterface();
+    auto *watcher = new QDBusPendingCallWatcher(
+        interface.asyncCall(QStringLiteral("ReadNetworkConnectivity1"),
+                            QVariant::fromValue(ProtocolVersion)), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this, watcher, generation, networkGeneration] {
+        const QDBusPendingReply<QByteArray> reply = *watcher;
+        watcher->deleteLater();
+        if (generation != m_serviceGeneration) {
+            failClosed();
+            return;
+        }
+        if (networkGeneration != m_networkGeneration) return;
+        bool parsed = false;
+        const auto object = boundedObject(reply.value(), &parsed);
+        const auto connectivity = object.value(QStringLiteral("connectivity")).toString();
+        const auto expires = object.value(QStringLiteral("expires_at_ms"));
+        const bool validConnectivity = connectivity == QStringLiteral("offline") ||
+            connectivity == QStringLiteral("local") || connectivity == QStringLiteral("limited") ||
+            connectivity == QStringLiteral("online") || connectivity == QStringLiteral("unknown");
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        bool validExpiry = false;
+        const qulonglong expiresAt = expires.toVariant().toULongLong(&validExpiry);
+        const qulonglong remaining = now >= 0 && expiresAt > static_cast<qulonglong>(now)
+            ? expiresAt - static_cast<qulonglong>(now) : 0;
+        if (reply.isError() || !parsed || !validExpiry || object.size() != 3 ||
+            object.value(QStringLiteral("version")).toInt() != ProtocolVersion ||
+            !validConnectivity || remaining == 0 || remaining > MaxNetworkLifetimeMs) {
+            clearNetwork();
+            return;
+        }
+        m_network = object.toVariantMap();
+        emit networkChanged();
+        m_networkExpiryTimer.start(std::chrono::milliseconds(remaining + 1));
+    });
+}
+
 void BlossomBroker::handleOutcome(const QByteArray &bytes) {
     bool ok = false;
     const auto object = boundedObject(bytes, &ok);
@@ -261,6 +305,7 @@ void BlossomBroker::failClosed() {
     m_preview.clear();
     emit previewChanged();
     clearBattery();
+    clearNetwork();
     setState(QStringLiteral("unavailable"));
 }
 
@@ -270,6 +315,14 @@ void BlossomBroker::clearBattery() {
     if (m_battery == unavailable) return;
     m_battery = unavailable;
     emit batteryChanged();
+}
+
+void BlossomBroker::clearNetwork() {
+    m_networkExpiryTimer.stop();
+    const QVariantMap unavailable{{QStringLiteral("connectivity"), QStringLiteral("unavailable")}};
+    if (m_network == unavailable) return;
+    m_network = unavailable;
+    emit networkChanged();
 }
 
 void BlossomBroker::setState(const QString &value) {

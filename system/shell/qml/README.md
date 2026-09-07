@@ -7,7 +7,7 @@ projection. It does not infer success from a D-Bus reply: the displayed state
 and activity originate from the authoritative service projection.
 
 Phase 7 adds only the service-verified, expiring battery status, percentage,
-and closed state. QML cannot select a provider, source, lifetime, polling
+closed battery state, and closed network connectivity enum. QML cannot select a provider, source, lifetime, polling
 interval, D-Bus target, or additional field.
 
 The security QML runs in the dedicated standard Qt `blossom-shell-ui` process

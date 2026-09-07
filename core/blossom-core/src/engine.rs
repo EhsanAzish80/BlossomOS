@@ -70,7 +70,7 @@ pub struct BlossomEngine<
     workspace_create: W,
     service_status: V,
     battery_summary: B,
-    network_connectivity: Box<dyn NetworkConnectivityProvider>,
+    network_connectivity: Box<dyn NetworkConnectivityProvider + Send>,
     audit: AuditLog,
 }
 
@@ -480,7 +480,7 @@ impl<
     B: BatterySummaryProvider,
 > BlossomEngine<E, O, U, M, S, P, L, F, W, V, B>
 {
-    pub fn with_network_connectivity<N: NetworkConnectivityProvider + 'static>(
+    pub fn with_network_connectivity<N: NetworkConnectivityProvider + Send + 'static>(
         mut self,
         provider: N,
     ) -> Self {
