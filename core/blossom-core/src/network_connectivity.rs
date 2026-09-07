@@ -451,4 +451,139 @@ mod tests {
             Err(NetworkConnectivityReadError::UnsupportedPlatform)
         );
     }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    mod linux_dbus {
+        use super::*;
+        use std::io::{BufRead, BufReader};
+        use std::process::{Child, Command, Stdio};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, AtomicU32, Ordering},
+        };
+
+        struct TestBus(Child);
+
+        impl Drop for TestBus {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let _ = self.0.wait();
+            }
+        }
+
+        fn start_bus() -> (TestBus, String) {
+            let mut child = Command::new("dbus-daemon")
+                .args(["--session", "--nofork", "--print-address=1"])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn()
+                .expect("dbus-daemon is available on Linux CI");
+            let stdout = child.stdout.take().expect("captured address");
+            let mut reader = BufReader::new(stdout);
+            let mut address = String::new();
+            reader.read_line(&mut address).expect("bus address");
+            let address = address.trim().to_string();
+            assert!(!address.is_empty());
+            (TestBus(child), address)
+        }
+
+        struct FixedNetworkManager {
+            connectivity: Arc<AtomicU32>,
+            slow: Arc<AtomicBool>,
+        }
+
+        #[zbus::interface(name = "org.freedesktop.NetworkManager")]
+        impl FixedNetworkManager {
+            #[zbus(property, name = "Connectivity")]
+            fn connectivity(&self) -> u32 {
+                if self.slow.load(Ordering::SeqCst) {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                }
+                self.connectivity.load(Ordering::SeqCst)
+            }
+        }
+
+        #[test]
+        fn fixed_property_owner_and_timeout_are_enforced() {
+            let (_bus, address) = start_bus();
+            let connectivity = Arc::new(AtomicU32::new(4));
+            let slow = Arc::new(AtomicBool::new(false));
+            let _service = zbus::blocking::connection::Builder::address(address.as_str())
+                .expect("test address")
+                .name(NETWORK_MANAGER_DESTINATION)
+                .expect("fixed destination")
+                .serve_at(
+                    NETWORK_MANAGER_PATH,
+                    FixedNetworkManager {
+                        connectivity: Arc::clone(&connectivity),
+                        slow: Arc::clone(&slow),
+                    },
+                )
+                .expect("fixed object")
+                .build()
+                .expect("mock NetworkManager service");
+
+            let uid = nix::unistd::geteuid().as_raw();
+            let observation = read_network_manager_connectivity_at(
+                &address,
+                std::time::Duration::from_secs(2),
+                uid,
+            )
+            .expect("fixed connectivity read");
+            assert_eq!(
+                observation.observation,
+                ContextValue::Present(NetworkConnectivity::Online)
+            );
+
+            connectivity.store(9, Ordering::SeqCst);
+            assert_eq!(
+                read_network_manager_connectivity_at(
+                    &address,
+                    std::time::Duration::from_secs(2),
+                    uid,
+                ),
+                Err(NetworkConnectivityReadError::ProtocolViolation)
+            );
+            assert_eq!(
+                read_network_manager_connectivity_at(
+                    &address,
+                    std::time::Duration::from_secs(2),
+                    uid.wrapping_add(1),
+                ),
+                Err(NetworkConnectivityReadError::UntrustedOwner)
+            );
+
+            connectivity.store(4, Ordering::SeqCst);
+            slow.store(true, Ordering::SeqCst);
+            assert_eq!(
+                read_network_manager_connectivity_at(
+                    &address,
+                    std::time::Duration::from_millis(20),
+                    uid,
+                ),
+                Err(NetworkConnectivityReadError::Timeout)
+            );
+        }
+
+        #[test]
+        fn unavailable_owner_and_bus_fail_closed() {
+            let (_bus, address) = start_bus();
+            assert_eq!(
+                read_network_manager_connectivity_at(
+                    &address,
+                    std::time::Duration::from_millis(100),
+                    nix::unistd::geteuid().as_raw(),
+                ),
+                Err(NetworkConnectivityReadError::OwnerUnavailable)
+            );
+            assert_eq!(
+                read_network_manager_connectivity_at(
+                    "unix:path=/run/blossom-missing-system-bus",
+                    std::time::Duration::from_millis(100),
+                    0,
+                ),
+                Err(NetworkConnectivityReadError::ConnectionFailed)
+            );
+        }
+    }
 }
