@@ -30,7 +30,11 @@ creating a generic discovery API or invisible personal history.
    is recorded in `docs/PHASE_7_BATTERY_INSTALLED_EVIDENCE.md`.
 7. Propose later sources one at a time. Private sources such as window titles,
    clipboard, notifications, selected files, and active projects require their
-   own privacy and lifetime review.
+   own privacy and lifetime review. ADR-0023 accepts the next bounded source,
+   a fixed network-connectivity enum that exposes no network identifiers or
+   external probe authority.
+8. Implement, route, project, and produce installed evidence for ADR-0023 using
+   the same core-to-host ordering as the first slice.
 
 ## First slice
 
@@ -68,6 +72,6 @@ notifications, file access, project discovery, or system mutation.
 The broader Phase 7 exit remains unchanged: every added context source must be
 typed, permissioned, observable, and testable.
 
-The next implementation checkpoint is 7: propose one later source with its own
-privacy, capability, lifetime, verification, audit, and evidence review before
-implementation.
+The next implementation checkpoint is 8: implement the accepted fixed network
+connectivity source from core registry through installed evidence without
+widening its native or presentation authority.

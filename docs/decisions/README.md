@@ -38,6 +38,8 @@ compatibility, packaging, or contributor obligations.
 - Shell IPC and approval surfaces: accepted in ADR-0021 for Phase 6.
 - Typed context registry and the first fixed battery summary: accepted in
   ADR-0022 for the first Phase 7 slice.
+- Fixed network connectivity summary: accepted in ADR-0023 for the next bounded
+  Phase 7 source, without identifiers or external probes.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and

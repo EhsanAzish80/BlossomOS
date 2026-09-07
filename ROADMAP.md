@@ -387,7 +387,9 @@ implemented and tested. The narrow, fixed battery shell projection is now
 implemented without generic QML authority. Real present-battery and valid
 no-battery UPower evidence passed together in run `34117027739`; the first
 fixed battery-summary slice is complete. Later sources remain active and must
-be proposed and reviewed one at a time.
+be proposed and reviewed one at a time. ADR-0023 now accepts the next bounded
+slice: coarse NetworkManager connectivity without network identifiers or
+external probes.
 
 - Add applications, windows, workspaces, hardware, battery, network, storage,
   services, clipboard, notifications, selected files, and active-project context.
