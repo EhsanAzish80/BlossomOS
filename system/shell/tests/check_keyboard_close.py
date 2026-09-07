@@ -43,15 +43,6 @@ def wait_for(name):
     raise AssertionError(f"accessible object did not appear: {name}")
 
 
-def wait_absent(name):
-    deadline = time.monotonic() + TIMEOUT_SECONDS
-    while time.monotonic() < deadline:
-        if not named(name):
-            return
-        time.sleep(0.1)
-    raise AssertionError(f"accessible object remained visible: {name}")
-
-
 def wait_focused(name):
     deadline = time.monotonic() + TIMEOUT_SECONDS
     while time.monotonic() < deadline:
@@ -82,6 +73,21 @@ def wait_compositor_window(title):
             return
         time.sleep(0.1)
     raise AssertionError(f"compositor window did not appear: {title}")
+
+
+def wait_compositor_window_absent(title):
+    deadline = time.monotonic() + TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        result = subprocess.run(
+            ["hyprctl", "clients", "-j"],
+            check=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        if not any(client.get("title") == title for client in json.loads(result.stdout)):
+            return
+        time.sleep(0.1)
+    raise AssertionError(f"compositor window remained visible: {title}")
 
 
 def press(key):
@@ -153,7 +159,7 @@ require_alert("Status: verified")
 focus_main_and_press("space")
 focus_approval()
 press("Escape")
-wait_absent("Approval required")
+wait_compositor_window_absent("Blossom OS approval")
 require_alert("Status: cancelled")
 escape_records = activity_for_latest_request()
 if [record[2] for record in escape_records] != [
@@ -168,7 +174,7 @@ if [record[2] for record in escape_records] != [
 focus_main_and_press("space")
 focus_approval()
 dispatch("closewindow", "title:^(Blossom OS approval)$")
-wait_absent("Approval required")
+wait_compositor_window_absent("Blossom OS approval")
 require_alert("Status: cancelled")
 close_records = activity_for_latest_request()
 if [record[2] for record in close_records] != [
