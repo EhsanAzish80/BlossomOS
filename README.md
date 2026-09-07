@@ -1,208 +1,144 @@
 # Blossom OS
 
 Blossom OS is an open-source, local-first, agent-native Linux desktop project.
-Its target platform is Arch Linux with Hyprland and a custom Quickshell shell,
-backed by a replaceable local AI runtime, capability broker, policy engine,
-sandboxed executor, minimal privileged helper, and structured audit system.
+It explores how a desktop agent can be useful without receiving ambient
+authority over the computer.
 
-That is the target architecture, not the current implementation.
+The target system combines Arch Linux, Hyprland, a Blossom-owned Quickshell
+interface, replaceable local model providers, typed capabilities, explicit
+approval, sandboxed execution, minimal privilege, verification, and
+content-minimized audit.
 
-## Project status
+> [!WARNING]
+> Blossom OS is pre-alpha research software. It is not a supported operating
+> system release and is not ready to protect a daily-use machine.
 
-Blossom OS is pre-alpha research software. It is not ready for installation as a
-trusted daily operating system and has no supported release.
+## Current status
 
-### Implemented today
+Phases 0 through 8 are complete at their separately reviewed boundaries.
+Phase 9—distribution, installation, upgrades, and rollback—is next.
 
-The repository currently contains the preserved original prototype:
+Implemented and tested foundations include:
 
-- ArchISO and experimental Alpine build/setup scripts.
-- XFCE and Picom configuration.
-- A Python command-line assistant with rule-based responses and system inspection.
-- VM, installer, theme, autologin, and bootable-media helper scripts.
-- Early prototype documentation.
+- deny-by-default typed capabilities and exact once-only approvals;
+- bounded native system, process, file, storage, and service operations;
+- a minimal independently authorized privileged helper;
+- replaceable local Ollama and llama.cpp provider boundaries;
+- authenticated, bounded, provider-neutral model gateway protocols;
+- closed multi-step planning with verification-derived outcomes;
+- a narrow Qt/QML approval and authoritative activity surface;
+- fixed battery and coarse network-connectivity context projections; and
+- disabled-by-default encrypted durable notes with explicit lifecycle controls
+  and bounded data-only recall.
 
-The untouched initial state is preserved by the Git tag
-`prototype-pre-agent-architecture`.
+Every completed phase has deterministic tests and an exit record. Selected
+boundaries also have installed Linux evidence. These results establish only the
+documented slices; they are not installer, release, broad-hardware, or daily-use
+claims.
 
-The Python assistant does **not** load or run a real LLM. The legacy scripts have
-not been validated as a secure or production-ready distribution and include
-insecure development defaults. See `SECURITY_MODEL.md` and
-`docs/PHASE_0_BASELINE.md` before running them.
+See the [roadmap](ROADMAP.md) for completion gates and the
+[documentation hub](docs/README.md) for evidence and architecture decisions.
 
-Phase 1 also implements a separate Rust security vertical slice:
+## Security model
 
-- One typed `system.uname` request mapped only to `/usr/bin/uname -s`.
-- A deny-by-default capability policy and exact, once-only terminal approval.
-- Approval binding, expiry, cancellation, and replay protection.
-- A Linux Bubblewrap adapter with a read-only system view, isolated network,
-  cleared environment, dropped capabilities, timeout, and output limits.
-- Result verification and hash-chained, content-redacted audit activity.
-- Non-interactive denial and no unsandboxed fallback.
+Blossom treats model output, prompts, files, tool output, remembered data, and
+same-user processes as untrusted input—not authorization.
 
-This slice is a tested foundation, not a general command runner or finished OS.
+Core rules:
 
-Phase 2 currently adds eight native read capabilities:
-`system.read:os.identity`, `system.read:uptime`, and
-`system.read:memory.summary`, root-scoped `system.read:storage.summary`, and
-`process.read:self`, plus approval-gated `process.read:list`.
-They use fixed native Linux/POSIX sources without launching a process, expose
-narrow typed results, and record verified provenance without copying identity,
-uptime, memory, storage, or process identifiers into the audit log.
-`process.read:self` is restricted to Blossom's own minimal native identity;
-`process.read:list` returns at most 256 same-effective-user PIDs, short kernel
-names, and coarse states after explicit once-only approval. It never reads
-command lines, environments, open files, sockets, or process memory.
+- capabilities are narrow, typed, and derived by trusted code;
+- privileged or sensitive effects require an exact user-visible approval;
+- approval is once-only, request-bound, expiring, and non-transferable;
+- execution uses operation-specific containment with no generic shell fallback;
+- success is reported only after operation-specific verification;
+- audit records outcomes and provenance without copying private content; and
+- local-first means no hidden network dependency, telemetry, or cloud fallback.
 
-The seventh capability, `files.read:content`, requires an absolute user-selected
-path and once-only approval. On Linux it uses `openat2` to reject symlinked path
-components, retains the selected descriptor across approval, revalidates file
-identity, and reads at most 64 KiB of UTF-8 text. It provides no relative paths,
-directory listing, globbing, binary-file transport, or write access.
+The authoritative requirements and current limitations are in the
+[security model](SECURITY_MODEL.md). Report vulnerabilities through the
+[security policy](SECURITY.md), not a public issue.
 
-Phase 2 also implements one narrowly scoped write capability:
-`files.write:create`. After explicit once-only approval, it can atomically
-create one previously absent UTF-8 file beneath a selected workspace using
-retained directory descriptors, fixed `0600` permissions, verified temporary
-content in an unnamed `O_TMPFILE` inode, atomic no-replace publication with
-`linkat(AT_EMPTY_PATH)`, and file/directory durability sync. It cannot
-overwrite, append, delete, choose permissions, follow symlinks, or cross a
-nested mount.
+## Architecture
 
-The eighth read capability, `services.read:status`, observes one exact loaded
-system-manager `.service` unit after explicit once-only approval. It uses fixed
-native systemd D-Bus calls for only `GetUnit`, `Id`, `LoadState`, `ActiveState`,
-and `SubState`, with a fixed local bus address and bounded deadlines. It cannot
-list or load units, request all properties, mutate systemd, invoke `systemctl`,
-or send a caller-selected D-Bus message. Service names and states are omitted
-from persistent audit detail.
-
-Phase 3 implements one narrowly typed privileged operation:
-`services.restart:bluetooth.service`. An interactive CLI displays the exact
-fixed operation and grants approval once only. A system D-Bus service captures
-the authenticated sender and UID, independently requests the fixed polkit
-action, persists replay-safe journal state, calls only
-`TryRestartUnit("bluetooth.service", "replace")`, verifies the changed active
-invocation, and writes a bounded, synced, hash-chained audit trail. The helper
-cannot accept a shell command, executable, argument vector, caller-selected
-unit, D-Bus address, method, object path, polkit action, or job mode.
-
-The Phase 3 package boundary is validated on controlled Linux CI services but
-is not installed by this repository, and real target-Arch or Bluetooth-hardware
-behavior has not yet been claimed. See `docs/PHASE_3_BASELINE.md`.
-
-Phase 7 adds two closed, read-only context sources: a battery summary from the
-fixed UPower boundary and coarse connectivity from the fixed NetworkManager
-boundary. Both remain default-deny, policy-routed, strictly verified,
-content-minimized in audit, and projected to the shell through narrow versioned
-methods. Installed x86-64 evidence covers battery present/absent and network
-online/isolated non-internet outcomes. It does not add generic discovery,
-hardware identifiers, network identifiers, personal history, or model context.
-
-### Planned, not implemented
-
-The following are architectural goals only:
-
-- Hyprland integration and a Quickshell-based Blossom Shell.
-- A user-ready model lifecycle and selection interface beyond the two pinned,
-  evidence-only local runtime packages now present.
-- A typed Blossom Bus and structured desktop/system context.
-- A complete user-facing, persistent and manageable audit service beyond the
-  current security-core and privileged-helper audit backends.
-- Durable orchestration recovery, memory, distribution packaging, and safe
-  updates.
-
-No security property described in the target documents should be treated as a
-claim about the current prototype.
-
-## Architectural contract
-
-- `VISION.md` defines what Blossom is and is not.
-- `ARCHITECTURE.md` defines target components and trust boundaries.
-- `SECURITY_MODEL.md` defines required security properties and tests.
-- `ROADMAP.md` defines phased delivery and exit gates.
-- `CONTRIBUTING.md` defines contribution and review expectations.
-- `SECURITY.md` describes the current security and reporting status.
-- `docs/DEPENDENCY_POLICY.md` defines dependency acceptance and update rules.
-- `docs/BRANCH_RELEASE_POLICY.md` defines branch, review, versioning, and signing.
-- `docs/decisions/` records accepted and proposed architecture decisions.
-
-Material architecture changes require an accepted ADR and matching updates to
-the relevant contract documents.
-
-## Repository layout today
+The target architecture separates presentation, model inference, policy,
+execution, privilege, verification, memory, and audit authority. A model may
+propose a closed intent; it cannot approve or execute that intent by itself.
 
 ```text
-ai-core/               rule-based Python prototype
-apps/blossom-cli/      Phase 1 interactive approval and activity client
-build/                 prototype ArchISO/Alpine build scripts and helpers
-config/                prototype XFCE/Picom configuration
-core/blossom-core/     typed policy, approval, executor, verification, and audit core
-docs/                  prototype docs, Phase 0 evidence, and ADRs
-scripts/               prototype installation and utility scripts
+User and Blossom Shell
+          |
+          v
+Typed request -> policy -> exact approval -> contained operation
+                                             |
+                                             v
+                                  verification -> audit
+
+Local model provider -> untrusted intent proposal only
 ```
 
-The target layout in `ARCHITECTURE.md` has not been created. The prototype has
-not been moved or restructured.
+Read [ARCHITECTURE.md](ARCHITECTURE.md) for component and trust boundaries and
+[VISION.md](VISION.md) for the product principles.
+
+## Repository structure
+
+```text
+apps/                 user-facing Rust clients
+core/blossom-core/    typed policy, approval, execution, verification, and memory core
+system/               isolated service and provider boundaries
+docs/                 phase evidence, policies, and architecture decisions
+.github/workflows/    protected checks and installed-evidence workflows
+ai-core/              preserved historical Python prototype
+build/, config/, scripts/
+                      preserved experimental distribution prototype
+```
+
+The historical prototype is preserved under the
+`prototype-pre-agent-architecture` tag. Its scripts and setup guides are not
+supported installation instructions and may contain insecure development
+defaults. Current Rust work is deliberately developed alongside it until a
+reviewed Phase 9 migration replaces the prototype distribution path.
 
 ## Development
 
-Phases 0 through 8 are complete at their reviewed boundaries. Their exit
-evidence is recorded in
-`docs/PHASE_0_BASELINE.md`, `docs/PHASE_1_SECURITY_CORE.md`,
-`docs/PHASE_2_BASELINE.md`, `docs/PHASE_3_BASELINE.md`,
-`docs/PHASE_4_EXIT_AUDIT.md`, `docs/PHASE_5_EXIT_AUDIT.md`, and
-`docs/PHASE_6_EXIT_AUDIT.md`, `docs/PHASE_7_EXIT_AUDIT.md`, and
-`docs/PHASE_8_EXIT_AUDIT.md`. Phase 8 completed the explicit, encrypted,
-approval-gated durable-note slice under ADR-0024 and bounded data-only recall
-under ADR-0025. Phase 4,
-governed by accepted ADR-0011 through ADR-0019, added closed
-provider-neutral inference types, bounded Ollama and llama.cpp adapters,
-authenticated one-request gateway framing, retained installed-identity
-readiness, a content-free operational audit, hardened systemd packaging, and a
-pinned offline-buildable llama.cpp and Ollama x86-64 packages.
+The workspace requires the Rust toolchain pinned in
+[rust-toolchain.toml](rust-toolchain.toml). Some integration tests additionally
+require Linux, Bubblewrap, D-Bus, Qt 6, and related system packages.
 
-Merged commit `91830c3` has passing disposable Ubuntu x86-64 installed evidence
-in workflow run
-[`33860951348`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33860951348).
-That run installed the package and exercised real offline inference, distinct
-service identities, peer admission, filesystem and network isolation, resource
-bounds, provider loss, audit redaction and capacity failure, socket lifecycle,
-cancellation during connect, response headers, streaming and the pre-completion
-race, plus contained terminal-write refusal and recovery.
+Run the portable local gates:
 
-Equivalent Ollama installed evidence passed in workflow run
-[`33866069049`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33866069049).
-Pinned Arch x86-64 userspace/package/ABI evidence for both providers passed in
-workflow run
-[`33867077966`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/33867077966).
-That Arch run is not Arch-kernel, ArchISO, hardware, installer, or release proof.
+```bash
+python3 scripts/ci/check_repository.py
+cargo fmt --all --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets
+```
 
-This remains a pre-alpha engineering boundary, not a supported production AI
-runtime or operating-system release. Private input remains disabled in default
-builds. Phase 5 adds closed, bounded typed plans, per-step policy and approval,
-verification-derived outcomes, hash-chained plan activity, and deterministic
-truthful reports. Its model bridge accepts only the six existing argument-free
-native read proposals; model output still grants no authorization. Recovery is
-in-memory only and active synchronous steps are not interruptible mid-call.
-Phase 6 is complete at the accepted ADR-0021 engineering boundary. The closed
-Qt/QML presentation host, authenticated versioned session service, fixed
-approval ceremony, accessibility path, and installed x86-64 interaction matrix
-are implemented and tested. This remains pre-alpha engineering evidence, not a
-finished operating-system image, installer, broad hardware claim, or release.
-See `docs/PHASE_6_EXIT_AUDIT.md` and
-`docs/PHASE_6_INSTALLED_EVIDENCE.md`.
+Loopback-based provider tests may require a normal host environment if a
+development sandbox prohibits local sockets. Installed and architecture-
+specific evidence is produced only by the corresponding reviewed workflows.
 
-Prototype commands in older documentation are historical development material,
-not supported installation instructions.
+Before changing a trust boundary, read:
 
-## Contributing and security
+1. [CONTRIBUTING.md](CONTRIBUTING.md)
+2. [SECURITY_MODEL.md](SECURITY_MODEL.md)
+3. [ROADMAP.md](ROADMAP.md)
+4. [Architecture decisions](docs/decisions/README.md)
 
-Read `CONTRIBUTING.md` before proposing changes. Do not report exploitable
-vulnerabilities in public issues; follow `SECURITY.md` for the current reporting
-status.
+Material architecture changes require a focused ADR and matching tests,
+evidence, documentation, and rollback analysis.
+
+## Project documents
+
+- [Documentation hub](docs/README.md)
+- [Vision](VISION.md)
+- [Architecture](ARCHITECTURE.md)
+- [Security model](SECURITY_MODEL.md)
+- [Roadmap](ROADMAP.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security reporting](SECURITY.md)
+- [Dependency policy](docs/DEPENDENCY_POLICY.md)
+- [Branch and release policy](docs/BRANCH_RELEASE_POLICY.md)
 
 ## License
 
-Blossom OS is licensed under the Apache License, Version 2.0. See `LICENSE` and
-accepted ADR-0001.
+Blossom OS is licensed under the [Apache License 2.0](LICENSE).

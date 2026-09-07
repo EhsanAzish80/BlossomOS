@@ -1,5 +1,10 @@
 # BlossomOS Quick Start Guide
 
+> [!CAUTION]
+> Historical prototype guide. These commands are preserved for provenance and
+> are not a supported Blossom OS installation path. See the
+> [project README](../README.md) and [roadmap](../ROADMAP.md) for current status.
+
 ## Prerequisites
 
 ### On macOS (for building)
