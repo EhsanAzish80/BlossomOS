@@ -2,6 +2,8 @@
 
 pub mod approval;
 pub mod audit;
+pub mod battery_summary;
+pub mod context;
 pub mod engine;
 pub mod executor;
 pub mod file_read;
@@ -26,6 +28,14 @@ pub mod workspace_create;
 
 pub use approval::{ApprovalError, ApprovalStore, ApprovalToken};
 pub use audit::{AuditEvent, AuditLog, AuditRecord};
+pub use battery_summary::{
+    BatteryObservation, BatteryObservationError, BatteryState, BatterySummary,
+    validate_battery_observation,
+};
+pub use context::{
+    BATTERY_MAX_AGE_MS, BATTERY_MIN_POLL_INTERVAL_MS, CONTEXT_PROTOCOL_VERSION, ContextObservation,
+    ContextSource, ContextValue, MAX_CONTEXT_RESPONSE_BYTES,
+};
 pub use engine::{
     BeginOutcome, BlossomEngine, CompletionOutcome, EngineError, ToolOutput, command_for,
 };

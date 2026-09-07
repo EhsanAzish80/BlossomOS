@@ -381,7 +381,8 @@ Exit: the shell can operate the tested vertical slices without XFCE dependencies
 
 Status: active. ADR-0022 defines the accepted closed context registry and first
 fixed battery-summary slice; implementation proceeds one bounded checkpoint at
-a time.
+a time. The core registry, typed observation, default-deny capability, strict
+validator, and deterministic tests are implemented; the native adapter is next.
 
 - Add applications, windows, workspaces, hardware, battery, network, storage,
   services, clipboard, notifications, selected files, and active-project context.

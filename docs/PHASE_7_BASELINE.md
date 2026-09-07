@@ -12,7 +12,9 @@ creating a generic discovery API or invisible personal history.
 1. Review and accept ADR-0022 for the closed context registry and fixed battery
    summary. Complete.
 2. Add the registry envelope, typed battery result, singleton capability, strict
-   validator, and deterministic unit tests. Keep default deny.
+   validator, and deterministic unit tests. Keep default deny. Complete in the
+   first core checkpoint; evidence is recorded in
+   `docs/PHASE_7_BATTERY_CORE.md`.
 3. Add the fixed UPower system-D-Bus adapter with peer checks, exact property
    allowlist, timeout, reply bound, and private-bus adversarial tests.
 4. Route the battery request through existing policy, verification, and

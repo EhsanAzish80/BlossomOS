@@ -8,6 +8,7 @@ pub enum Capability {
     SystemReadUptime,
     SystemReadMemorySummary,
     SystemReadStorageSummary,
+    SystemReadBatterySummary,
     ProcessReadSelf,
     ProcessReadList,
     FilesReadContent,
@@ -23,6 +24,7 @@ impl Capability {
             Self::SystemReadUptime => "system.read:uptime",
             Self::SystemReadMemorySummary => "system.read:memory.summary",
             Self::SystemReadStorageSummary => "system.read:storage.summary",
+            Self::SystemReadBatterySummary => "system.read:battery.summary",
             Self::ProcessReadSelf => "process.read:self",
             Self::ProcessReadList => "process.read:list",
             Self::FilesReadContent => "files.read:content",
@@ -72,6 +74,10 @@ impl PolicyEngine {
 
     pub fn evaluate(&self, request: &ToolRequest) -> PolicyDecision {
         let capability = Self::required_capability(request);
+        self.evaluate_capability(capability)
+    }
+
+    pub fn evaluate_capability(&self, capability: Capability) -> PolicyDecision {
         self.rules
             .iter()
             .rev()
@@ -137,6 +143,10 @@ mod tests {
         };
         assert_eq!(
             PolicyEngine::default().evaluate(&process_self),
+            PolicyDecision::Deny
+        );
+        assert_eq!(
+            PolicyEngine::default().evaluate_capability(Capability::SystemReadBatterySummary),
             PolicyDecision::Deny
         );
     }
