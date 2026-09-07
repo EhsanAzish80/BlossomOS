@@ -40,6 +40,10 @@ compatibility, packaging, or contributor obligations.
   ADR-0022 for the first Phase 7 slice.
 - Fixed network connectivity summary: accepted in ADR-0023 for the next bounded
   Phase 7 source, without identifiers or external probes.
+- Explicit user-approved durable memory: accepted in ADR-0024 as the first
+  bounded Phase 8 slice, with closed memory classes and no automatic capture.
+- Bounded durable-memory recall: accepted in ADR-0025 as data-only, never
+  permission, identity, policy, approval, or current-state authority.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and

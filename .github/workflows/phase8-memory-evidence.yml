@@ -1,0 +1,56 @@
+name: Phase 8 installed memory evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase8-installed-memory-evidence
+  cancel-in-progress: false
+
+jobs:
+  lifecycle:
+    name: Installed x86-64 encrypted memory lifecycle
+    runs-on: [self-hosted, linux, x64, blossom-gpu]
+    timeout-minutes: 20
+    steps:
+      - name: Establish real installed Linux host
+        run: |
+          grep -qx 'ID=ubuntu' /etc/os-release
+          test "$(uname -m)" = x86_64
+          docker version >/dev/null
+
+      - name: Restore runner ownership before checkout
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            chown -R "$(id -u):$(id -g)" /workspace
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build portable production probe
+        run: |
+          mkdir -p "$RUNNER_TEMP/memory-build"
+          docker run --rm \
+            --env HOST_UID="$(id -u)" \
+            --env HOST_GID="$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$RUNNER_TEMP/memory-build:/output" \
+            --workdir /workspace \
+            rust@sha256:3f6e6f8d8725a65a2db964bb828850f888d430c68784d661f753144e5d787207 \
+            sh -ec 'CARGO_HOME=/output/cargo-home \
+              CARGO_TARGET_DIR=/output/target \
+              cargo build --locked --release --package blossom-core \
+              --example installed_memory_probe
+              chown -R "$HOST_UID:$HOST_GID" /output'
+
+      - name: Prove installed encrypted lifecycle and restart boundary
+        run: |
+          output=$("$RUNNER_TEMP/memory-build/target/release/examples/installed_memory_probe" x86_64)
+          test "$output" = \
+            'memory-evidence=verified schema=1 encrypted=yes restart=yes deleted=yes'
+          echo "$output"

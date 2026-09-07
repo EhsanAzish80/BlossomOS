@@ -147,11 +147,13 @@ not been moved or restructured.
 
 ## Development
 
-Phases 0 through 6 are complete. Their exit evidence is recorded in
+Phases 0 through 7 are complete. Their exit evidence is recorded in
 `docs/PHASE_0_BASELINE.md`, `docs/PHASE_1_SECURITY_CORE.md`,
 `docs/PHASE_2_BASELINE.md`, `docs/PHASE_3_BASELINE.md`,
 `docs/PHASE_4_EXIT_AUDIT.md`, `docs/PHASE_5_EXIT_AUDIT.md`, and
-`docs/PHASE_6_EXIT_AUDIT.md`. Phase 4,
+`docs/PHASE_6_EXIT_AUDIT.md`, and `docs/PHASE_7_EXIT_AUDIT.md`. Phase 8 has
+begun at the accepted explicit durable-memory boundary in ADR-0024 and
+`docs/PHASE_8_BASELINE.md`. Phase 4,
 governed by accepted ADR-0011 through ADR-0019, added closed
 provider-neutral inference types, bounded Ollama and llama.cpp adapters,
 authenticated one-request gateway framing, retained installed-identity

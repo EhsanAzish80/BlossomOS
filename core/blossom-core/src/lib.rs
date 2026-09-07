@@ -4,9 +4,12 @@ pub mod approval;
 pub mod audit;
 pub mod battery_summary;
 pub mod context;
+pub mod durable_memory;
 pub mod engine;
 pub mod executor;
 pub mod file_read;
+#[cfg(unix)]
+pub mod memory_service;
 pub mod memory_summary;
 pub mod model_runtime;
 pub mod network_connectivity;
@@ -41,6 +44,15 @@ pub use context::{
     ContextSource, ContextValue, MAX_CONTEXT_RESPONSE_BYTES, NETWORK_CONNECTIVITY_MAX_AGE_MS,
     NETWORK_CONNECTIVITY_MIN_POLL_INTERVAL_MS,
 };
+#[cfg(unix)]
+pub use durable_memory::EncryptedMemoryStore;
+pub use durable_memory::{
+    DurableMemoryLifecycle, DurableMemoryRecord, DurableNoteDraft, MAX_DURABLE_NOTE_BYTES,
+    MAX_MEMORY_RECORD_ID_BYTES, MEMORY_SCHEMA_VERSION, MemoryClass, MemoryConsumer,
+    MemoryInputProvenance, MemoryOperation, MemoryPurpose, MemoryRetention, MemoryScope,
+    MemoryStoreError, MemoryValidationError, validate_durable_note_draft,
+    validate_memory_record_id,
+};
 pub use engine::{
     BeginOutcome, BlossomEngine, CompletionOutcome, EngineError, ToolOutput, command_for,
 };
@@ -49,6 +61,13 @@ pub use file_read::{
     FileContent, FileContentProvider, FileIdentity, FileReadError, FileSelection,
     MAX_FILE_CONTENT_BYTES, MAX_SELECTED_PATH_BYTES, Openat2FileReader,
     UnavailableFileContentProvider, validate_selected_path,
+};
+#[cfg(unix)]
+pub use memory_service::{
+    DurableMemoryService, MAX_RECALL_BYTES, MAX_RECALL_RECORDS, MEMORY_APPROVAL_TTL_MS,
+    MemoryApprovalPreview, MemoryApprovalToken, MemoryAuditEvent, MemoryAuditOutcome,
+    MemoryDecision, MemoryMutationRequest, MemoryMutationResult, MemoryRecallAuthority,
+    MemoryRecallProjection, MemoryServiceError,
 };
 pub use memory_summary::{
     MAX_PROC_MEMINFO_BYTES, MAX_PROC_MEMINFO_LINES, MemorySummary, MemorySummaryError,
@@ -123,11 +142,14 @@ pub use service_status::{
     UnavailableServiceStatusProvider, validate_service_status, validate_service_unit,
 };
 pub use shell_activity::{ShellActivityError, project_shell_activity};
+#[cfg(unix)]
+pub use shell_ipc::ShellMemoryApprovalProjection;
 pub use shell_ipc::{
     MAX_ACTIVITY_BATCH, MAX_SHELL_MESSAGE_BYTES, SHELL_BUS_NAME, SHELL_INTERFACE,
     SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellActivityCategory, ShellActivityKind,
     ShellActivityProjection, ShellApprovalPreview, ShellBatteryProjection, ShellBatteryStatus,
-    ShellClientRequest, ShellDecision, ShellNetworkProjection, ShellProtocolError,
+    ShellClientRequest, ShellDecision, ShellMemoryRecordProjection, ShellMemoryStatus,
+    ShellMemorySummaryProjection, ShellNetworkProjection, ShellProtocolError,
     decode_shell_client_request,
 };
 pub use shell_service::{

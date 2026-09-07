@@ -12,6 +12,9 @@ serde_json.workspace = true
 sha2.workspace = true
 libc.workspace = true
 nix.workspace = true
+chacha20poly1305.workspace = true
+getrandom.workspace = true
+zeroize.workspace = true
 
 [target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
 async-io = "2.6.0"

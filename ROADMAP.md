@@ -412,9 +412,17 @@ observable, and testable. Additional sources require separate future review.
 
 ## Phase 8: Memory and personalization
 
-- Separate session context, temporary memory, user-approved durable memory,
-  project knowledge, and system history.
-- Add inspect, edit, delete, export, disable, retention, and encryption controls.
+Status: active. ADR-0024 is accepted for the first bounded slice: explicit
+user-approved durable notes. The ordered implementation and evidence gates are
+recorded in `docs/PHASE_8_BASELINE.md`.
+
+- [x] Accept the closed separation of session context, temporary memory,
+  user-approved durable memory, project knowledge, and system history.
+- [ ] Implement disabled-by-default encrypted durable notes with exact
+  create/edit approval and no automatic capture, promotion, or model-authored
+  persistence.
+- [ ] Add fixed inspect, edit, delete, export, disable, retention, and bounded
+  recall controls with adversarial and installed Linux evidence.
 
 Exit: no durable memory is created invisibly.
 
