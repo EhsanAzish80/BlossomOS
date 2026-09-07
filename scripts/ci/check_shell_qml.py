@@ -101,6 +101,7 @@ def main() -> None:
         "REQUIRED_PREVIEW_FIELDS",
         'require_alert("Status: denied")',
         'require_alert("Status: verified")',
+        'wait_absent("Approval required")',
         "STATE_ENABLED",
     ]:
         require(required in accessibility_test,
@@ -124,6 +125,8 @@ def main() -> None:
     for state in ["requesting", "waiting", "submitting", "cancelling"]:
         require(f'BlossomBroker.state !== "{state}"' in shell,
                 f"request control must be disabled while {state}")
+    require("Qt.callLater(commandBar.restoreRequestFocus)" in shell,
+            "command focus must wait for the approval surface to unmap")
 
 
 if __name__ == "__main__":

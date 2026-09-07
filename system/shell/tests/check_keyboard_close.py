@@ -207,6 +207,7 @@ if scenario == "cancel-and-deny":
     focus_approval()
     press("space")
     require_alert("Status: denied")
+    wait_compositor_window_absent("Blossom OS approval")
     print("installed compositor-close, Escape, and keyboard-deny paths passed")
 elif scenario == "approve":
     # Start this scenario in a fresh AT-SPI client process so accessibility
@@ -218,6 +219,7 @@ elif scenario == "approve":
     wait_focused("Approve once")
     press("space")
     require_alert("Status: verified")
+    wait_compositor_window_absent("Blossom OS approval")
     print("installed keyboard-approve path passed")
 else:
     raise SystemExit("expected cancel-and-deny or approve")

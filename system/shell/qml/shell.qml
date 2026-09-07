@@ -14,6 +14,13 @@ ApplicationWindow {
     color: "#11151c"
     title: "Blossom OS"
 
+    function restoreRequestFocus() {
+        if (requestButton.enabled) {
+            commandBar.requestActivate()
+            requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
+        }
+    }
+
     onActiveChanged: {
         if (active && requestButton.enabled) {
             requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
@@ -32,8 +39,9 @@ ApplicationWindow {
             if (BlossomBroker.state !== "waiting"
                     && BlossomBroker.state !== "submitting"
                     && BlossomBroker.state !== "cancelling") {
-                commandBar.requestActivate()
-                requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
+                // Let the modal visibility binding unmap its Wayland surface
+                // before returning activation to the command bar.
+                Qt.callLater(commandBar.restoreRequestFocus)
             }
         }
     }
