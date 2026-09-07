@@ -2,11 +2,14 @@
 
 pub mod approval;
 pub mod audit;
+pub mod battery_summary;
+pub mod context;
 pub mod engine;
 pub mod executor;
 pub mod file_read;
 pub mod memory_summary;
 pub mod model_runtime;
+pub mod network_connectivity;
 pub mod orchestration;
 pub mod os_identity;
 pub mod policy;
@@ -25,7 +28,19 @@ pub mod verification;
 pub mod workspace_create;
 
 pub use approval::{ApprovalError, ApprovalStore, ApprovalToken};
-pub use audit::{AuditEvent, AuditLog, AuditRecord};
+pub use audit::{AuditEvent, AuditLog, AuditRecord, BatteryAuditStatus};
+pub use battery_summary::{
+    BATTERY_READ_TIMEOUT_MS, BatteryObservation, BatteryObservationError, BatteryReadError,
+    BatteryState, BatterySummary, BatterySummaryProvider, DBUS_PROPERTIES_INTERFACE,
+    SYSTEM_BUS_ADDRESS as BATTERY_SYSTEM_BUS_ADDRESS, UPOWER_DESTINATION, UPOWER_DEVICE_INTERFACE,
+    UPOWER_DISPLAY_DEVICE_PATH, UnavailableBatterySummaryProvider, UpowerBatterySummaryProvider,
+    validate_battery_observation,
+};
+pub use context::{
+    BATTERY_MAX_AGE_MS, BATTERY_MIN_POLL_INTERVAL_MS, CONTEXT_PROTOCOL_VERSION, ContextObservation,
+    ContextSource, ContextValue, MAX_CONTEXT_RESPONSE_BYTES, NETWORK_CONNECTIVITY_MAX_AGE_MS,
+    NETWORK_CONNECTIVITY_MIN_POLL_INTERVAL_MS,
+};
 pub use engine::{
     BeginOutcome, BlossomEngine, CompletionOutcome, EngineError, ToolOutput, command_for,
 };
@@ -70,6 +85,14 @@ pub use model_runtime::{
 };
 #[cfg(debug_assertions)]
 pub use model_runtime::{SyntheticProviderPackage, fixed_synthetic_provider_package};
+pub use network_connectivity::{
+    DBUS_PROPERTIES_INTERFACE as NETWORK_DBUS_PROPERTIES_INTERFACE,
+    NETWORK_CONNECTIVITY_READ_TIMEOUT_MS, NETWORK_MANAGER_DESTINATION, NETWORK_MANAGER_INTERFACE,
+    NETWORK_MANAGER_PATH, NetworkConnectivity, NetworkConnectivityObservation,
+    NetworkConnectivityObservationError, NetworkConnectivityProvider, NetworkConnectivityReadError,
+    NetworkManagerConnectivityProvider, SYSTEM_BUS_ADDRESS as NETWORK_SYSTEM_BUS_ADDRESS,
+    UnavailableNetworkConnectivityProvider, validate_network_connectivity_observation,
+};
 pub use orchestration::{
     MAX_PLAN_STEPS, OrchestrationError, OrchestrationEvent, PlanError, PlanId, PlanOrchestrator,
     PlanOutcome, ProposedPlanStep, RecoveryDisposition, RetryDisposition, RollbackDisposition,
@@ -103,8 +126,9 @@ pub use shell_activity::{ShellActivityError, project_shell_activity};
 pub use shell_ipc::{
     MAX_ACTIVITY_BATCH, MAX_SHELL_MESSAGE_BYTES, SHELL_BUS_NAME, SHELL_INTERFACE,
     SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellActivityCategory, ShellActivityKind,
-    ShellActivityProjection, ShellApprovalPreview, ShellClientRequest, ShellDecision,
-    ShellProtocolError, decode_shell_client_request,
+    ShellActivityProjection, ShellApprovalPreview, ShellBatteryProjection, ShellBatteryStatus,
+    ShellClientRequest, ShellDecision, ShellNetworkProjection, ShellProtocolError,
+    decode_shell_client_request,
 };
 pub use shell_service::{
     SHELL_APPROVAL_TTL_MS, ShellDiagnosticService, ShellServiceError, ShellServiceOutcome,
@@ -122,9 +146,10 @@ pub use uptime::{
     UnavailableUptimeProvider, UptimeError, UptimeProvider, parse_proc_uptime,
 };
 pub use verification::{
-    Verification, verify_execution, verify_file_content, verify_memory_summary, verify_os_identity,
-    verify_process_list, verify_process_self, verify_service_status, verify_storage_summary,
-    verify_uptime, verify_workspace_file_created,
+    Verification, verify_battery_summary, verify_execution, verify_file_content,
+    verify_memory_summary, verify_network_connectivity, verify_os_identity, verify_process_list,
+    verify_process_self, verify_service_status, verify_storage_summary, verify_uptime,
+    verify_workspace_file_created,
 };
 pub use workspace_create::{
     AtomicWorkspaceFileCreator, DirectoryIdentity, UnavailableWorkspaceCreateProvider,

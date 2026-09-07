@@ -27,7 +27,10 @@ filesystem scopes, privilege surface, planning language, or model authority.
 
 ### Trust boundary
 
-The Quickshell process is an untrusted presentation client. It may request a
+The Quickshell and dedicated standard Qt UI processes are untrusted
+presentation clients. The standard Qt host is used for the approval and
+activity ceremony because the pinned Quickshell proxy-window hierarchy does
+not publish child controls through Linux AT-SPI. Either client may request a
 registered operation, render service-authored projections, submit a one-time
 human decision, cancel work that has not started, and read redacted activity.
 It cannot create policy decisions, capabilities, scopes, approval tokens,
@@ -110,10 +113,11 @@ The UI never reconstructs or repairs authoritative audit history.
 
 ### Process and packaging boundary
 
-Quickshell is a separate unprivileged process. QML does not load the Rust core
-as a library or spawn the CLI, Bubblewrap, provider, helper, `systemctl`, a
-shell, or arbitrary executables. The service owns no graphical surface and
-accepts no QML or JavaScript program as data.
+Quickshell and `blossom-shell-ui` are separate unprivileged processes. The Qt
+host loads only the fixed installed QML entrypoint and adds no callable API.
+QML does not load the Rust core as a library or spawn the CLI, Bubblewrap,
+provider, helper, `systemctl`, a shell, or arbitrary executables. The service
+owns no graphical surface and accepts no QML or JavaScript program as data.
 
 Phase 6 pins supported Hyprland and Quickshell interfaces before compatibility
 claims. Other hosts may use protocol fixtures, but exit evidence must use pinned
@@ -173,14 +177,19 @@ or physical-machine compromise.
 
 Activity remains privacy-sensitive. Its projection is bounded, local-only, and
 content-minimized. The initial surface exposes no prompts, file contents,
-credentials, tokens, raw output, or provider reasoning.
+credentials, tokens, raw output, provider reasoning, service names, process
+data, or raw audit records. Phase 6 deliberately provides no durable activity
+recovery: a service restart creates an empty projection, invalidates every old
+preview, and starts nothing. Persistence or replay across restart requires a
+separate reviewed ADR and cannot be inferred by the client.
 
 ## Operational consequences
 
-Phase 6 adds Quickshell, Hyprland, a per-user D-Bus service, versioned interface
-definitions, and UI integration tests. Service and shell remain independently
-testable with fixed fixtures. Unsupported versions fail visibly rather than
-silently weakening authorization.
+Phase 6 adds Quickshell, Hyprland, the standard Qt security-surface host, a
+per-user D-Bus service, versioned interface definitions, and UI integration
+tests. Quickshell, the UI host, and the service remain independently testable
+with fixed fixtures. Unsupported versions fail visibly rather than silently
+weakening authorization.
 
 ## Migration and rollback
 
@@ -218,5 +227,6 @@ Tests and evidence must prove:
   replacement, keyboard-only operation, and assistive-technology behavior
   receive adversarial UI tests;
 - existing Phase 1-5 negative tests remain green; and
-- pinned Arch/Hyprland/Quickshell installed evidence exercises the complete
-  fixed diagnostic slice before Phase 6 is marked complete.
+- pinned Arch/Hyprland/Quickshell installed evidence exercises both unprivileged
+  presentation processes and the complete fixed diagnostic slice before Phase
+  6 is marked complete.

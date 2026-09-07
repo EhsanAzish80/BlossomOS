@@ -306,10 +306,13 @@ Exit: Blossom never reports success solely because a command was issued.
 
 ## Phase 6: Blossom Shell
 
-Status: active. ADR-0021 is accepted. A Linux-only unprivileged session IPC
-service and the first narrow Quickshell presentation surface are implemented
-behind inactive production gates; no passing installed-runtime or graphical
-interaction evidence is currently claimed.
+Status: complete (2026-09-07). ADR-0021 is accepted. A Linux-only unprivileged
+session IPC service and the first narrow Quickshell presentation surface are
+implemented behind inactive production gates. The ARM64 experiment now has
+installed graphical preview, denial, Escape-cancellation, approve-once verification,
+no-touch expiry, and fail-closed service-loss evidence. The x86-64 installed
+interaction and accessibility matrix passes, and the independent exit audit
+records completion at the accepted boundary.
 
 - [x] Review and accept the shell IPC and approval-surface ADR.
 - [x] Freeze a closed, authenticated, versioned, size-bounded session IPC
@@ -334,16 +337,41 @@ interaction evidence is currently claimed.
   boundary. The accepted exact stable-repository versions, closed lock schema,
   inactive user service, D-Bus activation metadata, and drift checker are
   committed; installed compatibility remains a separate exit gate.
-- [ ] Build exact approval preview and readable correlated activity UI for the
-  fixed diagnostic.
+- [x] Build exact approval preview and readable correlated activity UI for the
+  fixed diagnostic. The ARM64 guest renders every fixed preview field and the
+  correlated authoritative activity projection. Installed denial and
+  Escape-cancellation terminate without execution or verification events.
 - [ ] Add launcher, notifications, system status, and agent surfaces only as
   separately reviewed increments after the first slice preserves the boundary.
-- [ ] Produce installed target evidence and an independent Phase 6 exit audit.
-  The manual harness now requires a trusted ephemeral Linux runner exposing a
-  DRM render node. Hosted run `33890423701` is diagnostic failure evidence, not
-  an exit pass; the exact owner action is in `docs/PHASE_6_INSTALLED_EVIDENCE.md`.
+- [x] Produce installed target evidence and an independent Phase 6 exit audit.
+  A separate Apple Silicon ARM64 VM experiment has verified its isolated
+  image-builder boot. A frozen September 3 snapshot resolved the initial ARM
+  Hyprland/Aquamarine mismatch; all 279 diagnostic packages passed signature
+  and integrity checks, the installed versions match, and an ext4 image was
+  assembled. The ARM guest now reaches a serial login prompt and the host ANGLE
+  backend initializes on Metal. Owner screenshots verify visible Hyprland 0.56.1
+  rendering and DRM/VirGL diagnostics. The ARM service/plugin build and 26
+  selected tests pass. Installed graphical preview, denial, and keyboard Escape
+  cancellation now pass after correcting service-bus isolation, D-Bus wire
+  typing, plugin linkage, explicit expiry reporting, approval focus, and narrow
+  Bubblewrap/systemd namespace integration. The fixed approve-once workflow now
+  reaches terminal verification with a seven-record correlated audit sequence.
+  A bounded native-client timer now triggers backend-authoritative expiry; the
+  installed graphical panel closes with terminal cancellation and no execution.
+  A fixed-name owner watcher now closes pending UI and reports unavailable when
+  the broker disappears. See
+  `docs/PHASE_6_APPLE_SILICON_VALIDATION.md`. ARM evidence does not replace the
+  x86-64 gate. Final run `34102303699` passed at signed commit `b3bd89e`: the
+  pinned package set, installed service/plugin tree, real Qt/D-Bus path, fixed
+  networkless executor, nested compositor, real Hyprland and Quickshell,
+  keyboard close/deny/approve flows, and AT-SPI accessibility checks all passed
+  on the trusted Intel GPU runner. ADR-0021 intentionally provides no durable
+  activity recovery; replacement and bus-loss tests prove stale previews fail
+  closed. The passing evidence and its limits are in
+  `docs/PHASE_6_INSTALLED_EVIDENCE.md`; the completion decision is in
+  `docs/PHASE_6_EXIT_AUDIT.md`.
 
-The active design baseline and exit evidence are tracked in
+The accepted design baseline and exit evidence are tracked in
 `docs/PHASE_6_BASELINE.md`. Phase 6 adds no capability merely to make a UI
 demonstration work.
 
@@ -351,12 +379,36 @@ Exit: the shell can operate the tested vertical slices without XFCE dependencies
 
 ## Phase 7: Structured system awareness
 
-- Add applications, windows, workspaces, hardware, battery, network, storage,
-  services, clipboard, notifications, selected files, and active-project context.
-- Prefer native APIs and IPC over screenshots or accessibility automation.
-- Apply per-source privacy, lifetime, and capability rules.
+Status: complete (2026-09-07). ADR-0022 defines the accepted closed context registry and first
+fixed battery-summary slice; implementation proceeds one bounded checkpoint at
+a time. The core registry, typed observation, default-deny capability, strict
+validator, fixed UPower adapter, and closed policy/verification/audit route are
+implemented and tested. The narrow, fixed battery shell projection is now
+implemented without generic QML authority. Real present-battery and valid
+no-battery UPower evidence passed together in run `34117027739`; the first
+fixed battery-summary slice is complete. Later sources remain active and must
+be proposed and reviewed one at a time. ADR-0023 now accepts the next bounded
+slice: coarse NetworkManager connectivity without network identifiers or
+external probes. The fixed NetworkManager adapter, policy/verification/audit
+route, narrow shell projection, and installed online plus isolated non-internet
+evidence are complete. Run `34126485600` passed at signed commit `a9f934c`;
+the completion decision and limits are recorded in
+`docs/PHASE_7_EXIT_AUDIT.md`.
 
-Exit: context sources are typed, permissioned, observable, and testable.
+- [x] Define the closed context registry and add the fixed battery-summary and
+  coarse network-connectivity sources with per-source privacy, lifetime, and
+  capability rules.
+- [x] Use fixed native UPower and NetworkManager IPC adapters, strict
+  verification, content-minimized audit, and narrow shell projections.
+- [x] Pass deterministic, adversarial, regression, and real installed evidence
+  for battery present/absent and network online/isolated non-internet outcomes.
+
+Applications, windows, workspaces, broader hardware and service context,
+clipboard, notifications, selected files, active projects, screenshots, and
+accessibility-derived context remain future separately reviewed sources.
+
+Exit satisfied: both accepted context sources are typed, permissioned,
+observable, and testable. Additional sources require separate future review.
 
 ## Phase 8: Memory and personalization
 

@@ -8,6 +8,8 @@ pub enum Capability {
     SystemReadUptime,
     SystemReadMemorySummary,
     SystemReadStorageSummary,
+    SystemReadBatterySummary,
+    SystemReadNetworkConnectivity,
     ProcessReadSelf,
     ProcessReadList,
     FilesReadContent,
@@ -23,6 +25,8 @@ impl Capability {
             Self::SystemReadUptime => "system.read:uptime",
             Self::SystemReadMemorySummary => "system.read:memory.summary",
             Self::SystemReadStorageSummary => "system.read:storage.summary",
+            Self::SystemReadBatterySummary => "system.read:battery.summary",
+            Self::SystemReadNetworkConnectivity => "system.read:network.connectivity",
             Self::ProcessReadSelf => "process.read:self",
             Self::ProcessReadList => "process.read:list",
             Self::FilesReadContent => "files.read:content",
@@ -62,6 +66,10 @@ impl PolicyEngine {
             ToolRequest::SystemUptime { .. } => Capability::SystemReadUptime,
             ToolRequest::SystemMemorySummary { .. } => Capability::SystemReadMemorySummary,
             ToolRequest::SystemStorageSummary { .. } => Capability::SystemReadStorageSummary,
+            ToolRequest::SystemBatterySummary { .. } => Capability::SystemReadBatterySummary,
+            ToolRequest::SystemNetworkConnectivity { .. } => {
+                Capability::SystemReadNetworkConnectivity
+            }
             ToolRequest::ProcessSelf { .. } => Capability::ProcessReadSelf,
             ToolRequest::ProcessList { .. } => Capability::ProcessReadList,
             ToolRequest::FilesReadContent { .. } => Capability::FilesReadContent,
@@ -72,6 +80,10 @@ impl PolicyEngine {
 
     pub fn evaluate(&self, request: &ToolRequest) -> PolicyDecision {
         let capability = Self::required_capability(request);
+        self.evaluate_capability(capability)
+    }
+
+    pub fn evaluate_capability(&self, capability: Capability) -> PolicyDecision {
         self.rules
             .iter()
             .rev()
@@ -139,6 +151,14 @@ mod tests {
             PolicyEngine::default().evaluate(&process_self),
             PolicyDecision::Deny
         );
+        assert_eq!(
+            PolicyEngine::default().evaluate_capability(Capability::SystemReadBatterySummary),
+            PolicyDecision::Deny
+        );
+        assert_eq!(
+            PolicyEngine::default().evaluate_capability(Capability::SystemReadNetworkConnectivity),
+            PolicyDecision::Deny
+        );
     }
 
     #[test]
@@ -182,6 +202,16 @@ mod tests {
                 ToolRequest::SystemStorageSummary { request_id: id() },
                 Capability::SystemReadStorageSummary,
                 "system.read:storage.summary",
+            ),
+            (
+                ToolRequest::SystemBatterySummary { request_id: id() },
+                Capability::SystemReadBatterySummary,
+                "system.read:battery.summary",
+            ),
+            (
+                ToolRequest::SystemNetworkConnectivity { request_id: id() },
+                Capability::SystemReadNetworkConnectivity,
+                "system.read:network.connectivity",
             ),
             (
                 ToolRequest::ProcessSelf { request_id: id() },

@@ -17,16 +17,21 @@ AmbientCapabilities=
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectSystem=strict
-ProtectHome=yes
+# Empty read-only home/runtime trees, with only the session bus socket visible.
+ProtectHome=tmpfs
+BindReadOnlyPaths=%t/bus
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
 ProtectControlGroups=yes
 ProtectClock=yes
 ProtectHostname=yes
-RestrictAddressFamilies=AF_UNIX
+# Bubblewrap requires NETLINK_ROUTE while constructing its private, networkless
+# namespace. AF_INET and AF_INET6 remain unavailable to this service.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
 RestrictRealtime=yes
-RestrictSUIDSGID=yes
+# Do not set RestrictSUIDSGID here: systemd implements it by denying openat2(),
+# which Bubblewrap requires to construct code-owned read-only mounts safely.
 LockPersonality=yes
 MemoryDenyWriteExecute=yes
 RemoveIPC=yes

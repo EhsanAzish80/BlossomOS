@@ -1,0 +1,88 @@
+# Phase 7 structured system awareness baseline
+
+Status: complete on 2026-09-07 at the accepted battery-summary and fixed
+network-connectivity boundary.
+
+Phase 7 begins from the completed Phase 6 shell and session-service boundary.
+Its goal is to add typed, permissioned, observable, and testable context without
+creating a generic discovery API or invisible personal history.
+
+## Ordered implementation checkpoints
+
+1. Review and accept ADR-0022 for the closed context registry and fixed battery
+   summary. Complete.
+2. Add the registry envelope, typed battery result, singleton capability, strict
+   validator, and deterministic unit tests. Keep default deny. Complete in the
+   first core checkpoint; evidence is recorded in
+   `docs/PHASE_7_BATTERY_CORE.md`.
+3. Add the fixed UPower system-D-Bus adapter with peer checks, exact property
+   allowlist, timeout, reply bound, and private-bus adversarial tests. Complete;
+   evidence is recorded in `docs/PHASE_7_BATTERY_UPOWER.md`.
+4. Route the battery request through existing policy, verification, and
+   content-minimized audit paths. Add no command or executor fallback. Complete;
+   evidence is recorded in `docs/PHASE_7_BATTERY_ROUTING.md`.
+5. Add a narrow shell projection only after the service boundary passes. Keep
+   generic D-Bus and registry discovery out of QML. Complete; evidence and the
+   remaining installed-test boundary are recorded in
+   `docs/PHASE_7_BATTERY_SHELL.md`.
+6. Produce installed present-battery and no-battery evidence, protected
+   regression results, and an independent first-slice audit. Complete; evidence
+   is recorded in `docs/PHASE_7_BATTERY_INSTALLED_EVIDENCE.md`.
+7. Propose later sources one at a time. Private sources such as window titles,
+   clipboard, notifications, selected files, and active projects require their
+   own privacy and lifetime review. ADR-0023 accepts the next bounded source,
+   a fixed network-connectivity enum that exposes no network identifiers or
+   external probe authority.
+8. Add the inactive closed registry member, capability, typed value, strict
+   validator, and deterministic tests for ADR-0023. Complete; evidence is in
+   `docs/PHASE_7_NETWORK_CORE.md`.
+9. Add the fixed NetworkManager adapter and adversarial transport tests without
+   activating a public request. Complete; Linux evidence is recorded in
+   `docs/PHASE_7_NETWORK_MANAGER.md`.
+10. Activate the argument-free request atomically with policy, verification,
+    content-minimized audit, and failure routing. Complete; evidence is in
+    `docs/PHASE_7_NETWORK_ROUTING.md`.
+11. Add the narrow shell projection, then produce real installed online and
+    isolated non-internet evidence and an independent second-slice audit.
+    Complete; evidence is recorded in
+    `docs/PHASE_7_NETWORK_INSTALLED_EVIDENCE.md` and the completion decision in
+    `docs/PHASE_7_EXIT_AUDIT.md`.
+
+## First slice
+
+```text
+fixed battery request
+  -> code-owned capability and policy
+  -> fixed UPower display-device properties
+  -> strict typed validation
+  -> fresh present/absent observation
+  -> content-minimized audit outcome
+  -> optional narrow shell projection
+```
+
+## Non-goals
+
+This baseline adds no hardware enumeration, device identity, arbitrary system
+D-Bus, sysfs browsing, commands, screenshots, accessibility scraping, polling
+chosen by callers, durable context, model context, window titles, clipboard,
+notifications, file access, project discovery, or system mutation.
+
+## Exit evidence for the first slice
+
+- Accepted ADR-0022.
+- Closed source and capability types with default deny.
+- Fixed native adapter and strict present/absent/error distinction.
+- Bounded freshness, response size, polling, and audit data.
+- Adversarial D-Bus, stale-state, replacement, and privacy tests.
+- Narrow shell presentation with no new QML authority, if included.
+- Real installed Linux evidence for a battery-present machine and a valid
+  no-battery machine.
+- Passing Phase 1-6 regression, lint, dependency, secret, and CodeQL checks.
+- Independent evidence document that preserves hardware, packaging,
+  distribution-image, and release limitations.
+
+The broader Phase 7 exit remains unchanged: every added context source must be
+typed, permissioned, observable, and testable.
+
+All accepted Phase 7 checkpoints are complete. Additional context sources are
+future separately reviewed work and do not reopen this two-source exit gate.

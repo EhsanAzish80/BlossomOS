@@ -47,15 +47,12 @@ def check_evidence_lock() -> None:
     require(data["schema_version"] == 1, "evidence lock version drift")
     require(data["purpose"] == "ci-parent-compositors-only", "evidence lock purpose drift")
     require(data["architecture"] == "x86_64", "unsupported evidence architecture")
-    expected = {"cage": "0.3.1-1", "weston": "15.0.1-3"}
     packages = data["packages"]
-    require(len(packages) == len(expected), "evidence parent set drift")
-    for item in packages:
-        require(set(item) == {"name", "version", "repository", "source"}, "evidence package schema drift")
-        name = item["name"]
-        require(name in expected and item["version"] == expected[name], "evidence parent pin drift")
-        require(item["repository"] == "extra", "evidence parent repository drift")
-        require(item["source"] == f"https://archlinux.org/packages/extra/x86_64/{name}/", "evidence source drift")
+    require(len(packages) == 1, "evidence parent set drift")
+    item = packages[0]
+    require(set(item) == {"name", "version", "repository", "source"}, "evidence package schema drift")
+    require((item["name"], item["version"], item["repository"]) == ("niri", "26.04-1", "extra"), "evidence parent pin drift")
+    require(item["source"] == "https://archlinux.org/packages/extra/x86_64/niri/", "evidence source drift")
 
 
 def check_activation() -> None:
@@ -71,10 +68,20 @@ def check_activation() -> None:
 
 def check_unit() -> None:
     text = (PACKAGE / UNIT).read_text()
-    required = ["Type=dbus", f"BusName={BUS_NAME}", f"ExecStart={BINARY}", "Restart=no", "NoNewPrivileges=yes", "CapabilityBoundingSet=\n", "AmbientCapabilities=\n", "PrivateDevices=yes", "ProtectSystem=strict", "ProtectHome=yes", "RestrictAddressFamilies=AF_UNIX", "MemoryDenyWriteExecute=yes", "IPAddressDeny=any"]
+    required = ["Type=dbus", f"BusName={BUS_NAME}", f"ExecStart={BINARY}", "Restart=no", "NoNewPrivileges=yes", "CapabilityBoundingSet=\n", "AmbientCapabilities=\n", "PrivateDevices=yes", "ProtectSystem=strict", "ProtectHome=tmpfs", "RestrictAddressFamilies=AF_UNIX AF_NETLINK", "MemoryDenyWriteExecute=yes", "IPAddressDeny=any"]
     for value in required:
         require(value in text, f"missing shell unit boundary: {value.strip()}")
+    exposure = [line.strip() for line in text.splitlines()
+                if line.strip().startswith(("BindPaths=", "BindReadOnlyPaths=", "ReadWritePaths=", "ReadOnlyPaths=", "ProtectHome="))]
+    require(exposure == ["ProtectHome=tmpfs", "BindReadOnlyPaths=%t/bus"],
+            "shell may expose only the required user bus socket through hidden homes")
     require("[Install]" not in text, "checkpoint must not be enableable")
+    families = [line.strip() for line in text.splitlines()
+                if line.strip().startswith("RestrictAddressFamilies=")]
+    require(families == ["RestrictAddressFamilies=AF_UNIX AF_NETLINK"],
+            "shell service address-family boundary drift")
+    require("RestrictSUIDSGID=" not in text,
+            "RestrictSUIDSGID blocks Bubblewrap's required openat2 syscall")
     for value in ["User=root", "sudo", "pkexec", "/bin/sh", "sh -c", "bash", "systemctl", "RestrictNamespaces="]:
         require(value not in text, f"forbidden shell package surface: {value}")
 

@@ -1,19 +1,38 @@
 use crate::{
-    ApprovalStore, BeginOutcome, BlossomEngine, EngineError, Executor, PolicyDecision,
-    PolicyEngine, PolicyRule, RequestId, ShellApprovalPreview, ShellClientRequest, ShellDecision,
-    ShellPeerId, ShellSessionApprovals, ShellSessionError, ToolRequest,
+    ApprovalStore, BatterySummaryProvider, BeginOutcome, BlossomEngine, EngineError, Executor,
+    PolicyDecision, PolicyEngine, PolicyRule, RequestId, ShellApprovalPreview, ShellClientRequest,
+    ShellDecision, ShellPeerId, ShellSessionApprovals, ShellSessionError, ToolRequest,
 };
-use crate::{Capability, CompletionOutcome};
+use crate::{Capability, CompletionOutcome, ShellBatteryProjection, ToolOutput};
+use crate::{NetworkConnectivityProvider, ShellNetworkProjection};
 use serde::Serialize;
 use std::fmt;
 
 pub const SHELL_APPROVAL_TTL_MS: u64 = 30_000;
 
-pub struct ShellDiagnosticService<E: Executor> {
-    engine: BlossomEngine<E>,
+type ShellEngine<E, B> = BlossomEngine<
+    E,
+    crate::UnavailableOsIdentityProvider,
+    crate::UnavailableUptimeProvider,
+    crate::UnavailableMemorySummaryProvider,
+    crate::UnavailableStorageSummaryProvider,
+    crate::UnavailableProcessSelfProvider,
+    crate::UnavailableProcessListProvider,
+    crate::UnavailableFileContentProvider,
+    crate::UnavailableWorkspaceCreateProvider,
+    crate::UnavailableServiceStatusProvider,
+    B,
+>;
+
+pub struct ShellDiagnosticService<E: Executor, B = crate::UnavailableBatterySummaryProvider> {
+    engine: ShellEngine<E, B>,
     sessions: ShellSessionApprovals<crate::ApprovalToken>,
     instance_nonce: u64,
     next_request: u64,
+    last_battery_read_ms: Option<u64>,
+    cached_battery: Option<ShellBatteryProjection>,
+    last_network_read_ms: Option<u64>,
+    cached_network: Option<ShellNetworkProjection>,
 }
 
 impl<E: Executor> ShellDiagnosticService<E> {
@@ -27,9 +46,15 @@ impl<E: Executor> ShellDiagnosticService<E> {
             sessions: ShellSessionApprovals::default(),
             instance_nonce,
             next_request: 1,
+            last_battery_read_ms: None,
+            cached_battery: None,
+            last_network_read_ms: None,
+            cached_network: None,
         }
     }
+}
 
+impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
     pub fn begin_system_uname(
         &mut self,
         peer: ShellPeerId,
@@ -79,7 +104,7 @@ impl<E: Executor> ShellDiagnosticService<E> {
                     Ok(resolved) => resolved,
                     Err(ShellSessionError::ApprovalExpired) => {
                         self.expire_pending(peer, now_ms)?;
-                        return Err(ShellSessionError::ApprovalExpired.into());
+                        return Ok(ShellServiceOutcome::Expired);
                     }
                     Err(error) => return Err(error.into()),
                 };
@@ -107,7 +132,7 @@ impl<E: Executor> ShellDiagnosticService<E> {
                         Ok(cancelled) => cancelled,
                         Err(ShellSessionError::ApprovalExpired) => {
                             self.expire_pending(peer, now_ms)?;
-                            return Err(ShellSessionError::ApprovalExpired.into());
+                            return Ok(ShellServiceOutcome::Expired);
                         }
                         Err(error) => return Err(error.into()),
                     };
@@ -178,6 +203,141 @@ impl<E: Executor> ShellDiagnosticService<E> {
     }
 }
 
+impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
+    pub fn with_battery_summary(executor: E, battery_summary: B, instance_nonce: u64) -> Self {
+        let policy = PolicyEngine::new(vec![
+            PolicyRule {
+                capability: Capability::SystemReadKernelIdentity,
+                decision: PolicyDecision::Ask,
+            },
+            PolicyRule {
+                capability: Capability::SystemReadBatterySummary,
+                decision: PolicyDecision::Allow,
+            },
+        ]);
+        Self {
+            engine: BlossomEngine::with_battery_summary(
+                policy,
+                ApprovalStore::new(SHELL_APPROVAL_TTL_MS),
+                executor,
+                battery_summary,
+            ),
+            sessions: ShellSessionApprovals::default(),
+            instance_nonce,
+            next_request: 1,
+            last_battery_read_ms: None,
+            cached_battery: None,
+            last_network_read_ms: None,
+            cached_network: None,
+        }
+    }
+
+    pub fn with_context_providers<N: NetworkConnectivityProvider + Send + 'static>(
+        executor: E,
+        battery_summary: B,
+        network_connectivity: N,
+        instance_nonce: u64,
+    ) -> Self {
+        let policy = PolicyEngine::new(vec![
+            PolicyRule {
+                capability: Capability::SystemReadKernelIdentity,
+                decision: PolicyDecision::Ask,
+            },
+            PolicyRule {
+                capability: Capability::SystemReadBatterySummary,
+                decision: PolicyDecision::Allow,
+            },
+            PolicyRule {
+                capability: Capability::SystemReadNetworkConnectivity,
+                decision: PolicyDecision::Allow,
+            },
+        ]);
+        Self {
+            engine: BlossomEngine::with_battery_summary(
+                policy,
+                ApprovalStore::new(SHELL_APPROVAL_TTL_MS),
+                executor,
+                battery_summary,
+            )
+            .with_network_connectivity(network_connectivity),
+            sessions: ShellSessionApprovals::default(),
+            instance_nonce,
+            next_request: 1,
+            last_battery_read_ms: None,
+            cached_battery: None,
+            last_network_read_ms: None,
+            cached_network: None,
+        }
+    }
+
+    pub fn read_battery(
+        &mut self,
+        now_ms: u64,
+    ) -> Result<ShellBatteryProjection, ShellServiceError> {
+        if let (Some(read_at), Some(cached)) = (self.last_battery_read_ms, &self.cached_battery)
+            && now_ms.saturating_sub(read_at)
+                < crate::ContextSource::SystemBatterySummary.min_poll_interval_ms()
+            && now_ms <= cached.expires_at_ms
+        {
+            return Ok(cached.clone());
+        }
+        let sequence = self.next_request;
+        self.next_request = self
+            .next_request
+            .checked_add(1)
+            .ok_or(ShellServiceError::RequestIdExhausted)?;
+        let request = ToolRequest::SystemBatterySummary {
+            request_id: RequestId::parse(format!("shell-{:016x}-{sequence}", self.instance_nonce))
+                .map_err(|_| ShellServiceError::RequestIdExhausted)?,
+        };
+        let BeginOutcome::Completed(completion) = self.engine.begin_request(request, now_ms)?
+        else {
+            return Err(ShellServiceError::WrongMethod);
+        };
+        if !completion.verification.succeeded {
+            return Err(ShellServiceError::BatteryVerificationFailed);
+        }
+        let ToolOutput::BatterySummary(observation) = completion.output else {
+            return Err(ShellServiceError::WrongMethod);
+        };
+        let projection = ShellBatteryProjection::from_verified(&observation);
+        self.last_battery_read_ms = Some(now_ms);
+        self.cached_battery = Some(projection.clone());
+        Ok(projection)
+    }
+
+    pub fn read_network(
+        &mut self,
+        now_ms: u64,
+    ) -> Result<ShellNetworkProjection, ShellServiceError> {
+        if let (Some(read_at), Some(cached)) = (self.last_network_read_ms, &self.cached_network)
+            && now_ms.saturating_sub(read_at)
+                < crate::ContextSource::SystemNetworkConnectivity.min_poll_interval_ms()
+            && now_ms <= cached.expires_at_ms
+        {
+            return Ok(cached.clone());
+        }
+        let request = ToolRequest::SystemNetworkConnectivity {
+            request_id: self.next_request_id()?,
+        };
+        let BeginOutcome::Completed(completion) = self.engine.begin_request(request, now_ms)?
+        else {
+            return Err(ShellServiceError::WrongMethod);
+        };
+        if !completion.verification.succeeded {
+            return Err(ShellServiceError::NetworkVerificationFailed);
+        }
+        let ToolOutput::NetworkConnectivity(observation) = completion.output else {
+            return Err(ShellServiceError::WrongMethod);
+        };
+        let projection = ShellNetworkProjection::from_verified(&observation)
+            .ok_or(ShellServiceError::NetworkVerificationFailed)?;
+        self.last_network_read_ms = Some(now_ms);
+        self.cached_network = Some(projection.clone());
+        Ok(projection)
+    }
+}
+
 fn completion_outcome(completion: CompletionOutcome) -> ShellServiceOutcome {
     if completion.verification.succeeded {
         ShellServiceOutcome::Verified
@@ -192,6 +352,7 @@ pub enum ShellServiceOutcome {
     AwaitingApproval(Box<ShellApprovalPreview>),
     Denied,
     Cancelled,
+    Expired,
     Verified,
     VerificationFailed,
 }
@@ -202,6 +363,8 @@ pub enum ShellServiceError {
     Engine(EngineError),
     WrongMethod,
     RequestIdExhausted,
+    BatteryVerificationFailed,
+    NetworkVerificationFailed,
 }
 
 impl From<ShellSessionError> for ShellServiceError {
@@ -223,6 +386,8 @@ impl fmt::Display for ShellServiceError {
             Self::Engine(_) => "shell engine operation failed",
             Self::WrongMethod => "shell request was sent to the wrong service method",
             Self::RequestIdExhausted => "shell request identifier space was exhausted",
+            Self::BatteryVerificationFailed => "battery observation verification failed",
+            Self::NetworkVerificationFailed => "network observation verification failed",
         })
     }
 }
@@ -232,13 +397,56 @@ impl std::error::Error for ShellServiceError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CommandSpec, ExecutionResult, ExecutorError, decode_shell_client_request};
+    use crate::{
+        BatteryObservation, BatteryReadError, BatteryState, BatterySummary, CommandSpec,
+        ContextSource, ContextValue, ExecutionResult, ExecutorError, NetworkConnectivity,
+        NetworkConnectivityObservation, NetworkConnectivityReadError, decode_shell_client_request,
+    };
     use std::cell::Cell;
     use std::rc::Rc;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
 
     struct CountingExecutor {
         calls: Rc<Cell<usize>>,
         result: ExecutionResult,
+    }
+
+    struct CountingBattery {
+        calls: Rc<Cell<usize>>,
+    }
+
+    impl BatterySummaryProvider for CountingBattery {
+        fn read_battery_summary(&mut self) -> Result<BatteryObservation, BatteryReadError> {
+            self.calls.set(self.calls.get() + 1);
+            Ok(BatteryObservation::new(
+                ContextSource::SystemBatterySummary,
+                1_000,
+                ContextValue::Present(BatterySummary {
+                    percentage: 62,
+                    state: BatteryState::Discharging,
+                }),
+            ))
+        }
+    }
+
+    struct CountingNetwork {
+        calls: Arc<AtomicUsize>,
+    }
+
+    impl NetworkConnectivityProvider for CountingNetwork {
+        fn read_network_connectivity(
+            &mut self,
+        ) -> Result<NetworkConnectivityObservation, NetworkConnectivityReadError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(NetworkConnectivityObservation::new(
+                ContextSource::SystemNetworkConnectivity,
+                1_000,
+                ContextValue::Present(NetworkConnectivity::Online),
+            ))
+        }
     }
 
     impl Executor for CountingExecutor {
@@ -247,6 +455,83 @@ mod tests {
             self.calls.set(self.calls.get() + 1);
             Ok(self.result.clone())
         }
+    }
+
+    #[test]
+    fn battery_projection_is_policy_routed_verified_and_code_rate_limited() {
+        let executor_calls = Rc::new(Cell::new(0));
+        let battery_calls = Rc::new(Cell::new(0));
+        let mut service = ShellDiagnosticService::with_battery_summary(
+            CountingExecutor {
+                calls: executor_calls.clone(),
+                result: ExecutionResult {
+                    exit_code: Some(0),
+                    stdout: b"Linux\n".to_vec(),
+                    stderr: Vec::new(),
+                    timed_out: false,
+                    output_truncated: false,
+                },
+            },
+            CountingBattery {
+                calls: battery_calls.clone(),
+            },
+            99,
+        );
+        let first = service.read_battery(1_000).expect("battery projection");
+        let cached = service.read_battery(1_500).expect("cached projection");
+        assert_eq!(first, cached);
+        assert_eq!(first.percentage, Some(62));
+        assert_eq!(battery_calls.get(), 1);
+        assert_eq!(executor_calls.get(), 0);
+        let activity = service.read_activity(None, 16).expect("battery activity");
+        assert_eq!(activity.len(), 5);
+        assert_eq!(
+            activity.last().expect("terminal").category,
+            crate::ShellActivityCategory::Verified
+        );
+        assert!(
+            service
+                .audit()
+                .records()
+                .iter()
+                .all(|record| { !format!("{:?}", record.event).contains("62") })
+        );
+    }
+
+    #[test]
+    fn network_projection_is_policy_routed_verified_and_code_rate_limited() {
+        let executor_calls = Rc::new(Cell::new(0));
+        let battery_calls = Rc::new(Cell::new(0));
+        let network_calls = Arc::new(AtomicUsize::new(0));
+        let mut service = ShellDiagnosticService::with_context_providers(
+            CountingExecutor {
+                calls: executor_calls.clone(),
+                result: ExecutionResult {
+                    exit_code: Some(0),
+                    stdout: b"Linux\n".to_vec(),
+                    stderr: Vec::new(),
+                    timed_out: false,
+                    output_truncated: false,
+                },
+            },
+            CountingBattery {
+                calls: battery_calls.clone(),
+            },
+            CountingNetwork {
+                calls: network_calls.clone(),
+            },
+            9,
+        );
+        let first = service.read_network(1_000).expect("network projection");
+        let cached = service.read_network(1_500).expect("cached projection");
+        assert_eq!(first, cached);
+        assert_eq!(first.connectivity, NetworkConnectivity::Online);
+        assert_eq!(network_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(battery_calls.get(), 0);
+        assert_eq!(executor_calls.get(), 0);
+        let encoded = serde_json::to_string(&first).expect("serializable projection");
+        assert!(!encoded.contains("interface"));
+        assert!(!encoded.contains("address"));
     }
 
     fn service(calls: Rc<Cell<usize>>) -> ShellDiagnosticService<CountingExecutor> {
@@ -349,16 +634,16 @@ mod tests {
         else {
             panic!("approval")
         };
-        assert!(matches!(
-            service.handle_client_request(
-                &owner,
-                decision(&expiring, "approve_once"),
-                3_000 + SHELL_APPROVAL_TTL_MS + 1
-            ),
-            Err(ShellServiceError::Session(
-                ShellSessionError::ApprovalExpired
-            ))
-        ));
+        assert_eq!(
+            service
+                .handle_client_request(
+                    &owner,
+                    decision(&expiring, "approve_once"),
+                    3_000 + SHELL_APPROVAL_TTL_MS + 1
+                )
+                .expect("expired outcome"),
+            ShellServiceOutcome::Expired
+        );
         assert_eq!(calls.get(), 0);
     }
 
@@ -400,16 +685,16 @@ mod tests {
         ));
         assert_eq!(service.audit().records().len(), records_before_replacement);
 
-        assert!(matches!(
-            service.handle_client_request(
-                &owner,
-                decision(&preview, "approve_once"),
-                1_000 + SHELL_APPROVAL_TTL_MS + 1
-            ),
-            Err(ShellServiceError::Session(
-                ShellSessionError::ApprovalExpired
-            ))
-        ));
+        assert_eq!(
+            service
+                .handle_client_request(
+                    &owner,
+                    decision(&preview, "approve_once"),
+                    1_000 + SHELL_APPROVAL_TTL_MS + 1
+                )
+                .expect("expired outcome"),
+            ShellServiceOutcome::Expired
+        );
         let events: Vec<_> = service
             .audit()
             .records()

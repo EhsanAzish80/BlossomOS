@@ -1,18 +1,16 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import Quickshell
+import QtQuick.Window
 import Blossom.Shell
 
-PanelWindow {
-    anchors {
-        top: true
-        right: true
-        bottom: true
-    }
-    margins.top: 60
-    implicitWidth: 340
-    exclusiveZone: 0
+Window {
+    visible: true
+    width: Math.min(340, screen ? screen.width : 800)
+    height: Math.max(1, (screen ? screen.height : 600) - 60)
+    x: Math.max(0, (screen ? screen.width : 800) - width)
+    y: 60
+    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     color: "#f2171d27"
 
     ColumnLayout {
@@ -21,12 +19,17 @@ PanelWindow {
             margins: 16
         }
         spacing: 10
+        Accessible.role: Accessible.Grouping
+        Accessible.name: "Authoritative activity"
+        Accessible.ignored: false
 
         Label {
             color: "#f4f7fb"
             font.bold: true
             font.pixelSize: 18
             text: "Authoritative activity"
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
         }
 
         ListView {
@@ -35,6 +38,7 @@ PanelWindow {
             clip: true
             spacing: 8
             model: BlossomBroker.activity
+            onCountChanged: positionViewAtEnd()
 
             delegate: Rectangle {
                 required property var modelData
@@ -54,6 +58,8 @@ PanelWindow {
                     wrapMode: Text.Wrap
                     text: "Audit sequence #" + modelData.sequence + "  " + modelData.kind + "\n" +
                           modelData.category + "  ·  " + modelData.request_id
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
                 }
             }
         }

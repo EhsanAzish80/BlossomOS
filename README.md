@@ -91,6 +91,14 @@ The Phase 3 package boundary is validated on controlled Linux CI services but
 is not installed by this repository, and real target-Arch or Bluetooth-hardware
 behavior has not yet been claimed. See `docs/PHASE_3_BASELINE.md`.
 
+Phase 7 adds two closed, read-only context sources: a battery summary from the
+fixed UPower boundary and coarse connectivity from the fixed NetworkManager
+boundary. Both remain default-deny, policy-routed, strictly verified,
+content-minimized in audit, and projected to the shell through narrow versioned
+methods. Installed x86-64 evidence covers battery present/absent and network
+online/isolated non-internet outcomes. It does not add generic discovery,
+hardware identifiers, network identifiers, personal history, or model context.
+
 ### Planned, not implemented
 
 The following are architectural goals only:
@@ -139,10 +147,11 @@ not been moved or restructured.
 
 ## Development
 
-Phases 0 through 5 are complete. Their exit evidence is recorded in
+Phases 0 through 6 are complete. Their exit evidence is recorded in
 `docs/PHASE_0_BASELINE.md`, `docs/PHASE_1_SECURITY_CORE.md`,
 `docs/PHASE_2_BASELINE.md`, `docs/PHASE_3_BASELINE.md`,
-`docs/PHASE_4_EXIT_AUDIT.md`, and `docs/PHASE_5_EXIT_AUDIT.md`. Phase 4,
+`docs/PHASE_4_EXIT_AUDIT.md`, `docs/PHASE_5_EXIT_AUDIT.md`, and
+`docs/PHASE_6_EXIT_AUDIT.md`. Phase 4,
 governed by accepted ADR-0011 through ADR-0019, added closed
 provider-neutral inference types, bounded Ollama and llama.cpp adapters,
 authenticated one-request gateway framing, retained installed-identity
@@ -172,9 +181,13 @@ verification-derived outcomes, hash-chained plan activity, and deterministic
 truthful reports. Its model bridge accepts only the six existing argument-free
 native read proposals; model output still grants no authorization. Recovery is
 in-memory only and active synchronous steps are not interruptible mid-call.
-Phase 6 is active under accepted ADR-0021, but no graphical shell or session IPC
-service is implemented yet. See
-`docs/PHASE_4_INSTALLED_EVIDENCE.md` and `docs/PHASE_5_EXIT_AUDIT.md`.
+Phase 6 is complete at the accepted ADR-0021 engineering boundary. The closed
+Qt/QML presentation host, authenticated versioned session service, fixed
+approval ceremony, accessibility path, and installed x86-64 interaction matrix
+are implemented and tested. This remains pre-alpha engineering evidence, not a
+finished operating-system image, installer, broad hardware claim, or release.
+See `docs/PHASE_6_EXIT_AUDIT.md` and
+`docs/PHASE_6_INSTALLED_EVIDENCE.md`.
 
 Prototype commands in older documentation are historical development material,
 not supported installation instructions.

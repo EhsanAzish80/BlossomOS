@@ -1,54 +1,131 @@
 import QtQuick
 import QtQuick.Controls
-import Quickshell
+import QtQuick.Window
 import Blossom.Shell
 
-ShellRoot {
-    Component.onCompleted: BlossomBroker.refreshActivity()
+ApplicationWindow {
+    id: commandBar
+    visible: true
+    x: 0
+    y: 0
+    width: screen ? screen.width : 800
+    height: 52
+    flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+    color: "#11151c"
+    title: "Blossom OS"
 
-    PanelWindow {
-        id: commandBar
-        anchors {
-            top: true
-            left: true
-            right: true
+    function restoreRequestFocus() {
+        if (requestButton.enabled) {
+            commandBar.requestActivate()
+            requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
         }
-        implicitHeight: 52
-        color: "#11151c"
+    }
 
-        Row {
-            anchors {
-                fill: parent
-                leftMargin: 18
-                rightMargin: 18
-            }
-            spacing: 16
+    onActiveChanged: {
+        if (active && requestButton.enabled) {
+            requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
+        }
+    }
 
-            Label {
-                anchors.verticalCenter: parent.verticalCenter
-                color: "#f4f7fb"
-                font.bold: true
-                text: "Blossom OS"
-            }
+    Component.onCompleted: {
+        BlossomBroker.refreshActivity()
+        BlossomBroker.refreshBattery()
+        BlossomBroker.refreshNetwork()
+        requestActivate()
+        requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
+    }
 
-            Button {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Request kernel identity"
-                enabled: BlossomBroker.state !== "waiting" && BlossomBroker.state !== "submitting"
-                onClicked: BlossomBroker.requestSystemUname()
+    Connections {
+        target: BlossomBroker
+        function onStateChanged() {
+            if (BlossomBroker.state !== "waiting"
+                    && BlossomBroker.state !== "submitting"
+                    && BlossomBroker.state !== "cancelling") {
+                // Let the modal visibility binding unmap its Wayland surface
+                // before returning activation to the command bar.
+                Qt.callLater(commandBar.restoreRequestFocus)
             }
+        }
+    }
 
-            Label {
-                anchors.verticalCenter: parent.verticalCenter
-                color: BlossomBroker.state === "unavailable" ? "#ff8a80" : "#b8c4d6"
-                text: "Status: " + BlossomBroker.state
-            }
+    Row {
+        anchors {
+            fill: parent
+            leftMargin: 18
+            rightMargin: 18
+        }
+        spacing: 16
+        Accessible.role: Accessible.Grouping
+        Accessible.name: "Blossom OS controls"
+        Accessible.ignored: false
 
-            Button {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Refresh activity"
-                onClicked: BlossomBroker.refreshActivity()
-            }
+        Label {
+            anchors.verticalCenter: parent.verticalCenter
+            color: "#f4f7fb"
+            font.bold: true
+            text: "Blossom OS"
+        }
+
+        Label {
+            anchors.verticalCenter: parent.verticalCenter
+            color: "#b8c4d6"
+            text: "Network: " + BlossomBroker.network.connectivity
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.ignored: false
+        }
+
+        Label {
+            anchors.verticalCenter: parent.verticalCenter
+            color: "#b8c4d6"
+            text: BlossomBroker.battery.status === "present"
+                ? "Battery: " + BlossomBroker.battery.percentage + "% (" + BlossomBroker.battery.state + ")"
+                : BlossomBroker.battery.status === "absent" ? "Battery: none" : "Battery: unavailable"
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+            Accessible.ignored: false
+        }
+
+        Button {
+            id: requestButton
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Request kernel identity"
+            enabled: BlossomBroker.state !== "requesting"
+                && BlossomBroker.state !== "waiting"
+                && BlossomBroker.state !== "submitting"
+                && BlossomBroker.state !== "cancelling"
+            activeFocusOnTab: true
+            KeyNavigation.tab: refreshButton
+            KeyNavigation.backtab: refreshButton
+            Accessible.name: text
+            Accessible.description: "Request the fixed kernel identity diagnostic."
+            Accessible.role: Accessible.Button
+            Accessible.ignored: false
+            onClicked: BlossomBroker.requestSystemUname()
+        }
+
+        Label {
+            id: statusLabel
+            anchors.verticalCenter: parent.verticalCenter
+            color: BlossomBroker.state === "unavailable" ? "#ff8a80" : "#b8c4d6"
+            text: "Status: " + BlossomBroker.state
+            Accessible.role: Accessible.AlertMessage
+            Accessible.name: text
+            Accessible.ignored: false
+        }
+
+        Button {
+            id: refreshButton
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Refresh activity"
+            activeFocusOnTab: true
+            KeyNavigation.tab: requestButton
+            KeyNavigation.backtab: requestButton
+            Accessible.name: text
+            Accessible.description: "Refresh the bounded authoritative activity list."
+            Accessible.role: Accessible.Button
+            Accessible.ignored: false
+            onClicked: BlossomBroker.refreshActivity()
         }
     }
 

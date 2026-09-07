@@ -48,6 +48,11 @@ fn project_event(
             ShellActivityKind::Request,
             ShellActivityCategory::Accepted,
         ),
+        AuditEvent::RequestAccepted { request_id, tool } if tool == "system.battery.summary" => (
+            request_id,
+            ShellActivityKind::Request,
+            ShellActivityCategory::Accepted,
+        ),
         AuditEvent::PolicyEvaluated {
             request_id,
             capability: Capability::SystemReadKernelIdentity,
@@ -56,6 +61,33 @@ fn project_event(
             request_id,
             ShellActivityKind::Policy,
             ShellActivityCategory::PolicyAsk,
+        ),
+        AuditEvent::PolicyEvaluated {
+            request_id,
+            capability: Capability::SystemReadBatterySummary,
+            decision: PolicyDecision::Allow,
+        } => (
+            request_id,
+            ShellActivityKind::Policy,
+            ShellActivityCategory::PolicyAllow,
+        ),
+        AuditEvent::NativeReadStarted {
+            request_id,
+            resource,
+        } if resource == "system.battery.summary" => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadStarted,
+        ),
+        AuditEvent::BatterySummaryReadFinished { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadFinished,
+        ),
+        AuditEvent::BatterySummaryReadFailed { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadFailed,
         ),
         AuditEvent::ApprovalIssued { request_id } => (
             request_id,

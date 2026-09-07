@@ -1,4 +1,8 @@
 use crate::request::{RequestError, RequestId};
+use crate::{
+    BatteryObservation, BatteryState, ContextValue, NetworkConnectivity,
+    NetworkConnectivityObservation,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt::{self, Write};
@@ -9,6 +13,68 @@ pub const SHELL_OBJECT_PATH: &str = "/org/blossomos/Shell1";
 pub const SHELL_INTERFACE: &str = "org.blossomos.Shell1";
 pub const MAX_SHELL_MESSAGE_BYTES: usize = 4_096;
 pub const MAX_ACTIVITY_BATCH: u16 = 64;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShellBatteryStatus {
+    Present,
+    Absent,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ShellBatteryProjection {
+    pub version: u16,
+    pub status: ShellBatteryStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub percentage: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<BatteryState>,
+    pub expires_at_ms: u64,
+}
+
+impl ShellBatteryProjection {
+    pub fn from_verified(observation: &BatteryObservation) -> Self {
+        let (status, percentage, state) = match observation.observation {
+            ContextValue::Present(summary) => (
+                ShellBatteryStatus::Present,
+                Some(summary.percentage),
+                Some(summary.state),
+            ),
+            ContextValue::Absent => (ShellBatteryStatus::Absent, None, None),
+        };
+        Self {
+            version: SHELL_PROTOCOL_VERSION,
+            status,
+            percentage,
+            state,
+            expires_at_ms: observation
+                .observed_at_unix_ms
+                .saturating_add(observation.max_age_ms),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ShellNetworkProjection {
+    pub version: u16,
+    pub connectivity: NetworkConnectivity,
+    pub expires_at_ms: u64,
+}
+
+impl ShellNetworkProjection {
+    pub fn from_verified(observation: &NetworkConnectivityObservation) -> Option<Self> {
+        let ContextValue::Present(connectivity) = observation.observation else {
+            return None;
+        };
+        Some(Self {
+            version: SHELL_PROTOCOL_VERSION,
+            connectivity,
+            expires_at_ms: observation
+                .observed_at_unix_ms
+                .saturating_add(observation.max_age_ms),
+        })
+    }
+}
 
 const DIGEST_HEX_BYTES: usize = 64;
 
@@ -214,6 +280,7 @@ pub enum ShellActivityKind {
     Execution,
     Verification,
     Terminal,
+    Context,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -221,6 +288,7 @@ pub enum ShellActivityKind {
 pub enum ShellActivityCategory {
     Accepted,
     PolicyAsk,
+    PolicyAllow,
     PolicyDenied,
     ApprovalIssued,
     ApprovalRejected,
@@ -234,6 +302,9 @@ pub enum ShellActivityCategory {
     Verified,
     VerificationFailed,
     Indeterminate,
+    ReadStarted,
+    ReadFinished,
+    ReadFailed,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -393,5 +464,53 @@ mod tests {
         for forbidden in ["token", "shell", "sudo", "command_arguments", "tool_name"] {
             assert!(!encoded.contains(forbidden));
         }
+    }
+
+    #[test]
+    fn battery_projection_contains_only_fixed_fresh_display_fields() {
+        let observation = BatteryObservation::new(
+            crate::ContextSource::SystemBatterySummary,
+            10_000,
+            ContextValue::Present(crate::BatterySummary {
+                percentage: 73,
+                state: BatteryState::Charging,
+            }),
+        );
+        let projection = ShellBatteryProjection::from_verified(&observation);
+        assert_eq!(projection.expires_at_ms, 15_000);
+        assert_eq!(projection.status, ShellBatteryStatus::Present);
+        assert_eq!(projection.percentage, Some(73));
+        assert_eq!(projection.state, Some(BatteryState::Charging));
+        assert_eq!(
+            serde_json::to_value(projection).expect("projection"),
+            serde_json::json!({
+                "version": 1,
+                "status": "present",
+                "percentage": 73,
+                "state": "charging",
+                "expires_at_ms": 15_000
+            })
+        );
+    }
+
+    #[test]
+    fn network_projection_contains_only_fixed_fresh_display_fields() {
+        let observation = crate::NetworkConnectivityObservation::new(
+            crate::ContextSource::SystemNetworkConnectivity,
+            10_000,
+            ContextValue::Present(crate::NetworkConnectivity::Limited),
+        );
+        let projection = ShellNetworkProjection::from_verified(&observation)
+            .expect("present verified network projection");
+        assert_eq!(projection.version, SHELL_PROTOCOL_VERSION);
+        assert_eq!(projection.connectivity, crate::NetworkConnectivity::Limited);
+        assert_eq!(projection.expires_at_ms, 15_000);
+        let encoded = serde_json::to_string(&projection).expect("projection serializes");
+        assert_eq!(
+            encoded,
+            r#"{"version":1,"connectivity":"limited","expires_at_ms":15000}"#
+        );
+        assert!(!encoded.contains("interface"));
+        assert!(!encoded.contains("address"));
     }
 }

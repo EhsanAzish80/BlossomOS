@@ -48,6 +48,12 @@ pub enum ToolRequest {
     SystemStorageSummary {
         request_id: RequestId,
     },
+    SystemBatterySummary {
+        request_id: RequestId,
+    },
+    SystemNetworkConnectivity {
+        request_id: RequestId,
+    },
     ProcessSelf {
         request_id: RequestId,
     },
@@ -127,6 +133,22 @@ impl ToolRequest {
                     }
                 })?;
                 Ok(Self::SystemStorageSummary { request_id })
+            }
+            "system.battery.summary" => {
+                serde_json::from_value::<NoArguments>(envelope.arguments).map_err(|error| {
+                    RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    }
+                })?;
+                Ok(Self::SystemBatterySummary { request_id })
+            }
+            "system.network.connectivity" => {
+                serde_json::from_value::<NoArguments>(envelope.arguments).map_err(|error| {
+                    RequestError::InvalidArguments {
+                        message: error.to_string(),
+                    }
+                })?;
+                Ok(Self::SystemNetworkConnectivity { request_id })
             }
             "process.self" => {
                 serde_json::from_value::<NoArguments>(envelope.arguments).map_err(|error| {
@@ -210,6 +232,8 @@ impl ToolRequest {
             | Self::SystemUptime { request_id }
             | Self::SystemMemorySummary { request_id }
             | Self::SystemStorageSummary { request_id }
+            | Self::SystemBatterySummary { request_id }
+            | Self::SystemNetworkConnectivity { request_id }
             | Self::ProcessSelf { request_id }
             | Self::ProcessList { request_id } => request_id,
             Self::FilesReadContent { request_id, .. } => request_id,
@@ -225,6 +249,8 @@ impl ToolRequest {
             Self::SystemUptime { .. } => "system.uptime",
             Self::SystemMemorySummary { .. } => "system.memory.summary",
             Self::SystemStorageSummary { .. } => "system.storage.summary",
+            Self::SystemBatterySummary { .. } => "system.battery.summary",
+            Self::SystemNetworkConnectivity { .. } => "system.network.connectivity",
             Self::ProcessSelf { .. } => "process.self",
             Self::ProcessList { .. } => "process.list",
             Self::FilesReadContent { .. } => "files.read.content",
@@ -466,6 +492,24 @@ mod tests {
     }
 
     #[test]
+    fn parses_battery_summary_without_arguments() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-battery","tool":"system.battery.summary","arguments":{}}"#,
+        )
+        .expect("battery summary request should parse");
+        assert_eq!(request.tool_name(), "system.battery.summary");
+    }
+
+    #[test]
+    fn parses_network_connectivity_without_arguments() {
+        let request = ToolRequest::parse_json(
+            r#"{"request_id":"req-network","tool":"system.network.connectivity","arguments":{}}"#,
+        )
+        .expect("network connectivity request should parse");
+        assert_eq!(request.tool_name(), "system.network.connectivity");
+    }
+
+    #[test]
     fn parses_process_self_without_arguments() {
         let request = ToolRequest::parse_json(
             r#"{"request_id":"req-6","tool":"process.self","arguments":{}}"#,
@@ -528,6 +572,18 @@ mod tests {
         assert!(matches!(
             ToolRequest::parse_json(
                 r#"{"request_id":"req-5","tool":"system.storage.summary","arguments":{"path":"/home"}}"#
+            ),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+        assert!(matches!(
+            ToolRequest::parse_json(
+                r#"{"request_id":"req-battery","tool":"system.battery.summary","arguments":{"device":"BAT0"}}"#
+            ),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+        assert!(matches!(
+            ToolRequest::parse_json(
+                r#"{"request_id":"req-network","tool":"system.network.connectivity","arguments":{"interface":"wlan0"}}"#
             ),
             Err(RequestError::InvalidArguments { .. })
         ));
