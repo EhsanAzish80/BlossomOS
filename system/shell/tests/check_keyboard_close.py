@@ -170,6 +170,20 @@ def wait_for_latest_activity(expected_outcomes):
     raise AssertionError(f"activity projection drift: {latest_records}")
 
 
+# A compositor close request follows QML onClosing and must cancel without
+# depending on keyboard focus inherited from an earlier scenario.
+invoke("Request kernel identity")
+focus_approval()
+dispatch("closewindow", "title:^(Blossom OS approval)$")
+wait_compositor_window_absent("Blossom OS approval")
+require_alert("Status: cancelled")
+wait_for_latest_activity([
+    "accepted",
+    "policy_ask",
+    "approval_issued",
+    "cancelled",
+])
+
 # The command bar restores focus to its request button after each terminal state.
 # Space therefore starts a request without an assistive action invocation.
 focus_main_and_press("space")
@@ -189,20 +203,6 @@ require_alert("Status: verified")
 focus_main_and_press("space")
 focus_approval()
 press("Escape")
-wait_compositor_window_absent("Blossom OS approval")
-require_alert("Status: cancelled")
-invoke("Refresh activity")
-wait_for_latest_activity([
-    "accepted",
-    "policy_ask",
-    "approval_issued",
-    "cancelled",
-])
-
-# A compositor close request follows QML onClosing and must also cancel.
-invoke("Request kernel identity")
-focus_approval()
-dispatch("closewindow", "title:^(Blossom OS approval)$")
 wait_compositor_window_absent("Blossom OS approval")
 require_alert("Status: cancelled")
 invoke("Refresh activity")
