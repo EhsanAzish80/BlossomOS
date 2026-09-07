@@ -21,6 +21,6 @@ values, wrong service UID, timeout, missing owner, and missing bus. Quality run
 [`34121326225`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/34121326225)
 passed at signed commit `28e63b4`, compiling and executing the GNU/Linux path.
 
-The source remains inactive: this checkpoint adds no public request or shell
-method. Activation belongs to checkpoint 10 with policy, verification, audit,
-and failure routing in one change.
+The adapter checkpoint itself added no public request. The separately reviewed
+request route and shell projection are now complete and recorded in
+`docs/PHASE_7_NETWORK_ROUTING.md`.

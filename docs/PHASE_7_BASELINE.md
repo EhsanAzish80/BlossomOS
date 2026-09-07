@@ -40,9 +40,11 @@ creating a generic discovery API or invisible personal history.
    activating a public request. Complete; Linux evidence is recorded in
    `docs/PHASE_7_NETWORK_MANAGER.md`.
 10. Activate the argument-free request atomically with policy, verification,
-    content-minimized audit, and failure routing.
+    content-minimized audit, and failure routing. Complete; evidence is in
+    `docs/PHASE_7_NETWORK_ROUTING.md`.
 11. Add the narrow shell projection, then produce real installed offline and
-    online-class evidence and an independent second-slice audit.
+    online-class evidence and an independent second-slice audit. The shell
+    projection is complete; installed evidence and the exit audit remain.
 
 ## First slice
 
@@ -80,6 +82,6 @@ notifications, file access, project discovery, or system mutation.
 The broader Phase 7 exit remains unchanged: every added context source must be
 typed, permissioned, observable, and testable.
 
-The next implementation checkpoint is 9: add the fixed NetworkManager adapter
-and adversarial transport tests without widening native authority or activating
-a partially routed request.
+The next implementation checkpoint is the installed evidence portion of 11:
+prove real NetworkManager online and offline outcomes, then perform the
+independent second-slice and Phase 7 exit audit.

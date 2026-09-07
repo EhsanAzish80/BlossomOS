@@ -1,0 +1,102 @@
+name: Phase 7 installed network evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase7-installed-network-evidence
+  cancel-in-progress: false
+
+jobs:
+  online:
+    name: Real installed online NetworkManager boundary
+    runs-on: [self-hosted, linux, x64, blossom-gpu]
+    timeout-minutes: 20
+    steps:
+      - name: Establish real installed network host
+        run: |
+          grep -qx 'ID=ubuntu' /etc/os-release
+          test "$(uname -m)" = x86_64
+          test -S /run/dbus/system_bus_socket
+          systemctl is-active --quiet NetworkManager.service
+          docker version >/dev/null
+
+      - name: Restore runner ownership before checkout
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            chown -R "$(id -u):$(id -g)" /workspace
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build portable production probe
+        run: |
+          mkdir -p "$RUNNER_TEMP/network-build"
+          docker run --rm \
+            --env HOST_UID="$(id -u)" \
+            --env HOST_GID="$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$RUNNER_TEMP/network-build:/output" \
+            --workdir /workspace \
+            rust@sha256:3f6e6f8d8725a65a2db964bb828850f888d430c68784d661f753144e5d787207 \
+            sh -ec 'CARGO_HOME=/output/cargo-home \
+              CARGO_TARGET_DIR=/output/target \
+              cargo build --locked --release --package blossom-core \
+              --example installed_network_probe
+              chown -R "$HOST_UID:$HOST_GID" /output'
+
+      - name: Prove real online NetworkManager observation
+        run: |
+          "$RUNNER_TEMP/network-build/target/release/examples/installed_network_probe" \
+            expect-online
+
+  offline:
+    name: Real isolated offline NetworkManager boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install real NetworkManager
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes network-manager
+
+      - name: Build production probe
+        run: |
+          cargo build --locked --release --package blossom-core \
+            --example installed_network_probe
+
+      - name: Prove real offline observation in an isolated network namespace
+        run: |
+          sudo unshare --net --mount --pid --fork bash -euo pipefail -c '
+            mount -t tmpfs tmpfs /run
+            mkdir -p /run/dbus /run/NetworkManager
+            dbus-daemon --system --fork --nopidfile
+            NetworkManager --no-daemon >/tmp/blossom-network-manager.log 2>&1 &
+            nm_pid=$!
+            trap "kill $nm_pid 2>/dev/null || true" EXIT
+            for attempt in $(seq 1 100); do
+              busctl --system --quiet status org.freedesktop.NetworkManager >/dev/null 2>&1 && break
+              kill -0 "$nm_pid"
+              sleep 0.1
+            done
+            busctl --system --quiet status org.freedesktop.NetworkManager >/dev/null
+            ip link show lo >/dev/null
+            ! ip route show default | grep -q .
+            target/release/examples/installed_network_probe expect-offline
+          '
+
+  complete:
+    name: Network evidence complete
+    needs: [online, offline]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require both real outcomes
+        run: echo 'Real installed NetworkManager online and isolated offline observations passed.'
