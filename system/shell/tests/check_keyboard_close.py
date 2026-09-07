@@ -184,6 +184,19 @@ wait_for_latest_activity([
     "cancelled",
 ])
 
+# Escape is a global window shortcut and must cancel without execution.
+focus_main_and_press("space")
+focus_approval()
+press("Escape")
+wait_compositor_window_absent("Blossom OS approval")
+require_alert("Status: cancelled")
+wait_for_latest_activity([
+    "accepted",
+    "policy_ask",
+    "approval_issued",
+    "cancelled",
+])
+
 # The command bar restores focus to its request button after each terminal state.
 # Space therefore starts a request without an assistive action invocation.
 focus_main_and_press("space")
@@ -198,19 +211,5 @@ press("Tab")
 wait_focused("Approve once")
 press("space")
 require_alert("Status: verified")
-
-# Escape is a global window shortcut and must cancel without execution.
-invoke("Request kernel identity")
-focus_approval()
-press("Escape")
-wait_compositor_window_absent("Blossom OS approval")
-require_alert("Status: cancelled")
-invoke("Refresh activity")
-wait_for_latest_activity([
-    "accepted",
-    "policy_ask",
-    "approval_issued",
-    "cancelled",
-])
 
 print("installed keyboard and compositor-close matrix passed")
