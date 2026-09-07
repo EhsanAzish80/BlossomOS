@@ -223,7 +223,7 @@ async fn fixed_proxy<'a>(
 async fn resolve_owner(
     bus: &zbus::Proxy<'_>,
     destination: &str,
-) -> Result<zbus::zvariant::OwnedUniqueName, BatteryReadError> {
+) -> Result<zbus::names::OwnedUniqueName, BatteryReadError> {
     use zbus::proxy::MethodFlags;
 
     bus.call_with_flags(
@@ -239,7 +239,7 @@ async fn resolve_owner(
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 async fn require_owner_uid(
     bus: &zbus::Proxy<'_>,
-    owner: &zbus::zvariant::OwnedUniqueName,
+    owner: &zbus::names::OwnedUniqueName,
     expected_uid: u32,
 ) -> Result<(), BatteryReadError> {
     use zbus::proxy::MethodFlags;
