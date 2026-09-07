@@ -277,6 +277,9 @@ jobs:
               HYPRLAND_INSTANCE_SIGNATURE=$(find "$XDG_RUNTIME_DIR/hypr" \
                 -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | head -n 1)
               test -n "$HYPRLAND_INSTANCE_SIGNATURE"
+              hypr_socket=$(hyprctl instances -j | python3 -c \
+                "import json,os,sys; print(next(item[\"wl_socket\"] for item in json.load(sys.stdin) if item[\"instance\"] == os.environ[\"HYPRLAND_INSTANCE_SIGNATURE\"]))")
+              test -S "$XDG_RUNTIME_DIR/$hypr_socket"
               restart_shell_ui() {
                 pkill -u "$(id -u)" -f \
                   "^/usr/lib/blossom-os/blossom-shell-ui$" 2>/dev/null || true
@@ -287,7 +290,7 @@ jobs:
                 done
                 ! pgrep -u "$(id -u)" -f \
                   "^/usr/lib/blossom-os/blossom-shell-ui$" >/dev/null
-                WAYLAND_DISPLAY="$nested_socket" \
+                WAYLAND_DISPLAY="$hypr_socket" \
                   QML_IMPORT_PATH=/usr/lib/qt6/qml \
                   QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1 \
                   QT_LOGGING_RULES=qt.accessibility.*=true \
