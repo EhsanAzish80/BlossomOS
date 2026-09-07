@@ -144,9 +144,9 @@ async fn read_network_manager_connectivity(
     address: &str,
     expected_uid: u32,
 ) -> Result<NetworkConnectivityObservation, NetworkConnectivityReadError> {
+    use zbus::connection;
     use zbus::proxy::MethodFlags;
     use zbus::zvariant::OwnedValue;
-    use zbus::{Proxy, connection};
 
     let connection = connection::Builder::address(address)
         .map_err(|_| NetworkConnectivityReadError::ConnectionFailed)?
