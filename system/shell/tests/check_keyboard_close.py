@@ -140,6 +140,17 @@ def activity_for_latest_request():
     return [record for record in records if record[3] == latest_request]
 
 
+def wait_for_latest_activity(expected_outcomes):
+    deadline = time.monotonic() + TIMEOUT_SECONDS
+    latest_records = []
+    while time.monotonic() < deadline:
+        latest_records = activity_for_latest_request()
+        if [record[2] for record in latest_records] == expected_outcomes:
+            return latest_records
+        time.sleep(0.1)
+    raise AssertionError(f"activity projection drift: {latest_records}")
+
+
 # The command bar restores focus to its request button after each terminal state.
 # Space therefore starts a request without an assistive action invocation.
 focus_main_and_press("space")
@@ -161,14 +172,12 @@ focus_approval()
 press("Escape")
 wait_compositor_window_absent("Blossom OS approval")
 require_alert("Status: cancelled")
-escape_records = activity_for_latest_request()
-if [record[2] for record in escape_records] != [
+wait_for_latest_activity([
     "accepted",
     "policy_ask",
     "approval_issued",
     "cancelled",
-]:
-    raise AssertionError(f"Escape path activity drift: {escape_records}")
+])
 
 # A compositor close request follows QML onClosing and must also cancel.
 focus_main_and_press("space")
@@ -176,13 +185,11 @@ focus_approval()
 dispatch("closewindow", "title:^(Blossom OS approval)$")
 wait_compositor_window_absent("Blossom OS approval")
 require_alert("Status: cancelled")
-close_records = activity_for_latest_request()
-if [record[2] for record in close_records] != [
+wait_for_latest_activity([
     "accepted",
     "policy_ask",
     "approval_issued",
     "cancelled",
-]:
-    raise AssertionError(f"close path activity drift: {close_records}")
+])
 
 print("installed keyboard and compositor-close matrix passed")
