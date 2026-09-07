@@ -15,6 +15,15 @@ pub enum Capability {
     FilesReadContent,
     FilesWriteCreate,
     ServicesReadStatus,
+    MemoryDurableCreate,
+    MemoryDurableInspect,
+    MemoryDurableEdit,
+    MemoryDurableDelete,
+    MemoryDurableExport,
+    MemoryDurableDisable,
+    MemoryDurableSetRetention,
+    MemoryDurableRecall,
+    MemoryDurableEnable,
 }
 
 impl Capability {
@@ -32,6 +41,15 @@ impl Capability {
             Self::FilesReadContent => "files.read:content",
             Self::FilesWriteCreate => "files.write:create",
             Self::ServicesReadStatus => "services.read:status",
+            Self::MemoryDurableCreate => "memory.durable:create",
+            Self::MemoryDurableInspect => "memory.durable:inspect",
+            Self::MemoryDurableEdit => "memory.durable:edit",
+            Self::MemoryDurableDelete => "memory.durable:delete",
+            Self::MemoryDurableExport => "memory.durable:export",
+            Self::MemoryDurableDisable => "memory.durable:disable",
+            Self::MemoryDurableSetRetention => "memory.durable:set_retention",
+            Self::MemoryDurableRecall => "memory.durable:recall",
+            Self::MemoryDurableEnable => "memory.durable:enable",
         }
     }
 }

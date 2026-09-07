@@ -1,8 +1,11 @@
+#[cfg(unix)]
+use crate::MemoryApprovalPreview;
 use crate::request::{RequestError, RequestId};
 use crate::{
     BatteryObservation, BatteryState, ContextValue, NetworkConnectivity,
     NetworkConnectivityObservation,
 };
+use crate::{DurableMemoryRecord, MemoryRetention};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fmt::{self, Write};
@@ -13,6 +16,94 @@ pub const SHELL_OBJECT_PATH: &str = "/org/blossomos/Shell1";
 pub const SHELL_INTERFACE: &str = "org.blossomos.Shell1";
 pub const MAX_SHELL_MESSAGE_BYTES: usize = 4_096;
 pub const MAX_ACTIVITY_BATCH: u16 = 64;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShellMemoryStatus {
+    Disabled,
+    Enabled,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ShellMemorySummaryProjection {
+    pub version: u16,
+    pub status: ShellMemoryStatus,
+    pub record_count: usize,
+}
+
+impl ShellMemorySummaryProjection {
+    pub fn fixed(enabled: bool, record_count: usize) -> Self {
+        Self {
+            version: SHELL_PROTOCOL_VERSION,
+            status: if enabled {
+                ShellMemoryStatus::Enabled
+            } else {
+                ShellMemoryStatus::Disabled
+            },
+            record_count,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ShellMemoryRecordProjection {
+    pub version: u16,
+    pub record_id: String,
+    pub value: String,
+    pub retention: MemoryRetention,
+    pub created_at_unix_ms: u64,
+    pub last_user_edit_at_unix_ms: u64,
+}
+
+impl From<&DurableMemoryRecord> for ShellMemoryRecordProjection {
+    fn from(record: &DurableMemoryRecord) -> Self {
+        Self {
+            version: SHELL_PROTOCOL_VERSION,
+            record_id: record.record_id.clone(),
+            value: record.value.clone(),
+            retention: record.retention,
+            created_at_unix_ms: record.created_at_unix_ms,
+            last_user_edit_at_unix_ms: record.last_user_edit_at_unix_ms,
+        }
+    }
+}
+
+#[cfg(unix)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ShellMemoryApprovalProjection {
+    pub version: u16,
+    pub request_id: String,
+    pub operation: crate::MemoryOperation,
+    pub record_id: String,
+    pub value: Option<String>,
+    pub purpose: &'static str,
+    pub scope: &'static str,
+    pub retention: &'static str,
+    pub consumers: [&'static str; 1],
+    pub approval: &'static str,
+    pub expires_at_ms: u64,
+    pub preview_sha256: String,
+}
+
+#[cfg(unix)]
+impl From<&MemoryApprovalPreview> for ShellMemoryApprovalProjection {
+    fn from(preview: &MemoryApprovalPreview) -> Self {
+        Self {
+            version: SHELL_PROTOCOL_VERSION,
+            request_id: preview.request_id.clone(),
+            operation: preview.operation,
+            record_id: preview.record_id.clone(),
+            value: preview.value.clone(),
+            purpose: preview.purpose,
+            scope: preview.scope,
+            retention: preview.retention,
+            consumers: preview.consumers,
+            approval: preview.approval,
+            expires_at_ms: preview.expires_at_ms,
+            preview_sha256: preview.preview_sha256.clone(),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -464,6 +555,31 @@ mod tests {
         for forbidden in ["token", "shell", "sudo", "command_arguments", "tool_name"] {
             assert!(!encoded.contains(forbidden));
         }
+    }
+
+    #[test]
+    fn memory_projection_is_fixed_and_contains_no_storage_authority() {
+        let record = DurableMemoryRecord {
+            record_id: "mem-fixed".into(),
+            schema_version: crate::MEMORY_SCHEMA_VERSION,
+            purpose: crate::MemoryPurpose::UserPreference,
+            scope: crate::MemoryScope::User,
+            retention: MemoryRetention::UntilDeleted,
+            consumers: vec![crate::MemoryConsumer::UserControls],
+            created_at_unix_ms: 10,
+            last_user_edit_at_unix_ms: 11,
+            value: "visible user value".into(),
+        };
+        let projection = ShellMemoryRecordProjection::from(&record);
+        let encoded = serde_json::to_string(&projection).expect("projection serialized");
+        assert!(encoded.contains("visible user value"));
+        for forbidden in ["path", "key", "query", "database", "capability"] {
+            assert!(!encoded.contains(forbidden));
+        }
+        assert_eq!(
+            ShellMemorySummaryProjection::fixed(false, 0).status,
+            ShellMemoryStatus::Disabled
+        );
     }
 
     #[test]
