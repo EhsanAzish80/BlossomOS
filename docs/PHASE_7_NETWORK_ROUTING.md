@@ -1,9 +1,8 @@
 # Phase 7 network request routing and shell projection
 
-Status: request routing and the narrow shell projection are complete on
-2026-09-07. Installed online and isolated non-internet evidence remains the
-final checkpoint; exact offline, local, and limited mappings remain covered by
-deterministic core tests.
+Status: complete on 2026-09-07. Request routing, narrow shell projection, and
+installed online and isolated non-internet evidence have passed. Exact offline,
+local, and limited mappings remain covered by deterministic core tests.
 
 The argument-free `system.network.connectivity` request is mapped only to
 `system.read:network.connectivity`. Policy defaults to deny. An explicit allow
@@ -30,6 +29,8 @@ tests, diff hygiene, and the forbidden-name scan. Linux Quality run
 passed at signed commit `d252f00`, including the GNU/Linux provider, production
 D-Bus service, Qt client build, Rust lint, and all Rust tests.
 
-This completes Phase 7 checkpoints 10 and the shell-projection portion of 11.
-It does not claim installed online or offline observation evidence; those remain
-required before the second slice or Phase 7 can close.
+Installed run
+[`34126485600`](https://github.com/EhsanAzish80/BlossomOS/actions/runs/34126485600)
+passed the real online and isolated non-internet boundaries at signed commit
+`a9f934c`. Details and limits are recorded in
+`docs/PHASE_7_NETWORK_INSTALLED_EVIDENCE.md`.

@@ -91,6 +91,14 @@ The Phase 3 package boundary is validated on controlled Linux CI services but
 is not installed by this repository, and real target-Arch or Bluetooth-hardware
 behavior has not yet been claimed. See `docs/PHASE_3_BASELINE.md`.
 
+Phase 7 adds two closed, read-only context sources: a battery summary from the
+fixed UPower boundary and coarse connectivity from the fixed NetworkManager
+boundary. Both remain default-deny, policy-routed, strictly verified,
+content-minimized in audit, and projected to the shell through narrow versioned
+methods. Installed x86-64 evidence covers battery present/absent and network
+online/isolated non-internet outcomes. It does not add generic discovery,
+hardware identifiers, network identifiers, personal history, or model context.
+
 ### Planned, not implemented
 
 The following are architectural goals only:

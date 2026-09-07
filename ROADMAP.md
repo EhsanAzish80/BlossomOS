@@ -379,7 +379,7 @@ Exit: the shell can operate the tested vertical slices without XFCE dependencies
 
 ## Phase 7: Structured system awareness
 
-Status: active. ADR-0022 defines the accepted closed context registry and first
+Status: complete (2026-09-07). ADR-0022 defines the accepted closed context registry and first
 fixed battery-summary slice; implementation proceeds one bounded checkpoint at
 a time. The core registry, typed observation, default-deny capability, strict
 validator, fixed UPower adapter, and closed policy/verification/audit route are
@@ -389,14 +389,26 @@ no-battery UPower evidence passed together in run `34117027739`; the first
 fixed battery-summary slice is complete. Later sources remain active and must
 be proposed and reviewed one at a time. ADR-0023 now accepts the next bounded
 slice: coarse NetworkManager connectivity without network identifiers or
-external probes.
+external probes. The fixed NetworkManager adapter, policy/verification/audit
+route, narrow shell projection, and installed online plus isolated non-internet
+evidence are complete. Run `34126485600` passed at signed commit `a9f934c`;
+the completion decision and limits are recorded in
+`docs/PHASE_7_EXIT_AUDIT.md`.
 
-- Add applications, windows, workspaces, hardware, battery, network, storage,
-  services, clipboard, notifications, selected files, and active-project context.
-- Prefer native APIs and IPC over screenshots or accessibility automation.
-- Apply per-source privacy, lifetime, and capability rules.
+- [x] Define the closed context registry and add the fixed battery-summary and
+  coarse network-connectivity sources with per-source privacy, lifetime, and
+  capability rules.
+- [x] Use fixed native UPower and NetworkManager IPC adapters, strict
+  verification, content-minimized audit, and narrow shell projections.
+- [x] Pass deterministic, adversarial, regression, and real installed evidence
+  for battery present/absent and network online/isolated non-internet outcomes.
 
-Exit: context sources are typed, permissioned, observable, and testable.
+Applications, windows, workspaces, broader hardware and service context,
+clipboard, notifications, selected files, active projects, screenshots, and
+accessibility-derived context remain future separately reviewed sources.
+
+Exit satisfied: both accepted context sources are typed, permissioned,
+observable, and testable. Additional sources require separate future review.
 
 ## Phase 8: Memory and personalization
 

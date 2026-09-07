@@ -1,7 +1,7 @@
 # Phase 7 structured system awareness baseline
 
-Status: first fixed battery-summary slice complete on 2026-09-07. Phase 7
-remains active for separately reviewed later sources.
+Status: complete on 2026-09-07 at the accepted battery-summary and fixed
+network-connectivity boundary.
 
 Phase 7 begins from the completed Phase 6 shell and session-service boundary.
 Its goal is to add typed, permissioned, observable, and testable context without
@@ -42,9 +42,11 @@ creating a generic discovery API or invisible personal history.
 10. Activate the argument-free request atomically with policy, verification,
     content-minimized audit, and failure routing. Complete; evidence is in
     `docs/PHASE_7_NETWORK_ROUTING.md`.
-11. Add the narrow shell projection, then produce real installed offline and
-    online-class evidence and an independent second-slice audit. The shell
-    projection is complete; installed evidence and the exit audit remain.
+11. Add the narrow shell projection, then produce real installed online and
+    isolated non-internet evidence and an independent second-slice audit.
+    Complete; evidence is recorded in
+    `docs/PHASE_7_NETWORK_INSTALLED_EVIDENCE.md` and the completion decision in
+    `docs/PHASE_7_EXIT_AUDIT.md`.
 
 ## First slice
 
@@ -82,8 +84,5 @@ notifications, file access, project discovery, or system mutation.
 The broader Phase 7 exit remains unchanged: every added context source must be
 typed, permissioned, observable, and testable.
 
-The next implementation checkpoint is the installed evidence portion of 11:
-prove real NetworkManager online and isolated non-internet outcomes (with exact
-offline, local, and limited mappings retained in deterministic core coverage),
-then perform the
-independent second-slice and Phase 7 exit audit.
+All accepted Phase 7 checkpoints are complete. Additional context sources are
+future separately reviewed work and do not reopen this two-source exit gate.
