@@ -78,6 +78,11 @@ jobs:
           sudo unshare --net --mount --pid --fork bash -euo pipefail -c '
             mount -t tmpfs tmpfs /run
             mkdir -p /run/dbus /run/NetworkManager
+            mkdir -p /etc/NetworkManager/conf.d
+            mount -t tmpfs tmpfs /etc/NetworkManager/conf.d
+            printf "%s\n" "[connectivity]" "enabled=true" \
+              "uri=http://127.0.0.1:9/blossom-offline" "interval=1" \
+              > /etc/NetworkManager/conf.d/99-blossom-offline.conf
             ip link set lo up
             dbus-daemon --system --fork --nopidfile
             NetworkManager --no-daemon >/tmp/blossom-network-manager.log 2>&1 &
@@ -92,10 +97,12 @@ jobs:
             nmcli networking on
             connectivity=""
             for attempt in $(seq 1 100); do
+              nmcli networking connectivity check >/dev/null 2>&1 || true
               connectivity=$(nmcli -t -f CONNECTIVITY general)
               test "$connectivity" = none && break
               sleep 0.1
             done
+            echo "isolated-connectivity=$connectivity"
             test "$connectivity" = none
             ip link show lo >/dev/null
             ! ip route show default | grep -q .
