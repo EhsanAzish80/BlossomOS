@@ -1,7 +1,7 @@
 # Phase 7 structured system awareness baseline
 
-Status: planning. ADR-0022 is proposed and requires explicit project-owner
-review before implementation.
+Status: active. ADR-0022 was accepted on 2026-09-07 after project-owner review.
+Implementation proceeds through the ordered checkpoints below.
 
 Phase 7 begins from the completed Phase 6 shell and session-service boundary.
 Its goal is to add typed, permissioned, observable, and testable context without
@@ -10,7 +10,7 @@ creating a generic discovery API or invisible personal history.
 ## Ordered implementation checkpoints
 
 1. Review and accept ADR-0022 for the closed context registry and fixed battery
-   summary.
+   summary. Complete.
 2. Add the registry envelope, typed battery result, singleton capability, strict
    validator, and deterministic unit tests. Keep default deny.
 3. Add the fixed UPower system-D-Bus adapter with peer checks, exact property

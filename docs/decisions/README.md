@@ -36,7 +36,7 @@ compatibility, packaging, or contributor obligations.
   `TryRestartUnit` for the fixed already-running `bluetooth.service`; its Phase
   3 implementation and independent exit review are complete.
 - Shell IPC and approval surfaces: accepted in ADR-0021 for Phase 6.
-- Typed context registry and the first fixed battery summary: proposed in
+- Typed context registry and the first fixed battery summary: accepted in
   ADR-0022 for the first Phase 7 slice.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.

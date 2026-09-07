@@ -379,8 +379,9 @@ Exit: the shell can operate the tested vertical slices without XFCE dependencies
 
 ## Phase 7: Structured system awareness
 
-Status: planning. ADR-0022 proposes the closed context registry and first fixed
-battery-summary slice; implementation waits for explicit architecture review.
+Status: active. ADR-0022 defines the accepted closed context registry and first
+fixed battery-summary slice; implementation proceeds one bounded checkpoint at
+a time.
 
 - Add applications, windows, workspaces, hardware, battery, network, storage,
   services, clipboard, notifications, selected files, and active-project context.

@@ -1,7 +1,8 @@
 # ADR-0022: Typed context registry and battery summary
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-07
+- Accepted: 2026-09-07 after project-owner review of the Phase 7 first slice
 - Owners: Project maintainers
 
 ## Context
@@ -170,8 +171,7 @@ ADRs are superseded rather than silently redefined.
 
 ## Validation
 
-Before this ADR may be accepted and the slice marked complete, tests and
-evidence must prove:
+Before the slice may be marked complete, tests and evidence must prove:
 
 - the source, capability, D-Bus destination, object, interface, and four
   property names are fixed in code;
