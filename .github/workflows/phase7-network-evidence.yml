@@ -85,7 +85,6 @@ jobs:
               > /etc/NetworkManager/conf.d/99-blossom-offline.conf
             ip link set lo up
             ip link add blossom-offline type dummy
-            ip link set blossom-offline up
             dbus-daemon --system --fork --nopidfile
             NetworkManager --no-daemon >/tmp/blossom-network-manager.log 2>&1 &
             nm_pid=$!
@@ -98,6 +97,7 @@ jobs:
             busctl --system --quiet status org.freedesktop.NetworkManager >/dev/null
             nmcli networking on
             nmcli device set blossom-offline managed yes
+            nmcli device disconnect blossom-offline >/dev/null 2>&1 || true
             connectivity=""
             for attempt in $(seq 1 100); do
               nmcli networking connectivity check >/dev/null 2>&1 || true
