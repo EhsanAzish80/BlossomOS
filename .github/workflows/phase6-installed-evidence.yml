@@ -161,10 +161,14 @@ jobs:
               niri_pid=""
               hyprland_pid=""
               probe_pid=""
+              shell_ui_pid=""
               cleanup() {
                 status=$?
                 if test -n "$probe_pid"; then
                   kill "$probe_pid" 2>/dev/null || true
+                fi
+                if test -n "$shell_ui_pid"; then
+                  kill "$shell_ui_pid" 2>/dev/null || true
                 fi
                 if test -n "$hyprland_pid"; then
                   kill "$hyprland_pid" 2>/dev/null || true
@@ -273,8 +277,48 @@ jobs:
               HYPRLAND_INSTANCE_SIGNATURE=$(find "$XDG_RUNTIME_DIR/hypr" \
                 -mindepth 1 -maxdepth 1 -type d -printf "%f\n" | head -n 1)
               test -n "$HYPRLAND_INSTANCE_SIGNATURE"
+              restart_shell_boundary() {
+                pkill -u "$(id -u)" -f \
+                  "^/usr/lib/blossom-os/blossom-shell-ui$" 2>/dev/null || true
+                pkill -u "$(id -u)" -f \
+                  "^/usr/lib/blossom-os/blossom-shell-service$" 2>/dev/null || true
+                for attempt in $(seq 1 100); do
+                  if ! pgrep -u "$(id -u)" -f \
+                    "^/usr/lib/blossom-os/blossom-shell-ui$" >/dev/null && \
+                     ! pgrep -u "$(id -u)" -f \
+                    "^/usr/lib/blossom-os/blossom-shell-service$" >/dev/null; then break; fi
+                  sleep 0.1
+                done
+                ! pgrep -u "$(id -u)" -f \
+                  "^/usr/lib/blossom-os/blossom-shell-ui$" >/dev/null
+                ! pgrep -u "$(id -u)" -f \
+                  "^/usr/lib/blossom-os/blossom-shell-service$" >/dev/null
+                WAYLAND_DISPLAY="$nested_socket" \
+                  QML_IMPORT_PATH=/usr/lib/qt6/qml \
+                  QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1 \
+                  QT_LOGGING_RULES=qt.accessibility.*=true \
+                  /usr/lib/blossom-os/blossom-shell-ui \
+                  >"$XDG_RUNTIME_DIR/blossom-shell-ui-restart.log" 2>&1 &
+                shell_ui_pid=$!
+                for attempt in $(seq 1 100); do
+                  if pgrep -u "$(id -u)" -f \
+                    "^/usr/lib/blossom-os/blossom-shell-ui$" >/dev/null; then break; fi
+                  kill -0 "$shell_ui_pid"
+                  sleep 0.1
+                done
+                pgrep -u "$(id -u)" -f \
+                  "^/usr/lib/blossom-os/blossom-shell-ui$" >/dev/null
+                for attempt in $(seq 1 100); do
+                  busctl --user --quiet status org.blossomos.Shell1 \
+                    >/dev/null 2>&1 && break
+                  sleep 0.1
+                done
+                busctl --user --quiet status org.blossomos.Shell1 >/dev/null
+              }
               python3 system/shell/tests/check_keyboard_close.py cancel-and-deny
+              restart_shell_boundary
               python3 system/shell/tests/check_keyboard_close.py approve
+              restart_shell_boundary
               python3 system/shell/tests/check_accessibility.py
             '
 
