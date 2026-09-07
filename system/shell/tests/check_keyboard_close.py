@@ -144,7 +144,7 @@ def activity_for_latest_request():
     if not records:
         raise AssertionError("no projected activity records found")
     latest_request = max(records)[3]
-    return [record for record in records if record[3] == latest_request]
+    return sorted(record for record in records if record[3] == latest_request)
 
 
 def wait_for_latest_activity(expected_outcomes):
