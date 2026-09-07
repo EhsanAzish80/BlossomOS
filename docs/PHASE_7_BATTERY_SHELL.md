@@ -1,7 +1,8 @@
 # Phase 7 battery shell projection
 
-Status: implemented as Phase 7 checkpoint 5 on 2026-09-07; installed Linux
-evidence remains checkpoint 6.
+Status: implemented and regression-tested as Phase 7 checkpoint 5 on
+2026-09-07. Real battery-present and valid no-battery evidence remain
+checkpoint 6.
 
 The shell now receives one fixed, read-only battery projection through
 `ReadBatterySummary1`. The same-user session-bus service remains authoritative:
@@ -29,14 +30,21 @@ QML receives one `battery` property and can request only `refreshBattery()`.
 It has no generic D-Bus method, registry discovery, source selection, polling
 interval, commands, files, sockets, tokens, or raw provider response.
 
-## Local evidence
+## Evidence
 
 - focused shell and projection tests pass, including policy routing,
   verification, caching at the code-owned minimum interval, exact output, and
   content-free activity projection;
 - repository, QML, and native-client surface guards pass;
 - the forbidden legacy-name scan is clean.
+- Quality run `34112781806` passed on exact implementation commit `3186adc`,
+  including the native Qt plugin build, repository guards, strict Clippy, and
+  the complete Rust test suite;
+- installed shell regression run `34112782428` passed on the same commit using
+  the `blossom-x64-phase6` Intel Linux runner, including target Arch setup,
+  Rust/Qt compilation, the real Qt-to-Rust session-bus test, Bubblewrap,
+  package installation, and nested Hyprland loading.
 
-Linux compilation, the isolated real Qt/Rust session-bus test, installed
-battery-present evidence, and installed no-battery evidence are intentionally
-deferred to checkpoint 6 and must pass before the first battery slice exits.
+Installed battery-present evidence and installed no-battery evidence are
+intentionally deferred to checkpoint 6 and must pass before the first battery
+slice exits.
