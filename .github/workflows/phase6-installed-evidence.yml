@@ -2,6 +2,15 @@ name: Phase 6 installed shell evidence
 
 on:
   workflow_dispatch:
+    inputs:
+      evidence_scope:
+        description: Evidence boundary to execute
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - battery
 
 permissions:
   contents: read
@@ -13,6 +22,7 @@ concurrency:
 jobs:
   arch-x86-64:
     name: Installed Arch Hyprland Quickshell boundary
+    if: inputs.evidence_scope != 'battery'
     runs-on: [self-hosted, linux, x64, blossom-gpu]
     container:
       image: archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34
@@ -327,26 +337,37 @@ jobs:
   battery-present:
     name: Real battery-present UPower boundary
     runs-on: [self-hosted, linux, x64, blossom-gpu]
-    container:
-      image: archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34
-      options: >-
-        --volume /run/dbus/system_bus_socket:/run/dbus/system_bus_socket
     timeout-minutes: 20
     steps:
-      - name: Establish target Arch userspace
+      - name: Establish real battery host
         run: |
-          grep -qx 'ID=arch' /etc/os-release
+          grep -qx 'ID=ubuntu' /etc/os-release
           test "$(uname -m)" = x86_64
-          pacman -Syu --noconfirm base-devel rust
+          test -S /run/dbus/system_bus_socket
+          systemctl is-active --quiet upower.service
+          docker version >/dev/null
 
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Build a portable production probe
+        run: |
+          mkdir -p "$RUNNER_TEMP/battery-build"
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$RUNNER_TEMP/battery-build:/output" \
+            --workdir /workspace \
+            rust@sha256:ee9b9f2ebd8741e4ecf1ade08918e492d642c4e625be481bb7b7954b89e9d504 \
+            sh -ec 'CARGO_HOME=/output/cargo-home \
+              CARGO_TARGET_DIR=/output/target \
+              cargo build --locked --release --package blossom-core \
+              --example installed_battery_probe'
+
       - name: Prove real battery-present UPower observation
         run: |
-          test -S /run/dbus/system_bus_socket
-          cargo run --locked --release --package blossom-core \
-            --example installed_battery_probe -- expect-present
+          "$RUNNER_TEMP/battery-build/target/release/examples/installed_battery_probe" \
+            expect-present
 
   no-battery:
     name: Real no-battery UPower boundary
