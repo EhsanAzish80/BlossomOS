@@ -67,6 +67,9 @@ impl PolicyEngine {
             ToolRequest::SystemMemorySummary { .. } => Capability::SystemReadMemorySummary,
             ToolRequest::SystemStorageSummary { .. } => Capability::SystemReadStorageSummary,
             ToolRequest::SystemBatterySummary { .. } => Capability::SystemReadBatterySummary,
+            ToolRequest::SystemNetworkConnectivity { .. } => {
+                Capability::SystemReadNetworkConnectivity
+            }
             ToolRequest::ProcessSelf { .. } => Capability::ProcessReadSelf,
             ToolRequest::ProcessList { .. } => Capability::ProcessReadList,
             ToolRequest::FilesReadContent { .. } => Capability::FilesReadContent,
@@ -204,6 +207,11 @@ mod tests {
                 ToolRequest::SystemBatterySummary { request_id: id() },
                 Capability::SystemReadBatterySummary,
                 "system.read:battery.summary",
+            ),
+            (
+                ToolRequest::SystemNetworkConnectivity { request_id: id() },
+                Capability::SystemReadNetworkConnectivity,
+                "system.read:network.connectivity",
             ),
             (
                 ToolRequest::ProcessSelf { request_id: id() },

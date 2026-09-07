@@ -146,8 +146,9 @@ pub use uptime::{
 };
 pub use verification::{
     Verification, verify_battery_summary, verify_execution, verify_file_content,
-    verify_memory_summary, verify_os_identity, verify_process_list, verify_process_self,
-    verify_service_status, verify_storage_summary, verify_uptime, verify_workspace_file_created,
+    verify_memory_summary, verify_network_connectivity, verify_os_identity, verify_process_list,
+    verify_process_self, verify_service_status, verify_storage_summary, verify_uptime,
+    verify_workspace_file_created,
 };
 pub use workspace_create::{
     AtomicWorkspaceFileCreator, DirectoryIdentity, UnavailableWorkspaceCreateProvider,

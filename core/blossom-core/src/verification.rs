@@ -4,6 +4,10 @@ use crate::battery_summary::{
 use crate::executor::ExecutionResult;
 use crate::file_read::{FileContent, MAX_FILE_CONTENT_BYTES, validate_selected_path};
 use crate::memory_summary::{MAX_PROC_MEMINFO_BYTES, MemorySummary, PROC_MEMINFO_PATH};
+use crate::network_connectivity::{
+    NetworkConnectivityObservation, NetworkConnectivityObservationError,
+    validate_network_connectivity_observation,
+};
 use crate::os_identity::{MAX_OS_RELEASE_BYTES, MAX_OS_RELEASE_VALUE_BYTES, OsIdentity};
 use crate::process_list::{
     MAX_PROCESS_NAME_BYTES, MAX_PROCESS_RESULTS, ProcessList, ProcessListSource,
@@ -46,6 +50,9 @@ pub enum VerificationReason {
     ValidBatterySummary,
     InvalidBatterySummaryProvenance,
     InvalidBatterySummarySchema,
+    ValidNetworkConnectivity,
+    InvalidNetworkConnectivityProvenance,
+    InvalidNetworkConnectivitySchema,
     ValidProcessSelf,
     InvalidProcessSelfProvenance,
     InvalidProcessSelfSchema,
@@ -62,6 +69,30 @@ pub enum VerificationReason {
     ValidServiceStatus,
     InvalidServiceStatusProvenance,
     InvalidServiceStatusSchema,
+}
+
+pub fn verify_network_connectivity(
+    observation: &NetworkConnectivityObservation,
+    now_unix_ms: u64,
+) -> Verification {
+    let reason = match validate_network_connectivity_observation(observation, now_unix_ms) {
+        Ok(()) => VerificationReason::ValidNetworkConnectivity,
+        Err(
+            NetworkConnectivityObservationError::WrongSource
+            | NetworkConnectivityObservationError::UnsupportedSchema
+            | NetworkConnectivityObservationError::InvalidLifetime
+            | NetworkConnectivityObservationError::FutureTimestamp
+            | NetworkConnectivityObservationError::Stale,
+        ) => VerificationReason::InvalidNetworkConnectivityProvenance,
+        Err(
+            NetworkConnectivityObservationError::UnexpectedAbsence
+            | NetworkConnectivityObservationError::ResponseTooLarge,
+        ) => VerificationReason::InvalidNetworkConnectivitySchema,
+    };
+    Verification {
+        succeeded: reason == VerificationReason::ValidNetworkConnectivity,
+        reason,
+    }
 }
 
 pub fn verify_battery_summary(observation: &BatteryObservation, now_unix_ms: u64) -> Verification {
@@ -356,6 +387,27 @@ mod tests {
         assert_eq!(
             verify_battery_summary(&observation, 10_001).reason,
             VerificationReason::InvalidBatterySummarySchema
+        );
+    }
+
+    #[test]
+    fn verifies_fresh_network_observation_and_rejects_stale_or_absent_values() {
+        use crate::{ContextObservation, ContextSource, ContextValue, NetworkConnectivity};
+
+        let mut observation = ContextObservation::new(
+            ContextSource::SystemNetworkConnectivity,
+            10_000,
+            ContextValue::Present(NetworkConnectivity::Online),
+        );
+        assert!(verify_network_connectivity(&observation, 10_001).succeeded);
+        assert_eq!(
+            verify_network_connectivity(&observation, 15_001).reason,
+            VerificationReason::InvalidNetworkConnectivityProvenance
+        );
+        observation.observation = ContextValue::Absent;
+        assert_eq!(
+            verify_network_connectivity(&observation, 10_001).reason,
+            VerificationReason::InvalidNetworkConnectivitySchema
         );
     }
 

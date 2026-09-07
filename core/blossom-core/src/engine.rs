@@ -10,6 +10,10 @@ use crate::file_read::{
 use crate::memory_summary::{
     MemorySummary, MemorySummaryError, MemorySummaryProvider, UnavailableMemorySummaryProvider,
 };
+use crate::network_connectivity::{
+    NetworkConnectivityObservation, NetworkConnectivityProvider, NetworkConnectivityReadError,
+    UnavailableNetworkConnectivityProvider,
+};
 use crate::orchestration::TypedRequestEngine;
 use crate::os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, UnavailableOsIdentityProvider,
@@ -31,15 +35,15 @@ use crate::storage_summary::{
 use crate::uptime::{SystemUptime, UnavailableUptimeProvider, UptimeError, UptimeProvider};
 use crate::verification::{
     Verification, verify_battery_summary, verify_execution, verify_file_content,
-    verify_memory_summary, verify_os_identity, verify_process_list, verify_process_self,
-    verify_service_status, verify_storage_summary, verify_uptime, verify_workspace_file_created,
+    verify_memory_summary, verify_network_connectivity, verify_os_identity, verify_process_list,
+    verify_process_self, verify_service_status, verify_storage_summary, verify_uptime,
+    verify_workspace_file_created,
 };
 use crate::workspace_create::{
     UnavailableWorkspaceCreateProvider, WorkspaceCreateError, WorkspaceCreateProvider,
     WorkspaceFileCreated,
 };
 
-#[derive(Debug)]
 pub struct BlossomEngine<
     E,
     O = UnavailableOsIdentityProvider,
@@ -66,6 +70,7 @@ pub struct BlossomEngine<
     workspace_create: W,
     service_status: V,
     battery_summary: B,
+    network_connectivity: Box<dyn NetworkConnectivityProvider>,
     audit: AuditLog,
 }
 
@@ -97,6 +102,7 @@ impl<E: Executor>
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
+            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
             audit: AuditLog::default(),
         }
     }
@@ -125,6 +131,7 @@ impl<E: Executor, O: OsIdentityProvider>
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
+            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
             audit: AuditLog::default(),
         }
     }
@@ -153,6 +160,7 @@ impl<E: Executor, U: UptimeProvider>
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
+            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
             audit: AuditLog::default(),
         }
     }
@@ -181,6 +189,7 @@ impl<E: Executor, M: MemorySummaryProvider>
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
+            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
             audit: AuditLog::default(),
         }
     }
@@ -215,6 +224,7 @@ impl<E: Executor, S: StorageSummaryProvider>
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
+            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
             audit: AuditLog::default(),
         }
     }
@@ -253,6 +263,7 @@ impl<E: Executor, P: ProcessSelfProvider>
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
+            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
             audit: AuditLog::default(),
         }
     }
@@ -290,6 +301,7 @@ impl<E: Executor, L: ProcessListProvider>
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
+            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
             audit: AuditLog::default(),
         }
     }
@@ -328,6 +340,7 @@ impl<E: Executor, F: FileContentProvider>
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
+            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
             audit: AuditLog::default(),
         }
     }
@@ -366,6 +379,7 @@ impl<E: Executor, W: WorkspaceCreateProvider>
             workspace_create,
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
+            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
             audit: AuditLog::default(),
         }
     }
@@ -405,6 +419,7 @@ impl<E: Executor, V: ServiceStatusProvider>
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status,
             battery_summary: UnavailableBatterySummaryProvider,
+            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
             audit: AuditLog::default(),
         }
     }
@@ -445,6 +460,7 @@ impl<E: Executor, B: BatterySummaryProvider>
             workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary,
+            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
             audit: AuditLog::default(),
         }
     }
@@ -464,6 +480,14 @@ impl<
     B: BatterySummaryProvider,
 > BlossomEngine<E, O, U, M, S, P, L, F, W, V, B>
 {
+    pub fn with_network_connectivity<N: NetworkConnectivityProvider + 'static>(
+        mut self,
+        provider: N,
+    ) -> Self {
+        self.network_connectivity = Box::new(provider);
+        self
+    }
+
     pub fn begin(&mut self, input: &str, now_ms: u64) -> Result<BeginOutcome, EngineError> {
         let request = match ToolRequest::parse_json(input) {
             Ok(request) => request,
@@ -589,6 +613,9 @@ impl<
             ToolRequest::SystemStorageSummary { .. } => self.execute_storage_summary(request),
             ToolRequest::SystemBatterySummary { .. } => {
                 self.execute_battery_summary(request, now_ms)
+            }
+            ToolRequest::SystemNetworkConnectivity { .. } => {
+                self.execute_network_connectivity(request, now_ms)
             }
             ToolRequest::ProcessSelf { .. } => self.execute_process_self(request),
             ToolRequest::ProcessList { .. } => self.execute_process_list(request),
@@ -789,6 +816,44 @@ impl<
             request,
             verification,
             output: ToolOutput::BatterySummary(observation),
+        })
+    }
+
+    fn execute_network_connectivity(
+        &mut self,
+        request: ToolRequest,
+        now_ms: u64,
+    ) -> Result<CompletionOutcome, EngineError> {
+        let resource = crate::ContextSource::SystemNetworkConnectivity;
+        self.audit.append(AuditEvent::NativeReadStarted {
+            request_id: request.request_id().as_str().into(),
+            resource: resource.as_str().into(),
+        });
+        let observation = match self.network_connectivity.read_network_connectivity() {
+            Ok(observation) => observation,
+            Err(error) => {
+                self.audit
+                    .append(AuditEvent::NetworkConnectivityReadFailed {
+                        request_id: request.request_id().as_str().into(),
+                        resource,
+                        error,
+                    });
+                return Err(EngineError::NetworkConnectivity(error));
+            }
+        };
+        self.audit.append(AuditEvent::network_connectivity_finished(
+            &request,
+            &observation,
+        ));
+        let verification = verify_network_connectivity(&observation, now_ms);
+        self.audit.append(AuditEvent::VerificationFinished {
+            request_id: request.request_id().as_str().into(),
+            verification: verification.clone(),
+        });
+        Ok(CompletionOutcome {
+            request,
+            verification,
+            output: ToolOutput::NetworkConnectivity(observation),
         })
     }
 
@@ -1037,6 +1102,7 @@ pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
         ToolRequest::SystemMemorySummary { .. } => None,
         ToolRequest::SystemStorageSummary { .. } => None,
         ToolRequest::SystemBatterySummary { .. } => None,
+        ToolRequest::SystemNetworkConnectivity { .. } => None,
         ToolRequest::ProcessSelf { .. } => None,
         ToolRequest::ProcessList { .. } => None,
         ToolRequest::FilesReadContent { .. } => None,
@@ -1081,6 +1147,7 @@ pub enum ToolOutput {
     MemorySummary(MemorySummary),
     StorageSummary(StorageSummary),
     BatterySummary(BatteryObservation),
+    NetworkConnectivity(NetworkConnectivityObservation),
     ProcessSelf(ProcessSelf),
     ProcessList(ProcessList),
     FileContent(Box<FileContent>),
@@ -1098,6 +1165,7 @@ pub enum EngineError {
     MemorySummary(MemorySummaryError),
     StorageSummary(StorageSummaryError),
     BatterySummary(BatteryReadError),
+    NetworkConnectivity(NetworkConnectivityReadError),
     ProcessSelf(ProcessSelfError),
     ProcessList(ProcessListError),
     FileContent(FileReadError),
@@ -1216,6 +1284,28 @@ mod tests {
                 percentage: 73,
                 state: crate::BatteryState::Discharging,
             }),
+        )
+    }
+
+    struct ScriptedNetworkConnectivity {
+        result: Option<Result<NetworkConnectivityObservation, NetworkConnectivityReadError>>,
+    }
+
+    impl NetworkConnectivityProvider for ScriptedNetworkConnectivity {
+        fn read_network_connectivity(
+            &mut self,
+        ) -> Result<NetworkConnectivityObservation, NetworkConnectivityReadError> {
+            self.result
+                .take()
+                .unwrap_or(Err(NetworkConnectivityReadError::ConnectionFailed))
+        }
+    }
+
+    fn network_observation(observed_at_unix_ms: u64) -> NetworkConnectivityObservation {
+        crate::ContextObservation::new(
+            crate::ContextSource::SystemNetworkConnectivity,
+            observed_at_unix_ms,
+            crate::ContextValue::Present(crate::NetworkConnectivity::Online),
         )
     }
 
@@ -1785,6 +1875,71 @@ mod tests {
         assert!(matches!(
             engine.audit().records().last().map(|record| &record.event),
             Some(AuditEvent::BatterySummaryReadFailed { .. })
+        ));
+    }
+
+    #[test]
+    fn network_connectivity_uses_policy_native_provider_verification_and_minimal_audit() {
+        let policy = PolicyEngine::new(vec![PolicyRule {
+            capability: Capability::SystemReadNetworkConnectivity,
+            decision: PolicyDecision::Allow,
+        }]);
+        let mut engine = BlossomEngine::new(
+            policy,
+            ApprovalStore::new(100),
+            ScriptedExecutor::successful(),
+        )
+        .with_network_connectivity(ScriptedNetworkConnectivity {
+            result: Some(Ok(network_observation(10_000))),
+        });
+        let outcome = engine
+            .begin(
+                r#"{"request_id":"req-network","tool":"system.network.connectivity","arguments":{}}"#,
+                10_001,
+            )
+            .expect("native network read should complete");
+        let BeginOutcome::Completed(completed) = outcome else {
+            panic!("network request did not complete");
+        };
+        assert!(completed.verification.succeeded);
+        assert!(matches!(
+            completed.output,
+            ToolOutput::NetworkConnectivity(_)
+        ));
+        assert!(engine.executor.calls.is_empty());
+        assert!(engine.audit().verify_chain());
+        let encoded = serde_json::to_string(engine.audit().records()).expect("serializable audit");
+        assert!(!encoded.contains("online"));
+        assert!(!encoded.contains("observation"));
+    }
+
+    #[test]
+    fn network_connectivity_failure_is_audited_without_command_fallback() {
+        let policy = PolicyEngine::new(vec![PolicyRule {
+            capability: Capability::SystemReadNetworkConnectivity,
+            decision: PolicyDecision::Allow,
+        }]);
+        let mut engine = BlossomEngine::new(
+            policy,
+            ApprovalStore::new(100),
+            ScriptedExecutor::successful(),
+        )
+        .with_network_connectivity(ScriptedNetworkConnectivity {
+            result: Some(Err(NetworkConnectivityReadError::Timeout)),
+        });
+        assert!(matches!(
+            engine.begin(
+                r#"{"request_id":"req-network","tool":"system.network.connectivity","arguments":{}}"#,
+                10_000,
+            ),
+            Err(EngineError::NetworkConnectivity(
+                NetworkConnectivityReadError::Timeout
+            ))
+        ));
+        assert!(engine.executor.calls.is_empty());
+        assert!(matches!(
+            engine.audit().records().last().map(|record| &record.event),
+            Some(AuditEvent::NetworkConnectivityReadFailed { .. })
         ));
     }
 

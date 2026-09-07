@@ -1071,6 +1071,14 @@ fn describe_event(event: &AuditEvent) -> String {
             source.as_str(),
             status.as_str()
         ),
+        AuditEvent::NetworkConnectivityReadFinished {
+            request_id,
+            source,
+            schema_version,
+        } => format!(
+            "request {request_id} read {} connectivity schema={schema_version}",
+            source.as_str()
+        ),
         AuditEvent::ProcessSelfReadFinished { request_id, source } => {
             format!("request {request_id} read its own process identity via {source}")
         }
@@ -1155,6 +1163,14 @@ fn describe_event(event: &AuditEvent) -> String {
             error,
         } => format!("request {request_id} native read of {resource} failed ({error})"),
         AuditEvent::BatterySummaryReadFailed {
+            request_id,
+            resource,
+            error,
+        } => format!(
+            "request {request_id} native read of {} failed ({error})",
+            resource.as_str()
+        ),
+        AuditEvent::NetworkConnectivityReadFailed {
             request_id,
             resource,
             error,
