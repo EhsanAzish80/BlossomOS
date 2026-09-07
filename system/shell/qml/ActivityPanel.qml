@@ -38,6 +38,7 @@ Window {
             clip: true
             spacing: 8
             model: BlossomBroker.activity
+            onCountChanged: positionViewAtEnd()
 
             delegate: Rectangle {
                 required property var modelData
