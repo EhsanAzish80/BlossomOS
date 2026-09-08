@@ -1,0 +1,13 @@
+base
+linux-lts
+linux-firmware
+systemd
+dbus-broker
+bubblewrap
+hyprland
+quickshell
+qt6-base
+qt6-declarative
+python
+openssl
+openssh

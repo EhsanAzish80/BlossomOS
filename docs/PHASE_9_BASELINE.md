@@ -12,17 +12,22 @@ fail-closed update and rollback lifecycle.
    rollback boundary. Complete.
 2. Replace prototype distribution inputs with closed Arch package definitions
    for the reviewed Blossom binaries, services, shell, policy, and profiles.
+   Core definitions and static validation are implemented; package-build and VM
+   installation evidence remain pending.
 3. Add a Blossom-owned ArchISO profile with fixed package snapshot metadata,
    branding, no insecure defaults, and deterministic repository validation.
 4. Add minimal local hardware classification and closed packaged model
-   selection. The default remains no active model.
+   selection. The default remains no active model. Core state and adversarial
+   validation are complete in `docs/PHASE_9_LIFECYCLE_CORE.md`.
 5. Add the resumable first-run state machine and installation marker without
-   recording secrets.
+   recording secrets. Core state and adversarial validation are complete.
 6. Add canonical Ed25519-signed offline update metadata, strict verification,
    inactive-slot staging, atomic boot selection, health confirmation, and
-   automatic failed-boot rollback.
+   automatic failed-boot rollback. The local lifecycle is complete; real boot
+   integration remains pending.
 7. Add installation-media recovery that rejects unmarked targets and can only
-   restore a previously verified slot.
+   restore a previously verified slot. The local lifecycle is complete; media
+   integration remains pending.
 8. Prove adversarial package, image, first-run, update, interruption, downgrade,
    signature, recovery, and user-data preservation behavior locally.
 9. Build the ISO and prove fresh UEFI VM install, disk boot, failed-update

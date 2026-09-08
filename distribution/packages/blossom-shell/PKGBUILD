@@ -1,0 +1,16 @@
+pkgname=blossom-shell
+pkgver=0.9.0
+pkgrel=1
+pkgdesc='Blossom OS narrow desktop shell surface'
+arch=('x86_64')
+license=('Apache-2.0')
+depends=('hyprland' 'quickshell' 'qt6-base' 'qt6-declarative')
+source=()
+sha256sums=()
+
+package() {
+  install -d "$pkgdir/usr/share/blossom-os/shell"
+  cp -a "$srcdir/../../../system/shell/qml/." \
+    "$pkgdir/usr/share/blossom-os/shell/"
+  find "$pkgdir/usr/share/blossom-os/shell" -type f -exec chmod 0644 {} +
+}
