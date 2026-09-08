@@ -87,12 +87,17 @@ jobs:
           truncate -s 8G "$RUNNER_TEMP/blossom.raw"
           timeout 15m docker run --rm --device /dev/kvm \
             --volume "$RUNNER_TEMP:/evidence" \
+            --volume "$GITHUB_WORKSPACE/distribution/evidence/pacman-snapshot.conf:/etc/pacman.conf:ro" \
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
             bash -euo pipefail -c '
               pacman -Sy --noconfirm edk2-ovmf qemu-desktop
+              test -f /usr/share/edk2/x64/OVMF_CODE.4m.fd
+              test -f /usr/share/edk2/x64/OVMF_VARS.4m.fd
+              cp /usr/share/edk2/x64/OVMF_VARS.4m.fd /evidence/OVMF_VARS.4m.fd
               qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 \
                 -machine q35 -nographic -no-reboot \
-                -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.fd \
+                -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd \
+                -drive if=pflash,format=raw,file=/evidence/OVMF_VARS.4m.fd \
                 -drive file=/evidence/blossom.raw,format=raw,if=virtio \
                 -cdrom /evidence/iso/$(basename '"$iso"')
             ' | tee "$RUNNER_TEMP/install.log"
@@ -103,12 +108,16 @@ jobs:
         run: |
           timeout 10m docker run --rm --device /dev/kvm \
             --volume "$RUNNER_TEMP:/evidence" \
+            --volume "$GITHUB_WORKSPACE/distribution/evidence/pacman-snapshot.conf:/etc/pacman.conf:ro" \
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
             bash -euo pipefail -c '
               pacman -Sy --noconfirm edk2-ovmf qemu-desktop
+              test -f /usr/share/edk2/x64/OVMF_CODE.4m.fd
+              test -f /evidence/OVMF_VARS.4m.fd
               qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 \
                 -machine q35 -nographic -no-reboot \
-                -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.fd \
+                -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd \
+                -drive if=pflash,format=raw,file=/evidence/OVMF_VARS.4m.fd \
                 -drive file=/evidence/blossom.raw,format=raw,if=virtio
             ' | tee "$RUNNER_TEMP/boot.log"
           grep -q 'BLOSSOM_DISK_BOOT_VERIFIED architecture=x86_64 firmware=uefi lifecycle=verified' \
