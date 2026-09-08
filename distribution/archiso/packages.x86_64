@@ -1,5 +1,5 @@
 base
-linux-lts
+linux
 linux-firmware
 systemd
 dbus-broker

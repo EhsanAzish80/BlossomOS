@@ -35,6 +35,8 @@ if len(packages) != len(set(packages)) or any(not re.fullmatch(r"[a-z0-9][a-z0-9
 expected_external = [p for p in manifest["packages"] if not p.startswith("blossom-")]
 if packages != expected_external:
     fail("ArchISO packages differ from the closed manifest")
+if "linux" not in packages:
+    fail("ArchISO kernel must match the official releng UEFI boot entries")
 profile = (DIST / "archiso/profiledef.sh").read_text(encoding="utf-8")
 for required in ("iso_name=\"blossom-os\"", "arch=\"x86_64\"", "uefi-x64.systemd-boot.esp"):
     if required not in profile:
