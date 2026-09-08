@@ -6,6 +6,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PHASE9_EVIDENCE_DIR: ${{ runner.temp }}/phase9-${{ github.run_id }}
+
 concurrency:
   group: phase9-uefi-vm-install-evidence
   cancel-in-progress: false
@@ -35,11 +38,14 @@ jobs:
       - name: Check out the exact reviewed commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Prepare an isolated evidence directory
+        run: mkdir -p "$PHASE9_EVIDENCE_DIR"
+
       - name: Build the root filesystem and Blossom ISO
         run: |
           docker run --rm --privileged \
             --volume "$GITHUB_WORKSPACE:/workspace:ro" \
-            --volume "$RUNNER_TEMP:/evidence" \
+            --volume "$PHASE9_EVIDENCE_DIR:/evidence" \
             --workdir /workspace \
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
             bash -euo pipefail -c '
@@ -82,11 +88,11 @@ jobs:
 
       - name: Install the blank virtual disk from the ISO
         run: |
-          iso=$(find "$RUNNER_TEMP/iso" -maxdepth 1 -name 'blossom-os-*.iso' -print -quit)
+          iso=$(find "$PHASE9_EVIDENCE_DIR/iso" -maxdepth 1 -name 'blossom-os-*.iso' -print -quit)
           test -n "$iso"
-          truncate -s 8G "$RUNNER_TEMP/blossom.raw"
+          truncate -s 8G "$PHASE9_EVIDENCE_DIR/blossom.raw"
           timeout 15m docker run --rm --device /dev/kvm \
-            --volume "$RUNNER_TEMP:/evidence" \
+            --volume "$PHASE9_EVIDENCE_DIR:/evidence" \
             --volume "$GITHUB_WORKSPACE/distribution/evidence/pacman-snapshot.conf:/etc/pacman.conf:ro" \
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
             bash -euo pipefail -c '
@@ -100,14 +106,14 @@ jobs:
                 -drive if=pflash,format=raw,file=/evidence/OVMF_VARS.4m.fd \
                 -drive file=/evidence/blossom.raw,format=raw,if=virtio \
                 -cdrom /evidence/iso/$(basename '"$iso"')
-            ' | tee "$RUNNER_TEMP/install.log"
+            ' | tee "$PHASE9_EVIDENCE_DIR/install.log"
           grep -q 'BLOSSOM_INSTALL_COMPLETE architecture=x86_64 firmware=uefi disk=virtio' \
-            "$RUNNER_TEMP/install.log"
+            "$PHASE9_EVIDENCE_DIR/install.log"
 
       - name: Boot and verify the installed virtual disk
         run: |
           timeout 10m docker run --rm --device /dev/kvm \
-            --volume "$RUNNER_TEMP:/evidence" \
+            --volume "$PHASE9_EVIDENCE_DIR:/evidence" \
             --volume "$GITHUB_WORKSPACE/distribution/evidence/pacman-snapshot.conf:/etc/pacman.conf:ro" \
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
             bash -euo pipefail -c '
@@ -119,9 +125,18 @@ jobs:
                 -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd \
                 -drive if=pflash,format=raw,file=/evidence/OVMF_VARS.4m.fd \
                 -drive file=/evidence/blossom.raw,format=raw,if=virtio
-            ' | tee "$RUNNER_TEMP/boot.log"
+            ' | tee "$PHASE9_EVIDENCE_DIR/boot.log"
           grep -q 'BLOSSOM_DISK_BOOT_VERIFIED architecture=x86_64 firmware=uefi lifecycle=verified' \
-            "$RUNNER_TEMP/boot.log"
+            "$PHASE9_EVIDENCE_DIR/boot.log"
 
       - name: Record artifact identity
-        run: cat "$RUNNER_TEMP/iso/SHA256SUMS"
+        run: cat "$PHASE9_EVIDENCE_DIR/iso/SHA256SUMS"
+
+      - name: Remove bounded evidence data
+        if: always()
+        run: |
+          docker run --rm \
+            --volume "$PHASE9_EVIDENCE_DIR:/evidence" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            sh -c 'rm -rf /evidence/rootfs /evidence/profile /evidence/iso /evidence/work \
+              /evidence/blossom-rootfs.tar.zst /evidence/blossom.raw /evidence/OVMF_VARS.4m.fd'
