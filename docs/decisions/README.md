@@ -44,6 +44,9 @@ compatibility, packaging, or contributor obligations.
   bounded Phase 8 slice, with closed memory classes and no automatic capture.
 - Bounded durable-memory recall: accepted in ADR-0025 as data-only, never
   permission, identity, policy, approval, or current-state authority.
+- Phase 9 distribution and updates: accepted in ADR-0026 for one Blossom-owned
+  x86-64 UEFI VM image, closed packages and first-run state, signed offline
+  updates, inactive-slot staging, recovery, and failed-boot rollback.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and
