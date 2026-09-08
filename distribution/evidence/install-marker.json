@@ -1,0 +1,1 @@
+{"architecture":"x86_64","hardware":{"architecture":"x86_64","firmware":"uefi","graphics":"virtio","memory_class":"4g-plus","virtio":true},"image_schema":1,"product":"blossom-os","slots":["a","b"]}

@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+disk=/dev/vda
+target=/mnt
+test -b "$disk"
+test -f /root/blossom-rootfs.tar.zst
+
+sgdisk --zap-all "$disk"
+sgdisk --new=1:2048:+512M --typecode=1:ef00 --change-name=1:BLOSSOM_EFI "$disk"
+sgdisk --new=2:0:0 --typecode=2:8300 --change-name=2:BLOSSOM_SYSTEM "$disk"
+partprobe "$disk"
+udevadm settle
+mkfs.fat -F 32 -n BLOSSOM_EFI /dev/vda1
+mkfs.ext4 -F -L BLOSSOM_SYSTEM /dev/vda2
+mount /dev/vda2 "$target"
+mkdir -p "$target/boot"
+mount /dev/vda1 "$target/boot"
+tar --xattrs --numeric-owner -I zstd -xf /root/blossom-rootfs.tar.zst -C "$target"
+
+root_uuid=$(blkid -s UUID -o value /dev/vda2)
+bootctl --esp-path="$target/boot" install
+install -d -m 0755 "$target/boot/loader/entries"
+printf 'default blossom.conf\ntimeout 0\nconsole-mode keep\n' >"$target/boot/loader/loader.conf"
+cat >"$target/boot/loader/entries/blossom.conf" <<EOF
+title Blossom OS evidence installation
+linux /vmlinuz-linux-lts
+initrd /initramfs-linux-lts.img
+options root=UUID=$root_uuid rw console=ttyS0,115200n8 systemd.show_status=yes
+EOF
+
+sync
+echo 'BLOSSOM_INSTALL_COMPLETE architecture=x86_64 firmware=uefi disk=virtio'
+systemctl poweroff
