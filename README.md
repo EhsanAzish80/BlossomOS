@@ -15,8 +15,8 @@ content-minimized audit.
 
 ## Current status
 
-Phases 0 through 8 are complete at their separately reviewed boundaries.
-Phase 9—distribution, installation, upgrades, and rollback—is next.
+Phases 0 through 9 are complete at their separately reviewed boundaries.
+Phase 10—public-beta hardening—is next.
 
 Implemented and tested foundations include:
 
@@ -29,11 +29,14 @@ Implemented and tested foundations include:
 - a narrow Qt/QML approval and authoritative activity surface;
 - fixed battery and coarse network-connectivity context projections; and
 - disabled-by-default encrypted durable notes with explicit lifecycle controls
-  and bounded data-only recall.
+  and bounded data-only recall; and
+- closed Arch packages, a Blossom-owned UEFI VM image, and signed offline A/B
+  update, rollback, confirmation, and recovery foundations.
 
 Every completed phase has deterministic tests and an exit record. Selected
 boundaries also have installed Linux evidence. These results establish only the
-documented slices; they are not installer, release, broad-hardware, or daily-use
+documented slices. The Phase 9 installer is an evidence-only VM path; these
+results are not public-release, broad-hardware, physical-device, or daily-use
 claims.
 
 See the [roadmap](ROADMAP.md) for completion gates and the
@@ -95,8 +98,8 @@ build/, config/, scripts/
 The historical prototype is preserved under the
 `prototype-pre-agent-architecture` tag. Its scripts and setup guides are not
 supported installation instructions and may contain insecure development
-defaults. Current Rust work is deliberately developed alongside it until a
-reviewed Phase 9 migration replaces the prototype distribution path.
+defaults. The reviewed Phase 9 path is intentionally limited to repeatable
+x86-64 UEFI VM evidence while Phase 10 owns public-release hardening.
 
 ## Development
 

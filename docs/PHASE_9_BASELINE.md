@@ -1,6 +1,7 @@
 # Phase 9 distribution and updates baseline
 
-Status: active from 2026-09-08.
+Status: complete on 2026-09-08 for the reviewed x86-64 UEFI VM evidence
+target. See `PHASE_9_EXIT_AUDIT.md`.
 
 Phase 9 begins from the completed Phase 8 security and memory boundaries. Its
 goal is a repeatable Blossom-owned x86-64 VM installation and a signed,
@@ -12,28 +13,24 @@ fail-closed update and rollback lifecycle.
    rollback boundary. Complete.
 2. Replace prototype distribution inputs with closed Arch package definitions
    for the reviewed Blossom binaries, services, shell, policy, and profiles.
-   Core definitions and static validation are implemented; package-build and VM
-   installation evidence remain pending.
+   Complete with real package-build and installed-disk inspection evidence.
 3. Add a Blossom-owned ArchISO profile with fixed package snapshot metadata,
    branding, no insecure defaults, and deterministic repository validation.
 4. Add minimal local hardware classification and closed packaged model
-   selection. The default remains no active model. Core state and adversarial
-   validation are complete in `docs/PHASE_9_LIFECYCLE_CORE.md`.
+   selection. The default remains no active model. Complete.
 5. Add the resumable first-run state machine and installation marker without
-   recording secrets. Core state and adversarial validation are complete.
+   recording secrets. Complete.
 6. Add canonical Ed25519-signed offline update metadata, strict verification,
    inactive-slot staging, atomic boot selection, health confirmation, and
-   automatic failed-boot rollback. The local lifecycle is complete; real boot
-   integration remains pending.
+   automatic failed-boot rollback. Complete with installed-disk evidence.
 7. Add installation-media recovery that rejects unmarked targets and can only
-   restore a previously verified slot. The local lifecycle is complete; media
-   integration remains pending.
+   restore a previously verified slot. Complete with installed-disk evidence.
 8. Prove adversarial package, image, first-run, update, interruption, downgrade,
    signature, recovery, and user-data preservation behavior locally.
 9. Build the ISO and prove fresh UEFI VM install, disk boot, failed-update
    rollback, and confirmed update on the trusted x86-64 Linux runner.
 10. Perform an independent Phase 9 exit audit and update the roadmap only after
-    every gate passes.
+    every gate passes. Complete in `PHASE_9_EXIT_AUDIT.md`.
 
 ## Evidence flow
 

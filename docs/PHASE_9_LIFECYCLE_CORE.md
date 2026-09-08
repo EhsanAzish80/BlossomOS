@@ -1,7 +1,7 @@
 # Phase 9 distribution lifecycle core
 
-Status: implemented and locally verified on 2026-09-08; installed VM evidence
-remains pending.
+Status: complete on 2026-09-08 for the reviewed x86-64 UEFI VM evidence
+target.
 
 ## Implemented boundary
 
@@ -40,9 +40,12 @@ package alignment, fixed image identity, safe package definitions, and absence
 of insecure image defaults. The normal Quality workflow runs this check and the
 complete Python suite.
 
-## Remaining gate
+## Installed evidence
 
-These files establish the state machine and static image inputs. They do not yet
-prove that the package definitions build, that an ISO boots, or that a fresh VM
-disk installs and returns through both rollback and confirmed-update paths. The
-x86-64 installed workflow must provide that evidence before Phase 9 can close.
+The Phase 9 UEFI workflow builds the real package artifacts and image, installs
+the image onto a fresh blank disk, boots that disk, inspects both installed
+Blossom packages, and verifies rollback, confirmation, recovery, and user-data
+preservation markers. The separate lifecycle run verifies signed offline
+metadata and the same transitions with network access denied. Exact run links,
+implementation identity, limitations, and the exit decision are recorded in
+`PHASE_9_EXIT_AUDIT.md`.
