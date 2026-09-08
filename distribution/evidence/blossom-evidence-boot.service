@@ -1,0 +1,12 @@
+[Unit]
+Description=Verify the installed Blossom OS evidence disk
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/blossom-evidence-boot
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target

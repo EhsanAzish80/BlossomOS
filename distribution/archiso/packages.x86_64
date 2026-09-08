@@ -11,3 +11,7 @@ qt6-declarative
 python
 openssl
 openssh
+arch-install-scripts
+dosfstools
+gptfdisk
+zstd

@@ -1,0 +1,118 @@
+name: Phase 9 UEFI VM installation evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase9-uefi-vm-install-evidence
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: Blossom ISO install and disk boot
+    runs-on: [self-hosted, linux, x64, blossom-gpu]
+    timeout-minutes: 60
+    steps:
+      - name: Establish the trusted evidence host
+        run: |
+          grep -qx 'ID=ubuntu' /etc/os-release
+          test "$(uname -m)" = x86_64
+          test -d /sys/firmware/efi
+          test -e /dev/dri/renderD128
+          test -e /dev/kvm
+          docker version >/dev/null
+
+      - name: Restore runner ownership before checkout
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            chown -R "$(id -u):$(id -g)" /workspace
+
+      - name: Check out the exact reviewed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build the root filesystem and Blossom ISO
+        run: |
+          docker run --rm --privileged \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$RUNNER_TEMP:/evidence" \
+            --workdir /workspace \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            bash -euo pipefail -c '
+              cp distribution/evidence/pacman-snapshot.conf /etc/pacman.conf
+              pacman -Syu --noconfirm arch-install-scripts archiso dosfstools edk2-ovmf \
+                gptfdisk openssh python qemu-desktop zstd
+              mkdir -p /evidence/rootfs /evidence/profile /evidence/iso /evidence/work
+              pacstrap -K -C /etc/pacman.conf /evidence/rootfs \
+                base linux-lts python openssh systemd
+              install -Dm0755 distribution/evidence/blossom-evidence-boot \
+                /evidence/rootfs/usr/local/bin/blossom-evidence-boot
+              install -Dm0644 distribution/evidence/blossom-evidence-boot.service \
+                /evidence/rootfs/etc/systemd/system/blossom-evidence-boot.service
+              mkdir -p /evidence/rootfs/etc/systemd/system/multi-user.target.wants
+              ln -s ../blossom-evidence-boot.service \
+                /evidence/rootfs/etc/systemd/system/multi-user.target.wants/blossom-evidence-boot.service
+              install -d -m 0755 /evidence/rootfs/etc/blossom-os /evidence/rootfs/opt/blossom
+              cp distribution/evidence/install-marker.json /evidence/rootfs/etc/blossom-os/install.json
+              cp -a scripts tests distribution /evidence/rootfs/opt/blossom/
+              sed -i "s/^#Storage=.*/Storage=volatile/" /evidence/rootfs/etc/systemd/journald.conf
+              tar --xattrs --numeric-owner -I "zstd -19 -T0" \
+                -cf /evidence/blossom-rootfs.tar.zst -C /evidence/rootfs .
+
+              cp -a /usr/share/archiso/configs/releng/. /evidence/profile/
+              cp distribution/archiso/profiledef.sh /evidence/profile/profiledef.sh
+              cp distribution/evidence/pacman-snapshot.conf /evidence/profile/pacman.conf
+              cp distribution/archiso/packages.x86_64 /evidence/profile/packages.x86_64
+              install -Dm0755 distribution/archiso/airootfs/usr/local/bin/blossom-evidence-install \
+                /evidence/profile/airootfs/usr/local/bin/blossom-evidence-install
+              install -Dm0644 distribution/evidence/blossom-evidence-install.service \
+                /evidence/profile/airootfs/etc/systemd/system/blossom-evidence-install.service
+              mkdir -p /evidence/profile/airootfs/etc/systemd/system/multi-user.target.wants
+              ln -sf ../blossom-evidence-install.service \
+                /evidence/profile/airootfs/etc/systemd/system/multi-user.target.wants/blossom-evidence-install.service
+              install -Dm0600 /evidence/blossom-rootfs.tar.zst \
+                /evidence/profile/airootfs/root/blossom-rootfs.tar.zst
+              mkarchiso -v -w /evidence/work -o /evidence/iso /evidence/profile
+              sha256sum /evidence/iso/blossom-os-*.iso > /evidence/iso/SHA256SUMS
+            '
+
+      - name: Install the blank virtual disk from the ISO
+        run: |
+          iso=$(find "$RUNNER_TEMP/iso" -maxdepth 1 -name 'blossom-os-*.iso' -print -quit)
+          test -n "$iso"
+          truncate -s 8G "$RUNNER_TEMP/blossom.raw"
+          timeout 15m docker run --rm --device /dev/kvm \
+            --volume "$RUNNER_TEMP:/evidence" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            bash -euo pipefail -c '
+              pacman -Sy --noconfirm edk2-ovmf qemu-desktop
+              qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 \
+                -machine q35 -nographic -no-reboot \
+                -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.fd \
+                -drive file=/evidence/blossom.raw,format=raw,if=virtio \
+                -cdrom /evidence/iso/$(basename '"$iso"')
+            ' | tee "$RUNNER_TEMP/install.log"
+          grep -q 'BLOSSOM_INSTALL_COMPLETE architecture=x86_64 firmware=uefi disk=virtio' \
+            "$RUNNER_TEMP/install.log"
+
+      - name: Boot and verify the installed virtual disk
+        run: |
+          timeout 10m docker run --rm --device /dev/kvm \
+            --volume "$RUNNER_TEMP:/evidence" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            bash -euo pipefail -c '
+              pacman -Sy --noconfirm edk2-ovmf qemu-desktop
+              qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 \
+                -machine q35 -nographic -no-reboot \
+                -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.fd \
+                -drive file=/evidence/blossom.raw,format=raw,if=virtio
+            ' | tee "$RUNNER_TEMP/boot.log"
+          grep -q 'BLOSSOM_DISK_BOOT_VERIFIED architecture=x86_64 firmware=uefi lifecycle=verified' \
+            "$RUNNER_TEMP/boot.log"
+
+      - name: Record artifact identity
+        run: cat "$RUNNER_TEMP/iso/SHA256SUMS"

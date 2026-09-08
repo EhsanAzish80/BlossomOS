@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+grep -qx 'ID=arch' /etc/os-release
+test "$(uname -m)" = x86_64
+test -d /sys/firmware/efi
+test -f /etc/blossom-os/install.json
+cd /opt/blossom
+python3 scripts/ci/check_distribution.py
+python3 -m unittest tests.test_phase9_distribution -v
+echo 'BLOSSOM_DISK_BOOT_VERIFIED architecture=x86_64 firmware=uefi lifecycle=verified'
+systemctl poweroff

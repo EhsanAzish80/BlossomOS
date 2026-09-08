@@ -1,0 +1,12 @@
+[Unit]
+Description=Install Blossom OS onto the blank evidence disk
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/blossom-evidence-install
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=multi-user.target
