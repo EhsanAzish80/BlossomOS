@@ -12,6 +12,7 @@ qt6-declarative
 python
 openssl
 openssh
+parted
 arch-install-scripts
 dosfstools
 gptfdisk
