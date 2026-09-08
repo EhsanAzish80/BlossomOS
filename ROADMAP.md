@@ -431,21 +431,24 @@ broader memory classes, and public activation remain outside this boundary.
 
 ## Phase 9: Distribution and updates
 
-Status: active. ADR-0026 defines the first supported evidence target and
-`docs/PHASE_9_BASELINE.md` orders its implementation.
+Status: complete on 2026-09-08 for the reviewed x86-64 UEFI VM evidence
+target. ADR-0026 defines the boundary and `docs/PHASE_9_EXIT_AUDIT.md` records
+the exit evidence.
 
 - [x] Freeze the x86-64 UEFI VM distribution, installer, update, recovery, and
   rollback boundary in ADR-0026.
-- [ ] Build closed Arch packages and a Blossom-owned ArchISO without insecure
+- [x] Build closed Arch packages and a Blossom-owned ArchISO without insecure
   legacy defaults or mutable runtime downloads.
-- [ ] Add bounded hardware/model selection and resumable first-run state.
-- [ ] Add canonical signed offline updates, inactive-slot staging, health
+- [x] Add bounded hardware/model selection and resumable first-run state.
+- [x] Add canonical signed offline updates, inactive-slot staging, health
   confirmation, failed-boot rollback, and installation-media recovery.
-- [ ] Prove adversarial lifecycle behavior and repeatable fresh VM installation,
+- [x] Prove adversarial lifecycle behavior and repeatable fresh VM installation,
   rollback, and confirmed update on the trusted x86-64 Linux runner.
-- [ ] Publish the independent Phase 9 exit audit.
+- [x] Publish the independent Phase 9 exit audit.
 
-Exit: repeatable VM installation and rollback evidence exists before device claims.
+Exit satisfied: repeatable VM installation, installed-disk boot, rollback,
+confirmation, and recovery evidence exists before device claims. Completion is
+limited to the reviewed x86-64 UEFI VM target.
 
 ## Phase 10: Public beta hardening
 

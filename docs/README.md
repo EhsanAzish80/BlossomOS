@@ -29,7 +29,7 @@ explicitly labeled future work. A target design is not an implementation claim.
 | 6 | Narrow Blossom Shell approval surface | [Exit audit](PHASE_6_EXIT_AUDIT.md) |
 | 7 | Battery and coarse network context | [Exit audit](PHASE_7_EXIT_AUDIT.md) |
 | 8 | Explicit encrypted durable notes | [Exit audit](PHASE_8_EXIT_AUDIT.md) |
-| 9 | Distribution, signed updates, and rollback | [Active baseline](PHASE_9_BASELINE.md) · [Lifecycle core](PHASE_9_LIFECYCLE_CORE.md) |
+| 9 | Distribution, signed updates, and rollback | [Exit audit](PHASE_9_EXIT_AUDIT.md) · [Baseline](PHASE_9_BASELINE.md) · [Lifecycle core](PHASE_9_LIFECYCLE_CORE.md) |
 
 Each phase may have additional design, implementation, and installed-evidence
 records beside its primary document. Filenames use `PHASE_<number>_...` so the
@@ -44,8 +44,9 @@ full record remains discoverable without duplicating it here.
 
 [QUICK_START.md](QUICK_START.md) and [SIMPLE_GUIDE.md](../SIMPLE_GUIDE.md)
 describe the preserved early prototype. They are retained for provenance only;
-they are not supported installation instructions. Phase 9 will define the first
-reviewed distribution, installation, upgrade, recovery, and rollback path.
+they are not supported installation instructions. Phase 9 established the first
+reviewed distribution, installation, update, recovery, and rollback path for an
+evidence-only x86-64 UEFI VM target; it is not a supported public installer.
 
 ## Document status convention
 
