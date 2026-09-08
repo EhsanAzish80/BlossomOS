@@ -15,8 +15,6 @@ jobs:
     name: Blossom ISO install and disk boot
     runs-on: [self-hosted, linux, x64, blossom-gpu]
     timeout-minutes: 60
-    env:
-      PHASE9_EVIDENCE_DIR: ${{ runner.temp }}/phase9-${{ github.run_id }}
     steps:
       - name: Establish the trusted evidence host
         run: |
@@ -38,7 +36,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Prepare an isolated evidence directory
-        run: mkdir -p "$PHASE9_EVIDENCE_DIR"
+        run: |
+          evidence_dir="$RUNNER_TEMP/phase9-$GITHUB_RUN_ID"
+          echo "PHASE9_EVIDENCE_DIR=$evidence_dir" >> "$GITHUB_ENV"
+          mkdir -p "$evidence_dir"
 
       - name: Build the root filesystem and Blossom ISO
         run: |
