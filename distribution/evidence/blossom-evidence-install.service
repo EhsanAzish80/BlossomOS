@@ -1,6 +1,7 @@
 [Unit]
 Description=Install Blossom OS onto the blank evidence disk
-After=multi-user.target
+After=local-fs.target
+Before=multi-user.target
 
 [Service]
 Type=oneshot

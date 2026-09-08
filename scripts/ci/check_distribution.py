@@ -57,4 +57,7 @@ for forbidden in ("PermitRootLogin yes", "PasswordAuthentication yes", "NOPASSWD
 snapshot_config = (DIST / "evidence/pacman-snapshot.conf").read_text(encoding="utf-8")
 if f"archive.archlinux.org/repos/{manifest['snapshot']}" not in snapshot_config:
     fail("evidence userspace does not use the fixed Arch snapshot")
+installer_unit = (DIST / "evidence/blossom-evidence-install.service").read_text(encoding="utf-8")
+if "Before=multi-user.target" not in installer_unit or "After=multi-user.target" in installer_unit:
+    fail("installer service has an unsafe multi-user target ordering")
 print("Phase 9 distribution inputs passed.")

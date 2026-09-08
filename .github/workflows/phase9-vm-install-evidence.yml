@@ -73,6 +73,8 @@ jobs:
               cp distribution/archiso/profiledef.sh /evidence/profile/profiledef.sh
               cp distribution/evidence/pacman-snapshot.conf /evidence/profile/pacman.conf
               cp distribution/archiso/packages.x86_64 /evidence/profile/packages.x86_64
+              sed -i "/^options /s/$/ console=ttyS0,115200n8 systemd.show_status=yes/" \
+                /evidence/profile/efiboot/loader/entries/*.conf
               install -Dm0755 distribution/archiso/airootfs/usr/local/bin/blossom-evidence-install \
                 /evidence/profile/airootfs/usr/local/bin/blossom-evidence-install
               install -Dm0644 distribution/evidence/blossom-evidence-install.service \
@@ -91,7 +93,7 @@ jobs:
           iso=$(find "$PHASE9_EVIDENCE_DIR/iso" -maxdepth 1 -name 'blossom-os-*.iso' -print -quit)
           test -n "$iso"
           truncate -s 8G "$PHASE9_EVIDENCE_DIR/blossom.raw"
-          timeout 15m docker run --rm --device /dev/kvm \
+          timeout --signal=TERM --kill-after=30s 15m docker run --rm --device /dev/kvm \
             --volume "$PHASE9_EVIDENCE_DIR:/evidence" \
             --volume "$GITHUB_WORKSPACE/distribution/evidence/pacman-snapshot.conf:/etc/pacman.conf:ro" \
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
@@ -112,7 +114,7 @@ jobs:
 
       - name: Boot and verify the installed virtual disk
         run: |
-          timeout 10m docker run --rm --device /dev/kvm \
+          timeout --signal=TERM --kill-after=30s 10m docker run --rm --device /dev/kvm \
             --volume "$PHASE9_EVIDENCE_DIR:/evidence" \
             --volume "$GITHUB_WORKSPACE/distribution/evidence/pacman-snapshot.conf:/etc/pacman.conf:ro" \
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
