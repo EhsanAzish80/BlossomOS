@@ -39,6 +39,8 @@ if "linux" not in packages:
     fail("ArchISO kernel must match the official releng UEFI boot entries")
 if "mkinitcpio-archiso" not in packages:
     fail("ArchISO live root hook must be present in the installation image")
+if "parted" not in packages:
+    fail("ArchISO installer must provide partprobe for partition discovery")
 profile = (DIST / "archiso/profiledef.sh").read_text(encoding="utf-8")
 for required in ("iso_name=\"blossom-os\"", "arch=\"x86_64\"", "uefi-x64.systemd-boot.esp"):
     if required not in profile:
