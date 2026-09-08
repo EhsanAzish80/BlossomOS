@@ -50,11 +50,29 @@ jobs:
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
             bash -euo pipefail -c '
               cp distribution/evidence/pacman-snapshot.conf /etc/pacman.conf
-              pacman -Syu --noconfirm arch-install-scripts archiso dosfstools edk2-ovmf \
-                gptfdisk openssh python qemu-desktop zstd
-              mkdir -p /evidence/rootfs /evidence/profile /evidence/iso /evidence/work
+              pacman -Syu --noconfirm arch-install-scripts archiso base-devel dosfstools edk2-ovmf \
+                gptfdisk openssh python qemu-desktop rust zstd
+              mkdir -p /evidence/rootfs /evidence/profile /evidence/iso /evidence/work /evidence/packages
+              cp -a /workspace /evidence/source
+              useradd -m builder
+              chown -R builder:builder /evidence/source /evidence/packages
+              runuser -u builder -- env HOME=/home/builder \
+                cargo fetch --locked --manifest-path /evidence/source/Cargo.toml
+              runuser -u builder -- env HOME=/home/builder \
+                makepkg --nodeps --noconfirm --dir /evidence/source/distribution/packages/blossom-core
+              runuser -u builder -- env HOME=/home/builder \
+                makepkg --nodeps --noconfirm --dir /evidence/source/distribution/packages/blossom-shell
+              cp /evidence/source/distribution/packages/blossom-core/blossom-core-*.pkg.tar.zst \
+                /evidence/packages/
+              cp /evidence/source/distribution/packages/blossom-shell/blossom-shell-*.pkg.tar.zst \
+                /evidence/packages/
               pacstrap -K -C /etc/pacman.conf /evidence/rootfs \
-                base linux-lts python openssh systemd
+                base bubblewrap dbus-broker hyprland linux-lts openssh openssl python \
+                quickshell qt6-base qt6-declarative systemd
+              pacman --root /evidence/rootfs --config /etc/pacman.conf --noconfirm -U \
+                /evidence/packages/blossom-core-*.pkg.tar.zst \
+                /evidence/packages/blossom-shell-*.pkg.tar.zst
+              pacman --root /evidence/rootfs -Q blossom-core blossom-shell
               install -Dm0755 distribution/evidence/blossom-evidence-boot \
                 /evidence/rootfs/usr/local/bin/blossom-evidence-boot
               install -Dm0644 distribution/evidence/blossom-evidence-boot.service \
@@ -130,6 +148,14 @@ jobs:
             ' | tee "$PHASE9_EVIDENCE_DIR/boot.log"
           grep -q 'BLOSSOM_DISK_BOOT_VERIFIED architecture=x86_64 firmware=uefi lifecycle=verified' \
             "$PHASE9_EVIDENCE_DIR/boot.log"
+          grep -q 'BLOSSOM_PACKAGES_VERIFIED packages=blossom-core,blossom-shell' \
+            "$PHASE9_EVIDENCE_DIR/boot.log"
+          grep -q 'BLOSSOM_UPDATE_ROLLBACK_VERIFIED user_data=preserved' \
+            "$PHASE9_EVIDENCE_DIR/boot.log"
+          grep -q 'BLOSSOM_UPDATE_CONFIRMATION_VERIFIED user_data=preserved' \
+            "$PHASE9_EVIDENCE_DIR/boot.log"
+          grep -q 'BLOSSOM_RECOVERY_VERIFIED fail_closed=true' \
+            "$PHASE9_EVIDENCE_DIR/boot.log"
 
       - name: Record artifact identity
         run: cat "$PHASE9_EVIDENCE_DIR/iso/SHA256SUMS"
@@ -141,4 +167,5 @@ jobs:
             --volume "$PHASE9_EVIDENCE_DIR:/evidence" \
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
             sh -c 'rm -rf /evidence/rootfs /evidence/profile /evidence/iso /evidence/work \
-              /evidence/blossom-rootfs.tar.zst /evidence/blossom.raw /evidence/OVMF_VARS.4m.fd'
+              /evidence/source /evidence/packages /evidence/blossom-rootfs.tar.zst \
+              /evidence/blossom.raw /evidence/OVMF_VARS.4m.fd'

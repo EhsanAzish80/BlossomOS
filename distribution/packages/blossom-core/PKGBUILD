@@ -10,14 +10,29 @@ source=()
 sha256sums=()
 
 build() {
-  cargo build --locked --release --manifest-path "$srcdir/../../../Cargo.toml"
+  local repo_root="$startdir/../../.."
+  CARGO_TARGET_DIR="$srcdir/target" \
+    cargo build --locked --offline --release --manifest-path "$repo_root/Cargo.toml"
 }
 
 package() {
-  install -Dm0755 "$srcdir/../../../target/release/blossom-shell-service" \
+  local repo_root="$startdir/../../.."
+  install -Dm0755 "$srcdir/target/release/blossom-shell-service" \
     "$pkgdir/usr/lib/blossom-os/blossom-shell-service"
-  install -Dm0755 "$srcdir/../../../target/release/blossom-model-gateway" \
+  install -Dm0755 "$srcdir/target/release/blossom-model-gateway" \
     "$pkgdir/usr/lib/blossom-os/blossom-model-gateway"
-  install -Dm0755 "$srcdir/../../../target/release/blossom-privileged-helper" \
+  install -Dm0755 "$srcdir/target/release/blossom-privileged-helper" \
     "$pkgdir/usr/lib/blossom-os/blossom-privileged-helper"
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-service.service" \
+    "$pkgdir/usr/lib/systemd/user/blossom-shell-service.service"
+  install -Dm0644 "$repo_root/system/shell/packaging/org.blossomos.Shell1.service" \
+    "$pkgdir/usr/share/dbus-1/services/org.blossomos.Shell1.service"
+  install -Dm0644 "$repo_root/system/privileged-helper/packaging/blossom-privileged-helper.service" \
+    "$pkgdir/usr/lib/systemd/system/blossom-privileged-helper.service"
+  install -Dm0644 "$repo_root/system/privileged-helper/packaging/org.blossomos.Privileged1.service" \
+    "$pkgdir/usr/share/dbus-1/system-services/org.blossomos.Privileged1.service"
+  install -Dm0644 "$repo_root/system/privileged-helper/packaging/org.blossomos.Privileged1.conf" \
+    "$pkgdir/usr/share/dbus-1/system.d/org.blossomos.Privileged1.conf"
+  install -Dm0644 "$repo_root/system/privileged-helper/packaging/org.blossomos.privileged1.policy" \
+    "$pkgdir/usr/share/polkit-1/actions/org.blossomos.privileged1.policy"
 }

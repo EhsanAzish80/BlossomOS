@@ -9,8 +9,9 @@ source=()
 sha256sums=()
 
 package() {
+  local repo_root="$startdir/../../.."
   install -d "$pkgdir/usr/share/blossom-os/shell"
-  cp -a "$srcdir/../../../system/shell/qml/." \
+  cp -a "$repo_root/system/shell/qml/." \
     "$pkgdir/usr/share/blossom-os/shell/"
   find "$pkgdir/usr/share/blossom-os/shell" -type f -exec chmod 0644 {} +
 }
