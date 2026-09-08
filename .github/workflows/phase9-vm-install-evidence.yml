@@ -6,9 +6,6 @@ on:
 permissions:
   contents: read
 
-env:
-  PHASE9_EVIDENCE_DIR: ${{ runner.temp }}/phase9-${{ github.run_id }}
-
 concurrency:
   group: phase9-uefi-vm-install-evidence
   cancel-in-progress: false
@@ -18,6 +15,8 @@ jobs:
     name: Blossom ISO install and disk boot
     runs-on: [self-hosted, linux, x64, blossom-gpu]
     timeout-minutes: 60
+    env:
+      PHASE9_EVIDENCE_DIR: ${{ runner.temp }}/phase9-${{ github.run_id }}
     steps:
       - name: Establish the trusted evidence host
         run: |
