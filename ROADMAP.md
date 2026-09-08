@@ -431,9 +431,19 @@ broader memory classes, and public activation remain outside this boundary.
 
 ## Phase 9: Distribution and updates
 
-- Build Arch packages, services, ArchISO, hardware detection, model selection,
-  first-run setup, recovery, rollback, and signed updates.
-- Remove insecure legacy defaults and test upgrade paths.
+Status: active. ADR-0026 defines the first supported evidence target and
+`docs/PHASE_9_BASELINE.md` orders its implementation.
+
+- [x] Freeze the x86-64 UEFI VM distribution, installer, update, recovery, and
+  rollback boundary in ADR-0026.
+- [ ] Build closed Arch packages and a Blossom-owned ArchISO without insecure
+  legacy defaults or mutable runtime downloads.
+- [ ] Add bounded hardware/model selection and resumable first-run state.
+- [ ] Add canonical signed offline updates, inactive-slot staging, health
+  confirmation, failed-boot rollback, and installation-media recovery.
+- [ ] Prove adversarial lifecycle behavior and repeatable fresh VM installation,
+  rollback, and confirmed update on the trusted x86-64 Linux runner.
+- [ ] Publish the independent Phase 9 exit audit.
 
 Exit: repeatable VM installation and rollback evidence exists before device claims.
 
