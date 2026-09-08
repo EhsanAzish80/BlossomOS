@@ -83,6 +83,9 @@ jobs:
               install -d -m 0755 /evidence/rootfs/etc/blossom-os /evidence/rootfs/opt/blossom
               cp distribution/evidence/install-marker.json /evidence/rootfs/etc/blossom-os/install.json
               cp -a scripts tests distribution /evidence/rootfs/opt/blossom/
+              install -d -m 0755 /evidence/rootfs/opt/blossom/.github/workflows
+              install -m 0644 .github/workflows/phase9-vm-install-evidence.yml \
+                /evidence/rootfs/opt/blossom/.github/workflows/phase9-vm-install-evidence.yml
               sed -i "s/^#Storage=.*/Storage=volatile/" /evidence/rootfs/etc/systemd/journald.conf
               tar --xattrs --numeric-owner -I "zstd -19 -T0" \
                 -cf /evidence/blossom-rootfs.tar.zst -C /evidence/rootfs .
