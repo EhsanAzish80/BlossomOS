@@ -29,7 +29,7 @@ explicitly labeled future work. A target design is not an implementation claim.
 | 6 | Narrow Blossom Shell approval surface | [Exit audit](PHASE_6_EXIT_AUDIT.md) |
 | 7 | Battery and coarse network context | [Exit audit](PHASE_7_EXIT_AUDIT.md) |
 | 8 | Explicit encrypted durable notes | [Exit audit](PHASE_8_EXIT_AUDIT.md) |
-| 9 | Distribution, signed updates, and rollback | [Active baseline](PHASE_9_BASELINE.md) |
+| 9 | Distribution, signed updates, and rollback | [Active baseline](PHASE_9_BASELINE.md) · [Lifecycle core](PHASE_9_LIFECYCLE_CORE.md) |
 
 Each phase may have additional design, implementation, and installed-evidence
 records beside its primary document. Filenames use `PHASE_<number>_...` so the

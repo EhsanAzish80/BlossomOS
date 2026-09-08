@@ -1,0 +1,23 @@
+pkgname=blossom-core
+pkgver=0.9.0
+pkgrel=1
+pkgdesc='Blossom OS reviewed service boundaries'
+arch=('x86_64')
+license=('Apache-2.0')
+depends=('bubblewrap' 'dbus-broker' 'systemd')
+options=('!strip')
+source=()
+sha256sums=()
+
+build() {
+  cargo build --locked --release --manifest-path "$srcdir/../../../Cargo.toml"
+}
+
+package() {
+  install -Dm0755 "$srcdir/../../../target/release/blossom-shell-service" \
+    "$pkgdir/usr/lib/blossom-os/blossom-shell-service"
+  install -Dm0755 "$srcdir/../../../target/release/blossom-model-gateway" \
+    "$pkgdir/usr/lib/blossom-os/blossom-model-gateway"
+  install -Dm0755 "$srcdir/../../../target/release/blossom-privileged-helper" \
+    "$pkgdir/usr/lib/blossom-os/blossom-privileged-helper"
+}
