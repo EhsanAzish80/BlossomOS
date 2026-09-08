@@ -52,4 +52,7 @@ tree = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in DIST.r
 for forbidden in ("PermitRootLogin yes", "PasswordAuthentication yes", "NOPASSWD", "sshd.service"):
     if forbidden in tree:
         fail(f"insecure distribution input: {forbidden}")
+snapshot_config = (DIST / "evidence/pacman-snapshot.conf").read_text(encoding="utf-8")
+if f"archive.archlinux.org/repos/{manifest['snapshot']}" not in snapshot_config:
+    fail("evidence userspace does not use the fixed Arch snapshot")
 print("Phase 9 distribution inputs passed.")

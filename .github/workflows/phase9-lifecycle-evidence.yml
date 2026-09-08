@@ -1,0 +1,59 @@
+name: Phase 9 installed lifecycle evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase9-installed-lifecycle-evidence
+  cancel-in-progress: false
+
+jobs:
+  lifecycle:
+    name: Installed Arch x86-64 distribution lifecycle
+    runs-on: [self-hosted, linux, x64, blossom-gpu]
+    timeout-minutes: 20
+    steps:
+      - name: Establish the trusted evidence host
+        run: |
+          grep -qx 'ID=ubuntu' /etc/os-release
+          test "$(uname -m)" = x86_64
+          test -d /sys/firmware/efi
+          test -e /dev/dri/renderD128
+          docker version >/dev/null
+
+      - name: Restore runner ownership before checkout
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            chown -R "$(id -u):$(id -g)" /workspace
+
+      - name: Check out the exact reviewed commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Exercise the installed Arch lifecycle boundary
+        run: |
+          docker build \
+            --file distribution/evidence/Dockerfile \
+            --tag blossom-phase9-lifecycle-evidence:2026-09-08 \
+            .
+          docker run --rm \
+            --network none \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --workdir /workspace \
+            blossom-phase9-lifecycle-evidence:2026-09-08 \
+            bash -euo pipefail -c '
+              test "$(uname -m)" = x86_64
+              test "$(id -u)" = 0
+              command -v python3
+              command -v ssh-keygen
+              python3 scripts/ci/check_distribution.py
+              python3 -m unittest tests.test_phase9_distribution -v
+            '
+
+      - name: Record the bounded evidence result
+        run: |
+          echo 'phase9-lifecycle=verified architecture=x86_64 network=denied slots=a,b rollback=yes confirmation=yes recovery=yes'
