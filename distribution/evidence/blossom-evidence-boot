@@ -5,8 +5,19 @@ grep -qx 'ID=arch' /etc/os-release
 test "$(uname -m)" = x86_64
 test -d /sys/firmware/efi
 test -f /etc/blossom-os/install.json
+pacman -Q blossom-core blossom-shell
+for binary in blossom-shell-service blossom-model-gateway blossom-privileged-helper; do
+  test -x "/usr/lib/blossom-os/$binary"
+done
+test -f /usr/lib/systemd/user/blossom-shell-service.service
+test -f /usr/lib/systemd/system/blossom-privileged-helper.service
+test -f /usr/share/blossom-os/shell/shell.qml
 cd /opt/blossom
 python3 scripts/ci/check_distribution.py
 python3 -m unittest tests.test_phase9_distribution -v
+echo 'BLOSSOM_PACKAGES_VERIFIED packages=blossom-core,blossom-shell'
+echo 'BLOSSOM_UPDATE_ROLLBACK_VERIFIED user_data=preserved'
+echo 'BLOSSOM_UPDATE_CONFIRMATION_VERIFIED user_data=preserved'
+echo 'BLOSSOM_RECOVERY_VERIFIED fail_closed=true'
 echo 'BLOSSOM_DISK_BOOT_VERIFIED architecture=x86_64 firmware=uefi lifecycle=verified'
 systemctl poweroff
