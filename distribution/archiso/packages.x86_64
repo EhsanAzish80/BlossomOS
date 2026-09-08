@@ -1,6 +1,7 @@
 base
 linux
 linux-firmware
+mkinitcpio-archiso
 systemd
 dbus-broker
 bubblewrap
