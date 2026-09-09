@@ -48,6 +48,8 @@ class Phase10ReleaseTests(unittest.TestCase):
                     "1700000000",
                     "--artifact",
                     str(artifact),
+                    "--root-directory",
+                    str(root),
                     "--output-directory",
                     str(output),
                 ],
@@ -61,8 +63,17 @@ class Phase10ReleaseTests(unittest.TestCase):
                 hashlib.sha256(artifact.read_bytes()).hexdigest(),
             )
             self.assertEqual(
+                manifest["artifacts"][0]["path"],
+                "blossom-test",
+            )
+            self.assertEqual(
                 (output / "SHA256SUMS").read_text(),
-                f"{manifest['artifacts'][0]['sha256']}  blossom-test\n",
+                f"{manifest['artifacts'][0]['sha256']}  ../blossom-test\n",
+            )
+            subprocess.run(
+                ["shasum", "-a", "256", "-c", "SHA256SUMS"],
+                cwd=output,
+                check=True,
             )
 
 
