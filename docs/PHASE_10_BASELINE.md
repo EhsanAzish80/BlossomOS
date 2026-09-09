@@ -1,6 +1,7 @@
 # Phase 10 public-beta hardening baseline
 
-Status: active on 2026-09-09. No public beta is declared.
+Status: complete on 2026-09-09 for the reviewed x86-64 UEFI VM
+beta-candidate evidence boundary. No public beta is declared.
 
 Phase 10 starts from the completed x86-64 UEFI VM boundary in Phase 9. It turns
 that evidence artifact into a reviewable beta candidate without expanding the
@@ -11,20 +12,23 @@ supported target or silently publishing a release.
 1. Accept ADR-0027 and freeze the beta-candidate, provenance, publication, and
    support boundary. Complete.
 2. Publish a source-backed threat model plus privilege and sandbox review.
+   Complete.
 3. Enforce Rust dependency updates and a current RustSec advisory gate.
+   Complete.
 4. Add bounded fuzz targets for untrusted protocol decoders and preserve crash
-   evidence without private inputs.
+   evidence without private inputs. Complete.
 5. Generate and validate a deterministic SPDX 2.3 SBOM, checksums, and canonical
-   release manifest from locked inputs.
+   release manifest from locked inputs. Complete.
 6. Prove practical reproducibility by rebuilding release binaries from the same
-   reviewed commit and comparing their SHA-256 digests.
+   reviewed commit and comparing their SHA-256 digests. Complete.
 7. Generate short-lived signed build provenance in the protected candidate
-   workflow and verify it against the repository identity.
+   workflow and verify it against the repository identity. Complete.
 8. Publish clear limitations, supported-target scope, security-report handling,
-   and release/support policy.
+   and release/support policy. Complete.
 9. Run the complete candidate checklist on the trusted x86-64 Linux runner.
+   Complete.
 10. Perform an independent Phase 10 exit audit and update the roadmap only after
-    every gate passes.
+    every gate passes. Complete; see `docs/PHASE_10_EXIT_AUDIT.md`.
 
 ## Non-goals
 

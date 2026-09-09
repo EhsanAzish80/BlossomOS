@@ -15,9 +15,9 @@ content-minimized audit.
 
 ## Current status
 
-Phases 0 through 9 are complete at their separately reviewed boundaries.
-Phase 10—public-beta hardening—is active. Its candidate gates remain incomplete
-until the protected security, fuzz, rebuild, SBOM, and provenance evidence passes.
+Phases 0 through 10 are complete at their separately reviewed boundaries.
+Phase 10 produced a verified x86-64 UEFI VM beta-candidate evidence bundle; it
+did not publish a release or establish physical-device support.
 
 Implemented and tested foundations include:
 
@@ -99,7 +99,7 @@ build/, config/, scripts/
 The historical prototype is preserved under the
 `prototype-pre-agent-architecture` tag. Its scripts and setup guides are not
 supported installation instructions and may contain insecure development
-defaults. The reviewed Phase 9 path and active Phase 10 candidate remain
+defaults. The reviewed Phase 9 path and completed Phase 10 candidate remain
 intentionally limited to repeatable x86-64 UEFI VM evidence.
 
 ## Development

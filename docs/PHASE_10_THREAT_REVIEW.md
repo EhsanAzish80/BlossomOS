@@ -1,7 +1,7 @@
 # Phase 10 threat, privilege, and sandbox review
 
-Status: implementation review in progress. Runtime claims require the candidate
-workflow and exit audit.
+Status: complete on 2026-09-09 within the Phase 10 beta-candidate evidence
+boundary. Runtime and support claims remain limited by the exit audit.
 
 ## Assets and adversaries
 
@@ -22,7 +22,7 @@ compromise, and untrusted pull-request code.
 | Model gateway | Distinct UID, Unix socket, closed runtime files, network-isolated provider | Readiness, peer, audit, or protocol failure refuses service | ADR-0012 through ADR-0020; gateway tests |
 | Durable memory | Explicit approved mutation, encrypted store, data-only recall | Missing approval/key/integrity fails closed | ADR-0024/0025; memory tests |
 | Distribution/update | Pinned inputs, offline signed metadata, inactive-slot staging | Signature, version, health, or recovery mismatch rejects/rolls back | ADR-0026; lifecycle evidence |
-| CI and release | Protected review; self-hosted job never runs pull-request code | Missing SBOM, audit, rebuild match, or provenance blocks candidate | Phase 10 workflows |
+| CI and release | Protected review; untrusted pull-request code does not run in a publication-capable job | Missing SBOM, audit, rebuild match, or provenance blocks candidate | Phase 10 workflows and exit audit |
 
 ## Residual risks
 

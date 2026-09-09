@@ -52,11 +52,12 @@ The repository began as a desktop prototype and now contains reviewed, bounded
 foundations for typed capabilities, exact approval, sandboxed execution,
 minimal privilege, provider-neutral local-model protocols, truthful planning,
 graphical approval and activity, structured system context, encrypted durable
-notes, and an offline installation and rollback lifecycle. Phases 0 through 9
+notes, and an offline installation and rollback lifecycle. Phases 0 through 10
 are complete only at their documented boundaries.
 
-Phase 10 public-beta hardening is active. Blossom OS is still pre-release
-research software: there is no supported release, physical-device compatibility
-claim, daily-use guarantee, or general-purpose autonomous authority. The
+Phase 10 public-beta hardening is complete within its reviewed x86-64 UEFI VM
+beta-candidate evidence boundary. Blossom OS is still pre-release research
+software: there is no supported release, physical-device compatibility claim,
+daily-use guarantee, or general-purpose autonomous authority. The
 historical prototype remains preserved by the
 `prototype-pre-agent-architecture` tag.
