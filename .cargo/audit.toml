@@ -1,0 +1,12 @@
+[advisories]
+ignore = []
+informational_warnings = ["unmaintained", "unsound"]
+
+[output]
+deny = ["unmaintained", "unsound"]
+quiet = false
+show_tree = true
+
+[yanked]
+enabled = true
+update_index = true

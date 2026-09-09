@@ -47,6 +47,10 @@ compatibility, packaging, or contributor obligations.
 - Phase 9 distribution and updates: accepted in ADR-0026 for one Blossom-owned
   x86-64 UEFI VM image, closed packages and first-run state, signed offline
   updates, inactive-slot staging, recovery, and failed-boot rollback.
+- Phase 10 public-beta hardening: accepted in ADR-0027 for the same x86-64 UEFI
+  VM evidence target, with explicit security review, dependency and fuzz gates,
+  deterministic SBOM/release metadata, practical rebuild comparison, signed
+  provenance, limitations, and a separate human publication decision.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and

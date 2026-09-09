@@ -19,9 +19,19 @@ concurrency:
 
 jobs:
   analyze:
-    name: Analyze Python
+    name: Analyze ${{ matrix.display }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: python
+            display: Python
+          - language: rust
+            display: Rust
+          - language: actions
+            display: Actions
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -29,9 +39,10 @@ jobs:
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
-          languages: python
+          languages: ${{ matrix.language }}
+          build-mode: none
 
       - name: Analyze
         uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
-          category: /language:python
+          category: /language:${{ matrix.language }}

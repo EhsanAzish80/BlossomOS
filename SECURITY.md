@@ -28,5 +28,18 @@ the current prototype.
 
 ## Disclosure process
 
-Before public beta, the project will document acknowledgment targets, remediation
-timelines, coordinated disclosure, supported versions, and credit preferences.
+The project targets acknowledgment within three business days and an initial
+severity and scope assessment within seven business days. These are response
+targets, not guarantees. A critical issue should receive a mitigation or
+remediation plan within 30 days when practical; lower-severity work is scheduled
+according to impact, exploitability, and release risk.
+
+The maintainer and reporter should coordinate publication after a fix or
+mitigation is available. If coordination fails or users face active risk, either
+party may disclose responsibly after giving reasonable notice. Reporters may
+request public credit, a specific credit name, or anonymity.
+
+No version currently receives security updates. The first supported version and
+support lifetime must be stated in its release notes; silence never implies
+support. Security fixes must not disclose private report content before the
+coordinated disclosure point.

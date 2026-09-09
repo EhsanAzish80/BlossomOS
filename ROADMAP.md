@@ -452,6 +452,16 @@ limited to the reviewed x86-64 UEFI VM target.
 
 ## Phase 10: Public beta hardening
 
+- [x] Accept ADR-0027 and freeze the first beta-candidate boundary without
+  expanding the Phase 9 x86-64 UEFI VM evidence target.
+- [ ] Complete the threat-model, privilege, and sandbox review.
+- [ ] Enforce locked dependency updates and current advisory scanning.
+- [ ] Add bounded fuzzing for untrusted protocol decoders.
+- [ ] Generate deterministic SPDX SBOM, checksums, and release metadata.
+- [ ] Prove practical release-binary reproducibility and signed provenance.
+- [ ] Publish limitations, supported-target, disclosure, and release policy.
+- [ ] Pass the protected beta-candidate workflow and independent exit audit.
+
 - Threat-model review, dependency audit, fuzzing, privilege and sandbox review,
   signed releases, SBOM, practical reproducible builds, and disclosure process.
 - Publish clear limitations and supported hardware.

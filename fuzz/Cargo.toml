@@ -1,0 +1,19 @@
+[package]
+name = "blossom-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+blossom-core = { path = "../core/blossom-core" }
+libfuzzer-sys = "0.4"
+
+[[bin]]
+name = "untrusted_protocols"
+path = "fuzz_targets/untrusted_protocols.rs"
+test = false
+doc = false
+bench = false

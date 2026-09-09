@@ -1,0 +1,82 @@
+name: Phase 10 beta candidate
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: phase10-beta-candidate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  candidate:
+    name: Rebuild, SBOM, and signed provenance
+    if: github.repository == 'EhsanAzish80/BlossomOS'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - name: Check out reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve deterministic build identity
+        run: echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
+
+      - name: Build first release set
+        run: cargo build --locked --release --workspace --target-dir /tmp/blossom-build-a
+
+      - name: Build second release set
+        run: cargo build --locked --release --workspace --target-dir /tmp/blossom-build-b
+
+      - name: Verify practical reproducibility
+        run: |
+          for binary in blossom-cli blossom-model-gateway blossom-privileged-helper blossom-shell-service; do
+            cmp "/tmp/blossom-build-a/release/$binary" "/tmp/blossom-build-b/release/$binary"
+          done
+
+      - name: Assemble candidate evidence bundle
+        run: |
+          install -d -m 0755 /tmp/blossom-candidate/artifacts /tmp/blossom-candidate/metadata
+          for binary in blossom-cli blossom-model-gateway blossom-privileged-helper blossom-shell-service; do
+            install -m 0755 "/tmp/blossom-build-a/release/$binary" "/tmp/blossom-candidate/artifacts/$binary"
+          done
+          python3 scripts/release/generate_sbom.py \
+            --revision "$GITHUB_SHA" \
+            --source-date-epoch "$SOURCE_DATE_EPOCH" \
+            --output /tmp/blossom-candidate/metadata/blossom-os.spdx.json
+          python3 scripts/release/generate_manifest.py \
+            --revision "$GITHUB_SHA" \
+            --source-date-epoch "$SOURCE_DATE_EPOCH" \
+            --artifact /tmp/blossom-candidate/artifacts/blossom-cli \
+            --artifact /tmp/blossom-candidate/artifacts/blossom-model-gateway \
+            --artifact /tmp/blossom-candidate/artifacts/blossom-privileged-helper \
+            --artifact /tmp/blossom-candidate/artifacts/blossom-shell-service \
+            --artifact /tmp/blossom-candidate/metadata/blossom-os.spdx.json \
+            --output-directory /tmp/blossom-candidate/metadata
+          tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner \
+            -C /tmp/blossom-candidate -czf /tmp/blossom-os-beta-candidate-x86_64.tar.gz \
+            artifacts metadata
+
+      - name: Generate signed provenance and SBOM attestation
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: /tmp/blossom-os-beta-candidate-x86_64.tar.gz
+          sbom-path: /tmp/blossom-candidate/metadata/blossom-os.spdx.json
+
+      - name: Upload candidate evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: blossom-os-beta-candidate-${{ github.sha }}
+          path: |
+            /tmp/blossom-os-beta-candidate-x86_64.tar.gz
+            /tmp/blossom-candidate/metadata
+          if-no-files-found: error
+          retention-days: 14
