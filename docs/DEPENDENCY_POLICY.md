@@ -21,8 +21,12 @@ implementation.
 
 ## Updates and vulnerabilities
 
-- Dependabot monitors GitHub Actions weekly. Language ecosystems are added when
-  their manifests appear.
+- Dependabot monitors Cargo and GitHub Actions weekly.
+- The protected security workflow scans `Cargo.lock` against the current RustSec
+  advisory database and rejects vulnerable, yanked, unmaintained, or unsound
+  dependencies. Any temporary exception must name the advisory, document
+  reachability and mitigation, have an owner and expiry, and receive focused
+  security review.
 - Security updates are prioritized and tested before merging.
 - Breaking or security-sensitive upgrades receive focused review.
 - Abandoned or compromised dependencies must be replaced or isolated.

@@ -1,0 +1,64 @@
+name: Phase 10 security
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '43 3 * * 3'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase10-security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  advisory:
+    name: RustSec advisory gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned cargo-audit
+        run: cargo install cargo-audit --version 0.22.2 --locked
+
+      - name: Audit locked Rust dependencies
+        run: cargo audit --file Cargo.lock
+
+  fuzz:
+    name: Bounded protocol fuzzing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pinned nightly toolchain
+        run: rustup toolchain install nightly-2026-09-01 --profile minimal
+
+      - name: Install pinned cargo-fuzz
+        run: cargo install cargo-fuzz --version 0.13.2 --locked
+
+      - name: Fuzz untrusted protocol decoders
+        run: >-
+          cargo +nightly-2026-09-01 fuzz run untrusted_protocols
+          -- -max_total_time=60 -timeout=10
+
+  metadata:
+    name: Deterministic release metadata
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Test deterministic release metadata
+        run: |
+          python3 scripts/ci/check_phase10.py
+          python3 -m unittest tests.test_phase10_release -v

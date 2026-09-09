@@ -48,8 +48,15 @@ external service.
 
 ## Current reality
 
-The repository began as an Arch/XFCE prototype with build scripts and a
-rule-based Python CLI. It does not yet implement a real LLM runtime, capability
-broker, sandbox, permission engine, audit service, Hyprland integration, or
-Quickshell shell. The initial prototype is preserved by Git tag
-`prototype-pre-agent-architecture`.
+The repository began as a desktop prototype and now contains reviewed, bounded
+foundations for typed capabilities, exact approval, sandboxed execution,
+minimal privilege, provider-neutral local-model protocols, truthful planning,
+graphical approval and activity, structured system context, encrypted durable
+notes, and an offline installation and rollback lifecycle. Phases 0 through 9
+are complete only at their documented boundaries.
+
+Phase 10 public-beta hardening is active. Blossom OS is still pre-release
+research software: there is no supported release, physical-device compatibility
+claim, daily-use guarantee, or general-purpose autonomous authority. The
+historical prototype remains preserved by the
+`prototype-pre-agent-architecture` tag.
