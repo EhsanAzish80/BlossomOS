@@ -30,7 +30,7 @@ explicitly labeled future work. A target design is not an implementation claim.
 | 7 | Battery and coarse network context | [Exit audit](PHASE_7_EXIT_AUDIT.md) |
 | 8 | Explicit encrypted durable notes | [Exit audit](PHASE_8_EXIT_AUDIT.md) |
 | 9 | Distribution, signed updates, and rollback | [Exit audit](PHASE_9_EXIT_AUDIT.md) · [Baseline](PHASE_9_BASELINE.md) · [Lifecycle core](PHASE_9_LIFECYCLE_CORE.md) |
-| 10 | Public-beta hardening, active and not yet complete | [Baseline](PHASE_10_BASELINE.md) · [Threat review](PHASE_10_THREAT_REVIEW.md) · [Limitations](PHASE_10_LIMITATIONS.md) · [Checklist](PHASE_10_RELEASE_CHECKLIST.md) |
+| 10 | Verified beta-candidate hardening boundary; no public release | [Exit audit](PHASE_10_EXIT_AUDIT.md) · [Baseline](PHASE_10_BASELINE.md) · [Threat review](PHASE_10_THREAT_REVIEW.md) · [Limitations](PHASE_10_LIMITATIONS.md) · [Checklist](PHASE_10_RELEASE_CHECKLIST.md) |
 
 Each phase may have additional design, implementation, and installed-evidence
 records beside its primary document. Filenames use `PHASE_<number>_...` so the
