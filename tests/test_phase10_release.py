@@ -76,6 +76,13 @@ class Phase10ReleaseTests(unittest.TestCase):
                 check=True,
             )
 
+    def test_candidate_workflow_creates_both_attestation_types(self) -> None:
+        workflow = (ROOT / ".github/workflows/phase10-beta-candidate.yml").read_text()
+        self.assertIn("name: Generate signed build provenance", workflow)
+        self.assertIn("name: Generate signed SBOM attestation", workflow)
+        self.assertEqual(workflow.count("uses: actions/attest@"), 2)
+        self.assertEqual(workflow.count("sbom-path:"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
