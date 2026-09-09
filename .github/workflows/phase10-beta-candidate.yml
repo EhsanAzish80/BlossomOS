@@ -60,7 +60,9 @@ jobs:
             --artifact /tmp/blossom-candidate/artifacts/blossom-privileged-helper \
             --artifact /tmp/blossom-candidate/artifacts/blossom-shell-service \
             --artifact /tmp/blossom-candidate/metadata/blossom-os.spdx.json \
+            --root-directory /tmp/blossom-candidate \
             --output-directory /tmp/blossom-candidate/metadata
+          (cd /tmp/blossom-candidate/metadata && sha256sum --check SHA256SUMS)
           tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner \
             -C /tmp/blossom-candidate -czf /tmp/blossom-os-beta-candidate-x86_64.tar.gz \
             artifacts metadata

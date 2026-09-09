@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 
 
@@ -22,20 +23,37 @@ def main() -> int:
     parser.add_argument("--revision", required=True)
     parser.add_argument("--source-date-epoch", required=True, type=int)
     parser.add_argument("--artifact", action="append", required=True, type=Path)
+    parser.add_argument("--root-directory", required=True, type=Path)
     parser.add_argument("--output-directory", required=True, type=Path)
     args = parser.parse_args()
 
-    resolved = sorted((path.resolve() for path in args.artifact), key=lambda path: path.name)
-    if len({path.name for path in resolved}) != len(resolved):
-        parser.error("artifact basenames must be unique")
-    if any(not path.is_file() or path.is_symlink() for path in resolved):
+    root = args.root_directory.resolve()
+    output = args.output_directory.resolve()
+    try:
+        output.relative_to(root)
+    except ValueError:
+        parser.error("output directory must be inside root directory")
+
+    resolved = []
+    for artifact in args.artifact:
+        path = artifact.resolve()
+        try:
+            bundle_path = path.relative_to(root)
+        except ValueError:
+            parser.error("every artifact must be inside root directory")
+        resolved.append((bundle_path, path))
+    resolved.sort(key=lambda item: item[0].as_posix())
+    if any(not path.is_file() or path.is_symlink() for _, path in resolved):
         parser.error("every artifact must be a regular non-symlink file")
 
     artifacts = [
-        {"name": path.name, "sha256": sha256(path), "size": path.stat().st_size}
-        for path in resolved
+        {
+            "path": bundle_path.as_posix(),
+            "sha256": sha256(path),
+            "size": path.stat().st_size,
+        }
+        for bundle_path, path in resolved
     ]
-    output = args.output_directory
     output.mkdir(parents=True, exist_ok=True)
     manifest = {
         "artifacts": artifacts,
@@ -51,7 +69,11 @@ def main() -> int:
         encoding="utf-8",
     )
     (output / "SHA256SUMS").write_text(
-        "".join(f"{item['sha256']}  {item['name']}\n" for item in artifacts),
+        "".join(
+            f"{item['sha256']}  "
+            f"{Path(os.path.relpath(root / item['path'], output)).as_posix()}\n"
+            for item in artifacts
+        ),
         encoding="ascii",
     )
     return 0
