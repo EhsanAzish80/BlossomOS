@@ -473,3 +473,22 @@ declared. See `docs/PHASE_10_EXIT_AUDIT.md`.
 Exit satisfied: the security review and non-publication candidate checklist pass
 with traceable evidence at commit `0f6ca2c`. Public release publication remains
 a separate explicit maintainer decision.
+
+## Phase 11: First physical-device qualification
+
+Status: active. ADR-0028 freezes one expected `MacBookPro11,1` target and a
+read-only, privacy-minimized preflight. Physical installation remains blocked
+until a separate fail-closed disk-safety increment is reviewed and tested.
+
+- [x] Define the exact first-device boundary and implement a closed read-only
+  preflight that grants no installation or support authority.
+- [ ] Confirm the exact target identity and prerequisites on the physical host.
+- [ ] Add explicit target discovery, destructive-action rejection rules, typed
+  confirmation, power/recovery prerequisites, and disposable-media tests.
+- [ ] Prove installation, boot, essential hardware surfaces, update rollback,
+  and recovery on the frozen physical target.
+- [ ] Publish an independent Phase 11 exit audit and exact limitations.
+
+Exit: one exact physical target completes the reviewed safety, installation,
+hardware, update, rollback, and recovery matrix. No broader hardware claim is
+implied.
