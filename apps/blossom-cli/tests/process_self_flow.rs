@@ -63,7 +63,9 @@ fn allowed_native_read_returns_minimal_self_identity_and_never_executes() {
         .expect("process identity should be displayed");
     assert!(result.contains("PID: 42"));
     assert!(result.contains("Parent PID: 7"));
-    assert!(result.contains("Effective user ID: 1000"));
+    assert!(result.contains("Effective user and group IDs: redacted"));
+    assert!(!result.contains("1000"));
+    assert!(!result.contains("1001"));
     assert!(!result.contains("command"));
     assert!(!result.contains("environment"));
     assert!(outcome.activity.contains("policy Allow"));
