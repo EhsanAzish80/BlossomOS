@@ -1,7 +1,8 @@
 # Phase 11 physical installation guard
 
-Status: implemented and tested with one bounded disposable-media writer. No
-physical installer or internal-disk write authority is enabled.
+Status: implemented and tested with one bounded disposable-media writer. A
+separate physical-install backend is implemented for review, but it is not yet
+included in an install image and no internal-disk write has been authorized.
 
 The guard accepts one closed, purpose-bound observation containing the
 successful host preflight outcome, AC-power and recovery-media readiness, a
@@ -70,15 +71,24 @@ ambiguity, unplug or changed-device rejection, failure recovery, and
 exact-target behavior are covered by deterministic tests. Physical installation
 remains a separate unauthorized checkpoint.
 
-The next reviewed increment uses a distinct physical-install harness. It
+The distinct physical-install harness
 accepts only `physical_install` authority, repeats the exact confirmation and
 target-digest comparison against a fresh observation, consumes an exclusive
 once-only claim before invoking a backend, and refuses disposable-test
 authority. Backend failure remains terminal for that claim. The command runner
 uses one fixed absolute backend path, an argument vector without a shell, a
-bounded timeout, and only the guard-selected device path. This establishes the
-execution boundary but does not yet provide or authorize the destructive
-backend.
+bounded timeout, and sends only the canonical guard-selected target over
+standard input.
+
+The reviewed backend is frozen to `/dev/sda`, model `APPLE SSD SM0128F`, exact
+size `121332826112`, SATA transport, non-removable media, and
+`physical_install` purpose. It repeats a bounded live `lsblk` check, rejects any
+mounted target partition, opens the exact block device exclusively without
+following links, verifies its live byte size, and then uses a fixed GPT,
+filesystem, root-extraction, and systemd-boot command plan. It cannot select a
+different disk from user input. This implements the backend boundary; it does
+not authorize execution and is not yet integrated into a bootable physical
+candidate.
 
 ## Bounded disposable-media probe
 

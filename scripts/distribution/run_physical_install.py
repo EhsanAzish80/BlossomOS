@@ -27,7 +27,13 @@ def _load(path: Path) -> dict[str, Any]:
 
 
 def _production_backend(target: dict[str, Any]) -> None:
-    subprocess.run([str(BACKEND), target["path"]], check=True, timeout=1800)
+    subprocess.run(
+        [str(BACKEND)],
+        input=json.dumps(target, sort_keys=True, separators=(",", ":")),
+        text=True,
+        check=True,
+        timeout=1800,
+    )
 
 
 def execute(

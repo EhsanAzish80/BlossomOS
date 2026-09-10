@@ -28,6 +28,8 @@ probe = read("scripts/distribution/disposable_media_probe.py")
 probe_runner = read("scripts/distribution/run_disposable_media_test.py")
 install_harness = read("scripts/distribution/physical_install_harness.py")
 install_runner = read("scripts/distribution/run_physical_install.py")
+install_backend = read("scripts/distribution/physical_install_backend.py")
+install_backend_entrypoint = read("distribution/archiso/airootfs/usr/local/libexec/blossom-physical-install-backend")
 observer = read("scripts/distribution/physical_device_observer.py")
 observation_workflow = read(".github/workflows/phase11-device-observation.yml")
 disposable_evidence = read("docs/PHASE_11_DISPOSABLE_EVIDENCE.md")
@@ -131,7 +133,8 @@ for forbidden in ("subprocess", "sgdisk", "mkfs", "wipefs", "parted"):
 for required in (
     "MAX_INPUT_BYTES",
     'Path("/usr/local/libexec/blossom-physical-install-backend")',
-    'subprocess.run([str(BACKEND), target["path"]]',
+    "input=json.dumps(target",
+    "text=True",
     "timeout=1800",
 ):
     if required not in install_runner:
@@ -139,6 +142,28 @@ for required in (
 for forbidden in ("sgdisk", "mkfs", "wipefs", "parted", "shell=True"):
     if forbidden in install_runner:
         fail(f"physical install runner gained inline destructive authority: {forbidden}")
+for required in (
+    '"path": "/dev/sda"',
+    '"model": "APPLE SSD SM0128F"',
+    '"size_bytes": 121332826112',
+    '"transport": "sata"',
+    '"purpose": "physical_install"',
+    "O_EXCL",
+    "O_NOFOLLOW",
+    "BLKGETSIZE64",
+    '["sgdisk", "--zap-all", disk]',
+    '["mkfs.fat", "-F", "32", "-n", "BLOSSOM_EFI", "/dev/sda1"]',
+    '["mkfs.ext4", "-F", "-L", "BLOSSOM_SYSTEM", "/dev/sda2"]',
+    "installer backend requires root",
+):
+    if required not in install_backend:
+        fail(f"physical install backend is incomplete: {required}")
+for forbidden in ("shell=True", "os.system", '"/dev/sdb"', '"/dev/vda"'):
+    if forbidden in install_backend:
+        fail(f"physical install backend gained forbidden behavior: {forbidden}")
+for required in ("#!/usr/bin/env bash", "set -euo pipefail", "physical_install_backend import install"):
+    if required not in install_backend_entrypoint:
+        fail(f"physical install backend entrypoint is incomplete: {required}")
 for required in (
     "workflow_dispatch:",
     "runs-on: [self-hosted, linux, x64, blossom-gpu]",
