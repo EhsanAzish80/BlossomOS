@@ -34,7 +34,9 @@ formatting, mounting, or installation operation.
 
 ## Next gate
 
-Checkpoint 4 must connect this guard to a separately reviewed disposable-media
-test harness with once-only consumption and independent device revalidation.
+The deterministic harness now provides once-only consumption, cancellation,
+independent device revalidation, truthful post-claim failure, and an injected
+fake backend. Checkpoint 4 still requires a separately reviewed real
+disposable-media run.
 No physical laptop write may occur before cancellation, ambiguity, unplug,
 mutation, and failure-recovery tests pass there.
