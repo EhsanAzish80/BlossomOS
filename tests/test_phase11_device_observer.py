@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from scripts.distribution.physical_device_observer import ObservationError, parse_lsblk
+from scripts.distribution.physical_device_observer import LSBLK, ObservationError, parse_lsblk
 
 
 def inventory():
@@ -31,6 +31,10 @@ def inventory():
 
 
 class Phase11DeviceObserverTests(unittest.TestCase):
+    def test_lsblk_explicitly_requests_tree_for_child_mountpoints(self):
+        self.assertIn("--tree", LSBLK)
+        self.assertIn("MOUNTPOINTS", LSBLK[-1])
+
     def test_normalizes_closed_inventory_and_finds_live_root_disk(self):
         live, devices = parse_lsblk(json.dumps(inventory()).encode())
         self.assertEqual(live, "/dev/sda")
