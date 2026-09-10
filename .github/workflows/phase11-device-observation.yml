@@ -1,0 +1,80 @@
+name: Phase 11 disposable device observation
+
+on:
+  workflow_dispatch:
+    inputs:
+      ac_power:
+        description: Confirm the laptop is connected to AC power
+        required: true
+        type: boolean
+        default: false
+      recovery_media_ready:
+        description: Confirm separate recovery media is available
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase11-device-observation
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    name: Read-only disposable device observation
+    runs-on: [self-hosted, linux, x64, blossom-gpu]
+    timeout-minutes: 10
+    steps:
+      - name: Reject missing operator prerequisites
+        env:
+          AC_POWER: ${{ inputs.ac_power }}
+          RECOVERY_MEDIA_READY: ${{ inputs.recovery_media_ready }}
+        run: |
+          test "$AC_POWER" = true
+          test "$RECOVERY_MEDIA_READY" = true
+
+      - name: Restore runner ownership before checkout
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            chown -R "$(id -u):$(id -g)" /workspace
+
+      - name: Check out reviewed repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Reconfirm the frozen physical host
+        run: |
+          preflight="$RUNNER_TEMP/phase11-device-preflight.json"
+          python3 scripts/distribution/physical_preflight.py --observe-host > "$preflight"
+          python3 -c 'import json,sys; value=json.load(open(sys.argv[1])); assert value["result"] == "eligible_for_qualification"; assert value["authority"] == "read_only_preflight_only"' "$preflight"
+
+      - name: Observe and evaluate without writing
+        run: |
+          observation="$RUNNER_TEMP/phase11-device-observation.json"
+          decision="$RUNNER_TEMP/phase11-device-decision.json"
+          challenge=$(python3 -c 'import secrets; print(secrets.token_hex(16))')
+          python3 scripts/distribution/physical_device_observer.py \
+            --purpose disposable_test \
+            --host-preflight-result eligible_for_qualification \
+            --ac-power ready \
+            --recovery-media ready \
+            --challenge "$challenge" \
+            > "$observation"
+          python3 scripts/distribution/physical_install_guard.py \
+            --input "$observation" \
+            > "$decision"
+          python3 -c 'import json,sys; value=json.load(open(sys.argv[1])); assert value["authority"] == "guard_decision_only"; assert value["result"] == "confirmation_required"; assert value["target"]["purpose"] == "disposable_test"' "$decision"
+
+      - name: Upload minimized read-only evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: phase11-device-observation
+          path: |
+            ${{ runner.temp }}/phase11-device-preflight.json
+            ${{ runner.temp }}/phase11-device-observation.json
+            ${{ runner.temp }}/phase11-device-decision.json
+          if-no-files-found: error
+          retention-days: 7

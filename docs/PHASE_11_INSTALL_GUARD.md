@@ -16,6 +16,13 @@ filesystem label, UUID, partition content, or user data. Power and recovery
 readiness remain explicit operator assertions; the observer does not infer
 them.
 
+The manually dispatched `Phase 11 disposable device observation` workflow runs
+the frozen-host preflight, device observer, and non-writing guard on the trusted
+physical runner. It requires explicit AC-power and recovery-media assertions
+and uploads only the minimized preflight, observation, and guard-decision JSON.
+It has no `sudo`, device writer, partitioner, formatter, mount operation, or
+automatic trigger.
+
 For `physical_install`, it fails closed unless there is exactly one
 non-removable, unmounted internal SATA or NVMe target distinct from the live
 medium. For `disposable_test`, it accepts only an unmounted USB target. Purpose,
