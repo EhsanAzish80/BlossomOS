@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fail-closed repository checks for the first Phase 11 boundary."""
 
+import hashlib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -27,6 +28,20 @@ probe = read("scripts/distribution/disposable_media_probe.py")
 probe_runner = read("scripts/distribution/run_disposable_media_test.py")
 observer = read("scripts/distribution/physical_device_observer.py")
 observation_workflow = read(".github/workflows/phase11-device-observation.yml")
+disposable_evidence = read("docs/PHASE_11_DISPOSABLE_EVIDENCE.md")
+
+evidence_hashes = {
+    "distribution/evidence/phase11-device-preflight-34460218314.json": "5de11cb6ab30605ef4bcda084d2d73994a94269f3e99e9ac436f19b9b1c32c3c",
+    "distribution/evidence/phase11-device-observation-34460218314.json": "805e4cabbd4f70572c103038c1e6292bd8f98694738c2ff6ac7ce527bc8c1394",
+    "distribution/evidence/phase11-device-decision-34460218314.json": "13928b91fd0e6fbffd8cb8c58f65432a83fc179b6a0d4e96fb78571af6ab234b",
+}
+for path, expected in evidence_hashes.items():
+    actual = hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+    if actual != expected:
+        fail(f"Phase 11 disposable evidence hash drift: {path}")
+for required in ("34460218314", "pre-write observation accepted", "f7436d816d5efe2c8d7e8da02b31755a10e0124edfbfde09f0b8f3e96ad6f911"):
+    if required not in disposable_evidence:
+        fail(f"Phase 11 disposable evidence is incomplete: {required}")
 
 for required in (
     "Status: Accepted",

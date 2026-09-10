@@ -487,8 +487,9 @@ until a separate fail-closed disk-safety increment is reviewed and tested.
   frozen MacBookPro11,1 target without collecting stable identifiers.
 - [ ] Add explicit target discovery, destructive-action rejection rules, typed
   confirmation, power/recovery prerequisites, and disposable-media tests. The
-  non-writing guard and adversarial tests are complete; writer integration and
-  disposable-media evidence remain pending.
+  non-writing guard, bounded write/read/restore probe, adversarial tests, and
+  protected pre-write observation are complete; the approved physical probe
+  and its immutable result evidence remain pending.
 - [ ] Prove installation, boot, essential hardware surfaces, update rollback,
   and recovery on the frozen physical target.
 - [ ] Publish an independent Phase 11 exit audit and exact limitations.

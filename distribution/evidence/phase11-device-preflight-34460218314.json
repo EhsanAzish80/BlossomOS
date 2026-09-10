@@ -1,0 +1,1 @@
+{"authority":"read_only_preflight_only","checks":{"architecture":true,"drm":true,"firmware":true,"internal_disk":true,"memory":true,"product":true},"result":"eligible_for_qualification","schema":1,"target":"MacBookPro11,1"}
