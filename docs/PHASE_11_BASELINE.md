@@ -18,7 +18,8 @@ target. Eligibility is not compatibility, support, or installation proof.
    `docs/PHASE_11_PHYSICAL_EVIDENCE.md`.
 3. Replace automatic physical installation with fail-closed target discovery,
    live-media and mounted-device rejection, power/recovery prerequisites, and
-   explicit typed confirmation. Pending separate review.
+   explicit typed confirmation. The non-writing guard is implemented and
+   deterministically tested; integration with any writer remains pending.
 4. Prove destructive behavior only against disposable, independently identified
    media, including cancellation, ambiguity, unplug, and failure recovery.
    Pending.

@@ -20,6 +20,8 @@ installer = read("distribution/archiso/airootfs/usr/local/bin/blossom-evidence-i
 preflight = read("scripts/distribution/physical_preflight.py")
 workflow = read(".github/workflows/phase11-physical-preflight.yml")
 evidence = read("docs/PHASE_11_PHYSICAL_EVIDENCE.md")
+guard = read("scripts/distribution/physical_install_guard.py")
+guard_doc = read("docs/PHASE_11_INSTALL_GUARD.md")
 
 for required in (
     "Status: Accepted",
@@ -58,4 +60,18 @@ for required in (
 ):
     if required not in evidence:
         fail(f"physical preflight evidence is incomplete: {required}")
+for required in (
+    "guard_decision_only",
+    "guard_passed_no_write_performed",
+    "exactly one unmounted internal target is required",
+    "ERASE {target['path']}",
+):
+    if required not in guard:
+        fail(f"physical install guard is incomplete: {required}")
+for forbidden in ("sgdisk", "mkfs", "parted", "wipefs", "subprocess", "os.system"):
+    if forbidden in guard:
+        fail(f"physical install guard gained write authority: {forbidden}")
+for required in ("Status: implemented", "guard_passed_no_write_performed", "once-only"):
+    if required not in guard_doc:
+        fail(f"physical install guard document is incomplete: {required}")
 print("Phase 11 physical qualification boundary passed.")
