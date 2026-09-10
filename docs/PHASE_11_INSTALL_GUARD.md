@@ -8,6 +8,11 @@ successful host preflight outcome, AC-power and recovery-media readiness, a
 per-attempt challenge, the live-medium device, and at most eight bounded disk
 summaries.
 
+Unavailable zero-capacity card-reader slots are excluded before normalization;
+they contain no addressable media and cannot be a live device or target. Every
+non-empty disk remains subject to the complete closed validation and selection
+rules below.
+
 `physical_device_observer.py` supplies that inventory on Linux through one
 fixed, read-only `lsblk` invocation. It accepts at most 64 KiB and eight whole
 disks, recognizes only SATA, NVMe, and USB transports, and requires exactly one

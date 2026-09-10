@@ -48,6 +48,22 @@ class Phase11DeviceObserverTests(unittest.TestCase):
         value["blockdevices"][1]["children"] = [{"type": "part", "mountpoints": ["/cdrom"]}]
         self.assertEqual(parse_lsblk(json.dumps(value).encode())[0], "/dev/sdb")
 
+    def test_empty_card_reader_slot_is_not_observed_as_media(self):
+        value = inventory()
+        value["blockdevices"].append(
+            {
+                "path": "/dev/sdc",
+                "type": "disk",
+                "model": "SD Card Reader",
+                "size": 0,
+                "tran": "usb",
+                "rm": True,
+                "mountpoints": [None],
+            }
+        )
+        _, devices = parse_lsblk(json.dumps(value).encode())
+        self.assertEqual([device["path"] for device in devices], ["/dev/sda", "/dev/sdb"])
+
     def test_ambiguous_missing_and_unsupported_inventories_fail_closed(self):
         cases = []
         no_live = inventory()
