@@ -486,7 +486,9 @@ until a separate fail-closed disk-safety increment is reviewed and tested.
   Protected read-only run `34447352126` verified all six closed checks for the
   frozen MacBookPro11,1 target without collecting stable identifiers.
 - [ ] Add explicit target discovery, destructive-action rejection rules, typed
-  confirmation, power/recovery prerequisites, and disposable-media tests.
+  confirmation, power/recovery prerequisites, and disposable-media tests. The
+  non-writing guard and adversarial tests are complete; writer integration and
+  disposable-media evidence remain pending.
 - [ ] Prove installation, boot, essential hardware surfaces, update rollback,
   and recovery on the frozen physical target.
 - [ ] Publish an independent Phase 11 exit audit and exact limitations.
