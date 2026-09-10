@@ -77,6 +77,11 @@ def parse_lsblk(payload: bytes) -> tuple[str, list[dict[str, Any]]]:
             raise ObservationError("disk identity is incomplete")
         if type(size) is not int or transport is None or removable not in (True, False, 0, 1):
             raise ObservationError("disk properties are incomplete")
+        if size == 0:
+            # Empty card-reader slots are reported as whole disks on the frozen
+            # MacBook target but contain no addressable media and cannot be a
+            # live device or destructive-test candidate.
+            continue
         devices.append(
             {
                 "path": path,
