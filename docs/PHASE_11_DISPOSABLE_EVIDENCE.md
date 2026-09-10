@@ -1,6 +1,7 @@
 # Phase 11 disposable-media evidence
 
-Status: pre-write observation accepted; bounded physical probe pending.
+Status: bounded physical probe completed and restored on the approved disposable
+target; physical installation remains unauthorized.
 
 Protected workflow run `34460218314` completed on 2026-09-10 from reviewed
 `main`. It reconfirmed the frozen `MacBookPro11,1`, observed the exact bounded
@@ -25,3 +26,24 @@ These records contain no serial number, filesystem UUID, MAC address, SSID,
 username, file content, or content-derived fingerprint. They authorize only the
 separately reviewed bounded disposable probe. They do not authorize physical
 installation or any write to the internal disk.
+
+## Bounded physical result
+
+On 2026-09-10, after merged launcher commit
+`05ffd44411a167ef1a72fe0e247592f24c13c136` and a fresh successful read-only
+observation in protected run `34462749602`, the owner executed the reviewed
+launcher as root on the frozen host. The terminal result reported
+`disposable_test_completed` for the exact approved target digest above. The
+probe wrote, read back, restored, and re-read exactly 4,096 bytes at offset
+8,388,608. It reported `disposable_probe_completed_and_restored`; therefore the
+original bytes were restored before success was returned.
+
+The exact minimized terminal result is preserved as
+`distribution/evidence/phase11-disposable-probe-result-20260910.json`. Its
+`evidence_source` records that this result came from operator-captured terminal
+output. It contains no serial number, filesystem identifier, or disk content.
+
+This completes the successful bounded disposable-media path. Deterministic
+tests cover cancellation, ambiguity, unplug or changed-device rejection,
+once-only consumption, and failure recovery. Those negative cases do not grant
+physical-install authority and were not induced by writing the internal disk.
