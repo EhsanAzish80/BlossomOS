@@ -34,12 +34,18 @@ evidence_hashes = {
     "distribution/evidence/phase11-device-preflight-34460218314.json": "5de11cb6ab30605ef4bcda084d2d73994a94269f3e99e9ac436f19b9b1c32c3c",
     "distribution/evidence/phase11-device-observation-34460218314.json": "805e4cabbd4f70572c103038c1e6292bd8f98694738c2ff6ac7ce527bc8c1394",
     "distribution/evidence/phase11-device-decision-34460218314.json": "13928b91fd0e6fbffd8cb8c58f65432a83fc179b6a0d4e96fb78571af6ab234b",
+    "distribution/evidence/phase11-disposable-probe-result-20260910.json": "40bf0d8ae0f9b4de81d973ad2f329a9e326c74b50375bbe592684907e2b46444",
 }
 for path, expected in evidence_hashes.items():
     actual = hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
     if actual != expected:
         fail(f"Phase 11 disposable evidence hash drift: {path}")
-for required in ("34460218314", "pre-write observation accepted", "f7436d816d5efe2c8d7e8da02b31755a10e0124edfbfde09f0b8f3e96ad6f911"):
+for required in (
+    "34460218314",
+    "disposable_test_completed",
+    "disposable_probe_completed_and_restored",
+    "f7436d816d5efe2c8d7e8da02b31755a10e0124edfbfde09f0b8f3e96ad6f911",
+):
     if required not in disposable_evidence:
         fail(f"Phase 11 disposable evidence is incomplete: {required}")
 

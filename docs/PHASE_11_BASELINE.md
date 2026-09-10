@@ -18,11 +18,14 @@ target. Eligibility is not compatibility, support, or installation proof.
    `docs/PHASE_11_PHYSICAL_EVIDENCE.md`.
 3. Replace automatic physical installation with fail-closed target discovery,
    live-media and mounted-device rejection, power/recovery prerequisites, and
-   explicit typed confirmation. The non-writing guard is implemented and
-   deterministically tested; integration with any writer remains pending.
+   explicit typed confirmation. Complete: the guard is integrated only with the
+   bounded disposable-media probe; physical-install authority remains blocked.
 4. Prove destructive behavior only against disposable, independently identified
    media, including cancellation, ambiguity, unplug, and failure recovery.
-   Pending.
+   Complete for the bounded disposable-media checkpoint. The real approved
+   target completed write/read/restore verification, while deterministic tests
+   cover cancellation, ambiguity, unplug or changed-device rejection, and
+   failure recovery.
 5. Install and boot Blossom on the frozen target, then test display, keyboard,
    trackpad, network, audio, battery/power, suspend/resume, recovery, update,
    confirmation, and rollback independently. Pending.

@@ -485,11 +485,12 @@ until a separate fail-closed disk-safety increment is reviewed and tested.
 - [x] Confirm the exact target identity and prerequisites on the physical host.
   Protected read-only run `34447352126` verified all six closed checks for the
   frozen MacBookPro11,1 target without collecting stable identifiers.
-- [ ] Add explicit target discovery, destructive-action rejection rules, typed
+- [x] Add explicit target discovery, destructive-action rejection rules, typed
   confirmation, power/recovery prerequisites, and disposable-media tests. The
   non-writing guard, bounded write/read/restore probe, adversarial tests, and
-  protected pre-write observation are complete; the approved physical probe
-  and its immutable result evidence remain pending.
+  protected pre-write observation are complete. The approved `/dev/sdc` probe
+  wrote, verified, restored, and re-verified its bounded 4 KiB region; minimized
+  result evidence is preserved in the repository.
 - [ ] Prove installation, boot, essential hardware surfaces, update rollback,
   and recovery on the frozen physical target.
 - [ ] Publish an independent Phase 11 exit audit and exact limitations.

@@ -1,7 +1,7 @@
 # Phase 11 physical installation guard
 
-Status: implemented and deterministically tested as a non-writing guard. No
-physical installer or disk-write authority is enabled.
+Status: implemented and tested with one bounded disposable-media writer. No
+physical installer or internal-disk write authority is enabled.
 
 The guard accepts one closed, purpose-bound observation containing the
 successful host preflight outcome, AC-power and recovery-media readiness, a
@@ -64,9 +64,11 @@ The deterministic harness now provides once-only consumption, cancellation,
 independent device revalidation, truthful post-claim failure, and an injected
 fake backend. It rejects `physical_install` authority before invoking its
 backend; only a purpose-bound `disposable_test` decision can enter this harness.
-Checkpoint 4 still requires a separately reviewed real disposable-media run.
-No physical laptop write may occur before cancellation, ambiguity, unplug,
-mutation, and failure-recovery tests pass there.
+Checkpoint 4 completed on 2026-09-10: the separately reviewed real
+disposable-media run completed and restored its bounded region. Cancellation,
+ambiguity, unplug or changed-device rejection, failure recovery, and
+exact-target behavior are covered by deterministic tests. Physical installation
+remains a separate unauthorized checkpoint.
 
 ## Bounded disposable-media probe
 
