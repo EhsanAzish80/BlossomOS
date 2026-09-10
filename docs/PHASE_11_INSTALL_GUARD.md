@@ -70,6 +70,16 @@ ambiguity, unplug or changed-device rejection, failure recovery, and
 exact-target behavior are covered by deterministic tests. Physical installation
 remains a separate unauthorized checkpoint.
 
+The next reviewed increment uses a distinct physical-install harness. It
+accepts only `physical_install` authority, repeats the exact confirmation and
+target-digest comparison against a fresh observation, consumes an exclusive
+once-only claim before invoking a backend, and refuses disposable-test
+authority. Backend failure remains terminal for that claim. The command runner
+uses one fixed absolute backend path, an argument vector without a shell, a
+bounded timeout, and only the guard-selected device path. This establishes the
+execution boundary but does not yet provide or authorize the destructive
+backend.
+
 ## Bounded disposable-media probe
 
 The next writer increment is intentionally not an installer. After the existing

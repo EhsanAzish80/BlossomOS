@@ -28,7 +28,9 @@ target. Eligibility is not compatibility, support, or installation proof.
    failure recovery.
 5. Install and boot Blossom on the frozen target, then test display, keyboard,
    trackpad, network, audio, battery/power, suspend/resume, recovery, update,
-   confirmation, and rollback independently. Pending.
+   confirmation, and rollback independently. The once-only physical-install
+   harness is implemented and deterministically tested, but no production
+   physical writer or install image is authorized yet.
 6. Publish a Phase 11 exit audit with immutable evidence and explicit hardware
    limitations. Pending.
 
