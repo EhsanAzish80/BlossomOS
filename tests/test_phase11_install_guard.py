@@ -7,6 +7,7 @@ from scripts.distribution.physical_install_guard import GuardError, evaluate
 def observation():
     return {
         "schema": 1,
+        "purpose": "physical_install",
         "host_preflight_result": "eligible_for_qualification",
         "ac_power": True,
         "recovery_media_ready": True,
@@ -103,13 +104,36 @@ class Phase11InstallGuardTests(unittest.TestCase):
             ("path", "/dev/disk/by-id/private"),
             ("model", "bad\nmodel"),
             ("size_bytes", 1),
-            ("transport", "usb"),
+            ("transport", "firewire"),
             ("mounted", 0),
         ):
             invalid = copy.deepcopy(observation())
             invalid["devices"][0][field] = value
             with self.subTest(field=field), self.assertRaises(GuardError):
                 evaluate(invalid)
+
+    def test_disposable_usb_purpose_is_bound_and_cannot_select_internal_disk(self):
+        value = observation()
+        value["purpose"] = "disposable_test"
+        value["devices"][1]["mounted"] = False
+        value["devices"][1]["transport"] = "usb"
+        value["live_device"] = "/dev/nvme0n1"
+        value["devices"].append({
+            "path": "/dev/nvme0n1", "model": "LIVE SYSTEM", "size_bytes": 64000000000,
+            "transport": "nvme", "removable": False, "mounted": True,
+        })
+        pending = evaluate(value)
+        self.assertEqual(pending["target"]["path"], "/dev/sdb")
+        self.assertEqual(pending["target"]["purpose"], "disposable_test")
+        install = copy.deepcopy(value)
+        install["purpose"] = "physical_install"
+        self.assertEqual(evaluate(install, pending["expected_confirmation"])["result"], "confirmation_required")
+
+    def test_physical_install_never_accepts_usb_target(self):
+        value = observation()
+        value["devices"][0]["transport"] = "usb"
+        with self.assertRaises(GuardError):
+            evaluate(value)
 
 
 if __name__ == "__main__":
