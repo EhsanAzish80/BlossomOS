@@ -67,3 +67,21 @@ backend; only a purpose-bound `disposable_test` decision can enter this harness.
 Checkpoint 4 still requires a separately reviewed real disposable-media run.
 No physical laptop write may occur before cancellation, ambiguity, unplug,
 mutation, and failure-recovery tests pass there.
+
+## Bounded disposable-media probe
+
+The next writer increment is intentionally not an installer. After the existing
+guard and once-only harness accept an unchanged `disposable_test` target,
+`disposable_media_probe.py` opens that exact block device with `O_EXCL` and
+`O_NOFOLLOW`, confirms its live byte size with `BLKGETSIZE64`, and touches only
+4 KiB at the fixed 8 MiB offset. It reads the original region, writes a
+target-bound deterministic marker, flushes and reads it back, then restores,
+flushes, and reads back the original bytes before reporting success.
+
+The probe rejects files, symlinks, mounted or otherwise busy devices, changed
+sizes, non-USB authority, and `physical_install` authority. It returns no
+original bytes or content-derived fingerprint. Failure after a marker attempt
+always enters the restore path; a restore failure is reported explicitly and
+the once-only claim remains consumed. The command still requires root to open a
+real block device, so execution remains a separate manual, action-time-approved
+step on the frozen host.
