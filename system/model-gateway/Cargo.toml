@@ -16,7 +16,7 @@ path = "src/main.rs"
 
 [dependencies]
 blossom-core = { path = "../../core/blossom-core" }
-getrandom = "0.3.4"
+getrandom = "0.4.3"
 libc.workspace = true
 nix.workspace = true
 serde.workspace = true
