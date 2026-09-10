@@ -19,6 +19,7 @@ LSBLK = (
     "/usr/bin/lsblk",
     "--bytes",
     "--json",
+    "--tree",
     "--output",
     "PATH,TYPE,MODEL,SIZE,TRAN,RM,MOUNTPOINTS",
 )
