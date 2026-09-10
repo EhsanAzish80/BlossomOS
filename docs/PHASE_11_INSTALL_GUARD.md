@@ -50,7 +50,8 @@ formatting, mounting, or installation operation.
 
 The deterministic harness now provides once-only consumption, cancellation,
 independent device revalidation, truthful post-claim failure, and an injected
-fake backend. Checkpoint 4 still requires a separately reviewed real
-disposable-media run.
+fake backend. It rejects `physical_install` authority before invoking its
+backend; only a purpose-bound `disposable_test` decision can enter this harness.
+Checkpoint 4 still requires a separately reviewed real disposable-media run.
 No physical laptop write may occur before cancellation, ambiguity, unplug,
 mutation, and failure-recovery tests pass there.
