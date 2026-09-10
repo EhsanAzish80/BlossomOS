@@ -482,7 +482,9 @@ until a separate fail-closed disk-safety increment is reviewed and tested.
 
 - [x] Define the exact first-device boundary and implement a closed read-only
   preflight that grants no installation or support authority.
-- [ ] Confirm the exact target identity and prerequisites on the physical host.
+- [x] Confirm the exact target identity and prerequisites on the physical host.
+  Protected read-only run `34447352126` verified all six closed checks for the
+  frozen MacBookPro11,1 target without collecting stable identifiers.
 - [ ] Add explicit target discovery, destructive-action rejection rules, typed
   confirmation, power/recovery prerequisites, and disposable-media tests.
 - [ ] Prove installation, boot, essential hardware surfaces, update rollback,

@@ -19,6 +19,7 @@ baseline = read("docs/PHASE_11_BASELINE.md")
 installer = read("distribution/archiso/airootfs/usr/local/bin/blossom-evidence-install")
 preflight = read("scripts/distribution/physical_preflight.py")
 workflow = read(".github/workflows/phase11-physical-preflight.yml")
+evidence = read("docs/PHASE_11_PHYSICAL_EVIDENCE.md")
 
 for required in (
     "Status: Accepted",
@@ -47,4 +48,14 @@ for required in (
 for forbidden in ("pull_request:", "sudo ", "/dev/"):
     if forbidden in workflow:
         fail(f"physical preflight workflow gained forbidden authority: {forbidden}")
+for required in (
+    "73659253a8d3e9e10bbb1f194e99f2f016cc4e31",
+    "34447352126",
+    "10140148605",
+    "b53f1d14bb0b7c32fdf89fcd20f3de3bc0cc66e1d8cc0d5b8e8339eae863d41b",
+    '"authority":"read_only_preflight_only"',
+    '"result":"eligible_for_qualification"',
+):
+    if required not in evidence:
+        fail(f"physical preflight evidence is incomplete: {required}")
 print("Phase 11 physical qualification boundary passed.")
