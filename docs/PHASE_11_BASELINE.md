@@ -14,7 +14,8 @@ target. Eligibility is not compatibility, support, or installation proof.
    Complete.
 2. Run the preflight on the target and confirm its exact model, x86-64 UEFI
    environment, minimum memory, DRM graphics, and internal-storage presence.
-   Pending physical evidence.
+   Complete in protected run `34447352126`; see
+   `docs/PHASE_11_PHYSICAL_EVIDENCE.md`.
 3. Replace automatic physical installation with fail-closed target discovery,
    live-media and mounted-device rejection, power/recovery prerequisites, and
    explicit typed confirmation. Pending separate review.
