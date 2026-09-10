@@ -23,6 +23,8 @@ evidence = read("docs/PHASE_11_PHYSICAL_EVIDENCE.md")
 guard = read("scripts/distribution/physical_install_guard.py")
 guard_doc = read("docs/PHASE_11_INSTALL_GUARD.md")
 harness = read("scripts/distribution/physical_write_harness.py")
+probe = read("scripts/distribution/disposable_media_probe.py")
+probe_runner = read("scripts/distribution/run_disposable_media_test.py")
 observer = read("scripts/distribution/physical_device_observer.py")
 observation_workflow = read(".github/workflows/phase11-device-observation.yml")
 
@@ -82,6 +84,12 @@ for required in ("O_EXCL", "target changed before execution", "attempt already c
     if required not in harness: fail(f"physical write harness is incomplete: {required}")
 for forbidden in ("subprocess", "sgdisk", "mkfs", "wipefs"):
     if forbidden in harness: fail(f"physical write harness embeds a real writer: {forbidden}")
+for required in ("O_EXCL", "O_NOFOLLOW", "BLKGETSIZE64", "PROBE_BYTES = 4096", "PROBE_OFFSET = 8 * 1024 * 1024", "disposable_probe_completed_and_restored"):
+    if required not in probe: fail(f"disposable probe is incomplete: {required}")
+for forbidden in ("subprocess", "shell=True", "os.system", "mkfs", "wipefs", "parted", "sgdisk"):
+    if forbidden in probe: fail(f"disposable probe exceeds its bounded authority: {forbidden}")
+for required in ("MAX_INPUT_BYTES", "run_once", "probe(target)"):
+    if required not in probe_runner: fail(f"disposable probe runner is incomplete: {required}")
 for required in ("/usr/bin/lsblk", "MAX_OUTPUT_BYTES", "MAX_DEVICES", '"/cdrom"'):
     if required not in observer: fail(f"physical device observer is incomplete: {required}")
 for forbidden in ("sudo", "sgdisk", "mkfs", "wipefs", "parted", "dd if="):
