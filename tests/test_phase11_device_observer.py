@@ -48,6 +48,14 @@ class Phase11DeviceObserverTests(unittest.TestCase):
         value["blockdevices"][1]["children"] = [{"type": "part", "mountpoints": ["/cdrom"]}]
         self.assertEqual(parse_lsblk(json.dumps(value).encode())[0], "/dev/sdb")
 
+    def test_archiso_live_media_mount_is_recognized(self):
+        value = inventory()
+        value["blockdevices"][0]["children"][0]["mountpoints"] = [None]
+        value["blockdevices"][1]["children"] = [
+            {"type": "part", "mountpoints": ["/run/archiso/bootmnt"]}
+        ]
+        self.assertEqual(parse_lsblk(json.dumps(value).encode())[0], "/dev/sdb")
+
     def test_empty_card_reader_slot_is_not_observed_as_media(self):
         value = inventory()
         value["blockdevices"].append(

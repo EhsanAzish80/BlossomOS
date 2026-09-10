@@ -128,15 +128,18 @@ def install(
             run(command, check=True, timeout=900)
             mounted_root = mounted_root or command[:2] == ["mount", "/dev/sda2"]
             mounted_boot = mounted_boot or command[:2] == ["mount", "/dev/sda1"]
-        root_uuid = run(
-            ["blkid", "-s", "UUID", "-o", "value", "/dev/sda2"],
-            check=True,
-            capture_output=True,
-            timeout=5,
-            text=True,
-        ).stdout.strip()
-        if not root_uuid or len(root_uuid) > 64:
-            raise BackendError("installed root UUID is invalid")
+        uuids = {}
+        for name, device in (("efi", "/dev/sda1"), ("root", "/dev/sda2")):
+            value = run(
+                ["blkid", "-s", "UUID", "-o", "value", device],
+                check=True,
+                capture_output=True,
+                timeout=5,
+                text=True,
+            ).stdout.strip()
+            if not value or len(value) > 64 or any(character.isspace() for character in value):
+                raise BackendError(f"installed {name} UUID is invalid")
+            uuids[name] = value
         entries = MOUNT / "boot/loader/entries"
         entries.mkdir(parents=True, exist_ok=True)
         (MOUNT / "boot/loader/loader.conf").write_text(
@@ -145,8 +148,14 @@ def install(
         (entries / "blossom.conf").write_text(
             "title Blossom OS physical qualification\n"
             "linux /vmlinuz-linux-lts\n"
+            "initrd /intel-ucode.img\n"
             "initrd /initramfs-linux-lts.img\n"
-            f"options root=UUID={root_uuid} rw systemd.show_status=yes\n",
+            f"options root=UUID={uuids['root']} rw systemd.show_status=yes\n",
+            encoding="utf-8",
+        )
+        (MOUNT / "etc/fstab").write_text(
+            f"UUID={uuids['root']} / ext4 rw,relatime 0 1\n"
+            f"UUID={uuids['efi']} /boot vfat umask=0077 0 2\n",
             encoding="utf-8",
         )
         run(["sync"], check=True, timeout=60)

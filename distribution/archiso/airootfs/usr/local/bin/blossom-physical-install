@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (($# != 0)); then
+  echo "usage: sudo blossom-physical-install" >&2
+  exit 2
+fi
+cd /opt/blossom
+exec python3 -m scripts.distribution.physical_candidate_install

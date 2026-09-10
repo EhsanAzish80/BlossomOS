@@ -92,7 +92,7 @@ def parse_lsblk(payload: bytes) -> tuple[str, list[dict[str, Any]]]:
                 "mounted": bool(points),
             }
         )
-        if "/" in points or "/cdrom" in points:
+        if "/" in points or "/cdrom" in points or "/run/archiso/bootmnt" in points:
             live.append(path)
 
     if not 1 <= len(devices) <= MAX_DEVICES:
