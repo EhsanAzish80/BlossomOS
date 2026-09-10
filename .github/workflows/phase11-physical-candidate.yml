@@ -15,8 +15,6 @@ jobs:
     name: Build reviewed physical candidate
     runs-on: [self-hosted, linux, x64, blossom-gpu]
     timeout-minutes: 120
-    env:
-      CANDIDATE_OUTPUT: ${{ runner.temp }}/phase11-candidate
     steps:
       - name: Check out reviewed source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,6 +29,7 @@ jobs:
 
       - name: Build physical candidate in pinned Arch Linux container
         run: |
+          CANDIDATE_OUTPUT="$RUNNER_TEMP/phase11-candidate"
           mkdir -p "$CANDIDATE_OUTPUT"
           docker run --rm --privileged \
             --volume "$GITHUB_WORKSPACE/phase11-source:/workspace:ro" \
@@ -46,6 +45,7 @@ jobs:
 
       - name: Verify candidate outputs
         run: |
+          CANDIDATE_OUTPUT="$RUNNER_TEMP/phase11-candidate"
           test "$(find "$CANDIDATE_OUTPUT/iso" -maxdepth 1 -name 'blossom-os-*.iso' | wc -l)" -eq 1
           cd "$CANDIDATE_OUTPUT/iso"
           sha256sum --check SHA256SUMS
