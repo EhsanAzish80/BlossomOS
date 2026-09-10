@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+test "$#" -eq 0
+cd /opt/blossom
+exec python3 -c 'import json,sys; from scripts.distribution.physical_install_backend import install; install(json.loads(sys.stdin.read()))'
