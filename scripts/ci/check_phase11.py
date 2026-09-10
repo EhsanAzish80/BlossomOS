@@ -24,6 +24,7 @@ guard = read("scripts/distribution/physical_install_guard.py")
 guard_doc = read("docs/PHASE_11_INSTALL_GUARD.md")
 harness = read("scripts/distribution/physical_write_harness.py")
 observer = read("scripts/distribution/physical_device_observer.py")
+observation_workflow = read(".github/workflows/phase11-device-observation.yml")
 
 for required in (
     "Status: Accepted",
@@ -85,4 +86,18 @@ for required in ("/usr/bin/lsblk", "MAX_OUTPUT_BYTES", "MAX_DEVICES", '"/cdrom"'
     if required not in observer: fail(f"physical device observer is incomplete: {required}")
 for forbidden in ("sudo", "sgdisk", "mkfs", "wipefs", "parted", "dd if="):
     if forbidden in observer: fail(f"physical device observer gained write authority: {forbidden}")
+for required in (
+    "workflow_dispatch:",
+    "runs-on: [self-hosted, linux, x64, blossom-gpu]",
+    "physical_preflight.py --observe-host",
+    "physical_device_observer.py",
+    "physical_install_guard.py",
+    '"confirmation_required"',
+    "phase11-device-observation",
+):
+    if required not in observation_workflow:
+        fail(f"physical device observation workflow is incomplete: {required}")
+for forbidden in ("pull_request:", "push:", "sudo", "sgdisk", "mkfs", "wipefs", "parted", "physical_write_harness"):
+    if forbidden in observation_workflow:
+        fail(f"physical device observation workflow gained forbidden authority: {forbidden}")
 print("Phase 11 physical qualification boundary passed.")
