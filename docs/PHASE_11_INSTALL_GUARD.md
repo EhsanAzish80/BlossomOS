@@ -3,14 +3,17 @@
 Status: implemented and deterministically tested as a non-writing guard. No
 physical installer or disk-write authority is enabled.
 
-The guard accepts one closed observation containing the successful host
-preflight outcome, AC-power and recovery-media readiness, a per-attempt
-challenge, the live-medium device, and at most eight bounded disk summaries.
+The guard accepts one closed, purpose-bound observation containing the
+successful host preflight outcome, AC-power and recovery-media readiness, a
+per-attempt challenge, the live-medium device, and at most eight bounded disk
+summaries.
 
-It fails closed unless there is exactly one non-removable, unmounted internal
-SATA or NVMe target distinct from the live medium. Device paths, model, size,
-transport, and the per-attempt challenge are bound into a canonical SHA-256
-digest. The operator must type the exact displayed phrase:
+For `physical_install`, it fails closed unless there is exactly one
+non-removable, unmounted internal SATA or NVMe target distinct from the live
+medium. For `disposable_test`, it accepts only an unmounted USB target. Purpose,
+device path, model, size, transport, and the per-attempt challenge are bound
+into a canonical SHA-256 digest. The operator must type the exact displayed
+phrase:
 
 ```text
 ERASE <device-path> <first-16-digest-characters>
@@ -31,6 +34,7 @@ formatting, mounting, or installation operation.
 - zero or multiple eligible internal targets;
 - target is outside bounded size, path, model, or transport rules;
 - typed confirmation differs from the exact bound phrase.
+- purpose changes between disposable testing and physical installation.
 
 ## Next gate
 

@@ -64,7 +64,8 @@ for required in (
 for required in (
     "guard_decision_only",
     "guard_passed_no_write_performed",
-    "exactly one unmounted internal target is required",
+    '"physical_install", "disposable_test"',
+    "exactly one unmounted {target_kind} target is required",
     "ERASE {target['path']}",
 ):
     if required not in guard:

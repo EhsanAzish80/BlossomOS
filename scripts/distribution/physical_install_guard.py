@@ -16,6 +16,7 @@ class GuardError(ValueError):
 
 TOP_FIELDS = {
     "schema",
+    "purpose",
     "host_preflight_result",
     "ac_power",
     "recovery_media_ready",
@@ -44,7 +45,7 @@ def _validate_device(device: Any) -> dict[str, Any]:
         raise GuardError("invalid device model")
     if type(device["size_bytes"]) is not int or not MIN_BYTES <= device["size_bytes"] <= MAX_BYTES:
         raise GuardError("invalid device size")
-    if device["transport"] not in ("sata", "nvme"):
+    if device["transport"] not in ("sata", "nvme", "usb"):
         raise GuardError("unsupported device transport")
     for field in ("removable", "mounted"):
         if type(device[field]) is not bool:
@@ -58,6 +59,8 @@ def evaluate(observation: dict[str, Any], confirmation: str | None = None) -> di
         raise GuardError("guard observation schema drift")
     if observation["schema"] != 1:
         raise GuardError("unsupported guard schema")
+    if observation["purpose"] not in ("physical_install", "disposable_test"):
+        raise GuardError("unsupported guard purpose")
     if observation["host_preflight_result"] != "eligible_for_qualification":
         raise GuardError("host preflight is not eligible")
     for field in ("ac_power", "recovery_media_ready"):
@@ -80,21 +83,25 @@ def evaluate(observation: dict[str, Any], confirmation: str | None = None) -> di
     paths = [device["path"] for device in devices]
     if len(paths) != len(set(paths)) or observation["live_device"] not in paths:
         raise GuardError("device identity is ambiguous")
-    candidates = [
-        device
-        for device in devices
-        if device["path"] != observation["live_device"]
-        and not device["removable"]
-        and not device["mounted"]
-    ]
+    candidates = []
+    for device in devices:
+        if device["path"] == observation["live_device"] or device["mounted"]:
+            continue
+        if observation["purpose"] == "physical_install":
+            if not device["removable"] and device["transport"] in ("sata", "nvme"):
+                candidates.append(device)
+        elif device["transport"] == "usb":
+            candidates.append(device)
     if len(candidates) != 1:
-        raise GuardError("exactly one unmounted internal target is required")
+        target_kind = "internal SATA or NVMe" if observation["purpose"] == "physical_install" else "USB disposable-test"
+        raise GuardError(f"exactly one unmounted {target_kind} target is required")
 
     target = candidates[0]
     summary = {
         "challenge": observation["challenge"],
         "model": target["model"],
         "path": target["path"],
+        "purpose": observation["purpose"],
         "size_bytes": target["size_bytes"],
         "transport": target["transport"],
     }
