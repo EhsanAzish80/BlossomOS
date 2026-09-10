@@ -30,6 +30,9 @@ on:
     - cron: "0 6 * * 1"
   workflow_dispatch:
 
+# This workflow uses only its deploy-hook secret and needs no GITHUB_TOKEN access.
+permissions: {}
+
 # Never run two rebuilds at once for the same branch.
 concurrency:
   group: rebuild-site

@@ -896,11 +896,8 @@ fn render_storage_summary(summary: &StorageSummary) -> String {
 
 fn render_process_self(identity: &ProcessSelf) -> String {
     format!(
-        "Blossom process identity\n  PID: {}\n  Parent PID: {}\n  Effective user ID: {}\n  Effective group ID: {}\n  Source: native process identity APIs\n",
-        identity.process_id,
-        identity.parent_process_id,
-        identity.effective_user_id,
-        identity.effective_group_id
+        "Blossom process identity\n  PID: {}\n  Parent PID: {}\n  Effective user and group IDs: redacted\n  Source: native process identity APIs\n",
+        identity.process_id, identity.parent_process_id
     )
 }
 
