@@ -10,7 +10,8 @@ target. Eligibility is not compatibility, support, or installation proof.
 ## Ordered checkpoints
 
 1. Accept ADR-0028 and implement the closed, privacy-minimized read-only
-   preflight. Complete.
+   preflight plus a manually dispatched trusted-runner evidence workflow.
+   Complete.
 2. Run the preflight on the target and confirm its exact model, x86-64 UEFI
    environment, minimum memory, DRM graphics, and internal-storage presence.
    Pending physical evidence.

@@ -1,8 +1,9 @@
 import json
 from pathlib import Path
+import tempfile
 import unittest
 
-from scripts.distribution.physical_preflight import PreflightError, classify
+from scripts.distribution.physical_preflight import PreflightError, classify, observe_host
 
 
 def valid_observation():
@@ -51,6 +52,33 @@ class Phase11PhysicalPreflightTests(unittest.TestCase):
         encoded = json.dumps(classify(valid_observation())).lower()
         for forbidden in ("serial", "uuid", "mac_address", "ssid", "/dev/", "username"):
             self.assertNotIn(forbidden, encoded)
+
+    def test_host_observation_reads_only_the_minimized_linux_surface(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "proc").mkdir()
+            (root / "proc/meminfo").write_text("MemTotal:        8388608 kB\n")
+            (root / "sys/firmware/efi").mkdir(parents=True)
+            (root / "sys/class/dmi/id").mkdir(parents=True)
+            (root / "sys/class/dmi/id/product_name").write_text("MacBookPro11,1\n")
+            (root / "dev/dri").mkdir(parents=True)
+            (root / "dev/dri/card1").touch()
+            disk = root / "sys/block/sda"
+            (disk / "device").mkdir(parents=True)
+            (disk / "removable").write_text("0\n")
+            observed = observe_host(root, architecture="x86_64")
+            self.assertEqual(observed, valid_observation())
+            self.assertEqual(classify(observed)["result"], "eligible_for_qualification")
+
+    def test_host_observation_does_not_treat_removable_media_as_internal(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "proc").mkdir()
+            (root / "proc/meminfo").write_text("MemTotal: 8388608 kB\n")
+            disk = root / "sys/block/sdb"
+            (disk / "device").mkdir(parents=True)
+            (disk / "removable").write_text("1\n")
+            self.assertFalse(observe_host(root, architecture="x86_64")["internal_disk_present"])
 
 
 class Phase11RepositoryBoundaryTests(unittest.TestCase):
