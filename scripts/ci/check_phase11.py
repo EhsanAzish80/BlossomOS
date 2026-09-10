@@ -18,6 +18,7 @@ adr = read("docs/decisions/0028-phase-11-physical-qualification.md")
 baseline = read("docs/PHASE_11_BASELINE.md")
 installer = read("distribution/archiso/airootfs/usr/local/bin/blossom-evidence-install")
 preflight = read("scripts/distribution/physical_preflight.py")
+workflow = read(".github/workflows/phase11-physical-preflight.yml")
 
 for required in (
     "Status: Accepted",
@@ -35,4 +36,15 @@ if "disk=/dev/vda" not in installer or "sgdisk --zap-all \"$disk\"" not in insta
     fail("VM evidence installer identity drift")
 if "read_only_preflight_only" not in preflight or "disk path" not in preflight:
     fail("physical preflight authority boundary drift")
+for required in (
+    "workflow_dispatch:",
+    "runs-on: [self-hosted, linux, x64, blossom-gpu]",
+    "physical_preflight.py --observe-host",
+    "read_only_preflight_only",
+):
+    if required not in workflow:
+        fail(f"physical preflight workflow is incomplete: {required}")
+for forbidden in ("pull_request:", "sudo ", "/dev/"):
+    if forbidden in workflow:
+        fail(f"physical preflight workflow gained forbidden authority: {forbidden}")
 print("Phase 11 physical qualification boundary passed.")

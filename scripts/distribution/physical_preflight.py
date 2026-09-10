@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
+from pathlib import Path
 from typing import Any
 
 
@@ -21,6 +23,49 @@ INPUT_FIELDS = {
     "internal_disk_present",
 }
 TARGET_PRODUCT = "MacBookPro11,1"
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        return ""
+
+
+def observe_host(root: Path = Path("/"), architecture: str | None = None) -> dict[str, Any]:
+    """Collect only the closed, non-identifying fields needed by classify()."""
+    meminfo = _read_text(root / "proc/meminfo")
+    memory_kib = 0
+    for line in meminfo.splitlines():
+        if line.startswith("MemTotal:"):
+            fields = line.split()
+            if len(fields) == 3 and fields[2] == "kB" and fields[1].isdigit():
+                memory_kib = int(fields[1])
+            break
+
+    drm = root / "dev/dri"
+    drm_present = any(drm.glob("card[0-9]*")) or any(drm.glob("renderD[0-9]*"))
+    internal_disk_present = False
+    block = root / "sys/block"
+    try:
+        candidates = tuple(block.iterdir())
+    except OSError:
+        candidates = ()
+    for candidate in candidates:
+        if candidate.name.startswith(("loop", "ram", "zram", "dm-")):
+            continue
+        if _read_text(candidate / "removable") == "0" and (candidate / "device").exists():
+            internal_disk_present = True
+            break
+
+    return {
+        "architecture": architecture if architecture is not None else platform.machine(),
+        "firmware": "uefi" if (root / "sys/firmware/efi").is_dir() else "unknown",
+        "product_name": _read_text(root / "sys/class/dmi/id/product_name"),
+        "memory_mib": memory_kib // 1024,
+        "drm_present": drm_present,
+        "internal_disk_present": internal_disk_present,
+    }
 
 
 def classify(observation: dict[str, Any]) -> dict[str, Any]:
@@ -57,10 +102,19 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Classify a Phase 11 physical-target observation without disk authority"
     )
-    parser.add_argument("observation", help="path to the closed observation JSON")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--input", help="path to a closed observation JSON")
+    source.add_argument(
+        "--observe-host",
+        action="store_true",
+        help="read the minimized observation from the current Linux host",
+    )
     args = parser.parse_args()
-    with open(args.observation, encoding="utf-8") as source:
-        observation = json.load(source)
+    if args.observe_host:
+        observation = observe_host()
+    else:
+        with open(args.input, encoding="utf-8") as input_file:
+            observation = json.load(input_file)
     print(json.dumps(classify(observation), sort_keys=True, separators=(",", ":")))
 
 
