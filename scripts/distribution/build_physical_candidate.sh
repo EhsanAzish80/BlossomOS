@@ -9,8 +9,8 @@ fi
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 output=$(realpath -m "$1")
 case "$output" in
-  "$repo"|"$repo"/*) ;;
-  *) echo "output must remain inside the repository workspace" >&2; exit 2 ;;
+  "$repo"|"$repo"/*|/candidate) ;;
+  *) echo "output must be the workspace or the isolated /candidate mount" >&2; exit 2 ;;
 esac
 
 build="$output/build"
