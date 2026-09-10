@@ -23,6 +23,7 @@ evidence = read("docs/PHASE_11_PHYSICAL_EVIDENCE.md")
 guard = read("scripts/distribution/physical_install_guard.py")
 guard_doc = read("docs/PHASE_11_INSTALL_GUARD.md")
 harness = read("scripts/distribution/physical_write_harness.py")
+observer = read("scripts/distribution/physical_device_observer.py")
 
 for required in (
     "Status: Accepted",
@@ -80,4 +81,8 @@ for required in ("O_EXCL", "target changed before execution", "attempt already c
     if required not in harness: fail(f"physical write harness is incomplete: {required}")
 for forbidden in ("subprocess", "sgdisk", "mkfs", "wipefs"):
     if forbidden in harness: fail(f"physical write harness embeds a real writer: {forbidden}")
+for required in ("/usr/bin/lsblk", "MAX_OUTPUT_BYTES", "MAX_DEVICES", '"/cdrom"'):
+    if required not in observer: fail(f"physical device observer is incomplete: {required}")
+for forbidden in ("sudo", "sgdisk", "mkfs", "wipefs", "parted", "dd if="):
+    if forbidden in observer: fail(f"physical device observer gained write authority: {forbidden}")
 print("Phase 11 physical qualification boundary passed.")

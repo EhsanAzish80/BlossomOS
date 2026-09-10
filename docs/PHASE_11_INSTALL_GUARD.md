@@ -8,6 +8,14 @@ successful host preflight outcome, AC-power and recovery-media readiness, a
 per-attempt challenge, the live-medium device, and at most eight bounded disk
 summaries.
 
+`physical_device_observer.py` supplies that inventory on Linux through one
+fixed, read-only `lsblk` invocation. It accepts at most 64 KiB and eight whole
+disks, recognizes only SATA, NVMe, and USB transports, and requires exactly one
+live root (`/`) or live-media (`/cdrom`) disk. It collects no serial number,
+filesystem label, UUID, partition content, or user data. Power and recovery
+readiness remain explicit operator assertions; the observer does not infer
+them.
+
 For `physical_install`, it fails closed unless there is exactly one
 non-removable, unmounted internal SATA or NVMe target distinct from the live
 medium. For `disposable_test`, it accepts only an unmounted USB target. Purpose,
@@ -35,6 +43,8 @@ formatting, mounting, or installation operation.
 - target is outside bounded size, path, model, or transport rules;
 - typed confirmation differs from the exact bound phrase.
 - purpose changes between disposable testing and physical installation.
+- device-observer output is excessive, incomplete, unsupported, or cannot
+  identify exactly one live disk.
 
 ## Next gate
 
