@@ -214,6 +214,8 @@ for required in (
 for forbidden in ("systemctl enable",):
     if forbidden in candidate_builder:
         fail(f"physical candidate builder retained VM-only behavior: {forbidden}")
+if "sha256sum blossom-os-*.iso > SHA256SUMS" not in candidate_builder:
+    fail("physical candidate checksum manifest is not path-independent")
 for required in (
     "workflow_dispatch:",
     "permissions:",

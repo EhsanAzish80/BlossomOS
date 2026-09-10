@@ -82,4 +82,7 @@ cp -a "$repo/scripts" "$profile/airootfs/opt/blossom/"
 install -Dm0600 "$build/blossom-rootfs.tar.zst" \
   "$profile/airootfs/root/blossom-rootfs.tar.zst"
 mkarchiso -v -w "$build/archiso-work" -o "$iso" "$profile"
-sha256sum "$iso"/blossom-os-*.iso > "$iso/SHA256SUMS"
+(
+  cd "$iso"
+  sha256sum blossom-os-*.iso > SHA256SUMS
+)
