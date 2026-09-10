@@ -42,6 +42,7 @@ jobs:
           python3 scripts/ci/check_repository.py
           python3 scripts/ci/check_distribution.py
           python3 scripts/ci/check_phase10.py
+          python3 scripts/ci/check_phase11.py
 
       - name: Validate privileged helper packaging boundary
         run: |

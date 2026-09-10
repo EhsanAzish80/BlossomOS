@@ -16,6 +16,8 @@ content-minimized audit.
 ## Current status
 
 Phases 0 through 10 are complete at their separately reviewed boundaries.
+Phase 11 is active with one exact physical-device qualification boundary and a
+read-only preflight; physical installation is not yet enabled or supported.
 Phase 10 produced a verified x86-64 UEFI VM beta-candidate evidence bundle; it
 did not publish a release or establish physical-device support.
 

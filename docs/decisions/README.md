@@ -51,6 +51,9 @@ compatibility, packaging, or contributor obligations.
   VM evidence target, with explicit security review, dependency and fuzz gates,
   deterministic SBOM/release metadata, practical rebuild comparison, signed
   provenance, limitations, and a separate human publication decision.
+- Phase 11 first physical-device qualification: accepted in ADR-0028 for one
+  expected MacBookPro11,1, beginning with a read-only minimized preflight and
+  requiring a separate reviewed disk-safety increment before physical writes.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and
