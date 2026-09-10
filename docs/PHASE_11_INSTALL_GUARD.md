@@ -90,6 +90,25 @@ different disk from user input. This implements the backend boundary; it does
 not authorize execution and is not yet integrated into a bootable physical
 candidate.
 
+## Physical candidate boundary
+
+The physical candidate is a separate, manually dispatched build and never
+enables the VM evidence auto-installer. Its live environment exposes one short
+operator command, `sudo blossom-physical-install`. That entrypoint reruns the
+frozen host preflight, requires exact AC-power and recovery-media assertions,
+creates a fresh random challenge, observes the ArchISO live mount and target,
+prints the exact bound erase phrase, then observes the devices again before the
+once-only harness may call the backend.
+
+The installed root contains the Blossom packages and the bounded hardware stack
+needed for this qualification target: the LTS kernel and firmware, Intel
+microcode and graphics, NetworkManager and iwd, PipeWire, Bluetooth, power
+status, Hyprland, QuickShell, and a terminal. The local qualification user is
+locked and automatically starts the reviewed shell on the first console; this
+is a physical qualification surface, not a general release image. The workflow
+must build and hash the ISO successfully before any flashing or installation
+can be proposed.
+
 ## Bounded disposable-media probe
 
 The next writer increment is intentionally not an installer. After the existing

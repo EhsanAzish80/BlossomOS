@@ -33,6 +33,10 @@ install_backend_entrypoint = read("distribution/archiso/airootfs/usr/local/libex
 observer = read("scripts/distribution/physical_device_observer.py")
 observation_workflow = read(".github/workflows/phase11-device-observation.yml")
 disposable_evidence = read("docs/PHASE_11_DISPOSABLE_EVIDENCE.md")
+candidate = read("scripts/distribution/physical_candidate_install.py")
+candidate_entrypoint = read("distribution/archiso/airootfs/usr/local/bin/blossom-physical-install")
+candidate_builder = read("scripts/distribution/build_physical_candidate.sh")
+candidate_workflow = read(".github/workflows/phase11-physical-candidate.yml")
 
 evidence_hashes = {
     "distribution/evidence/phase11-device-preflight-34460218314.json": "5de11cb6ab30605ef4bcda084d2d73994a94269f3e99e9ac436f19b9b1c32c3c",
@@ -115,7 +119,7 @@ for forbidden in ("subprocess", "shell=True", "os.system", "mkfs", "wipefs", "pa
     if forbidden in probe: fail(f"disposable probe exceeds its bounded authority: {forbidden}")
 for required in ("MAX_INPUT_BYTES", "run_once", "probe(target)"):
     if required not in probe_runner: fail(f"disposable probe runner is incomplete: {required}")
-for required in ("/usr/bin/lsblk", "MAX_OUTPUT_BYTES", "MAX_DEVICES", '"/cdrom"'):
+for required in ("/usr/bin/lsblk", "MAX_OUTPUT_BYTES", "MAX_DEVICES", '"/cdrom"', '"/run/archiso/bootmnt"'):
     if required not in observer: fail(f"physical device observer is incomplete: {required}")
 for forbidden in ("sudo", "sgdisk", "mkfs", "wipefs", "parted", "dd if="):
     if forbidden in observer: fail(f"physical device observer gained write authority: {forbidden}")
@@ -178,4 +182,50 @@ for required in (
 for forbidden in ("pull_request:", "push:", "sudo", "sgdisk", "mkfs", "wipefs", "parted", "physical_write_harness"):
     if forbidden in observation_workflow:
         fail(f"physical device observation workflow gained forbidden authority: {forbidden}")
+for required in (
+    "AC-READY",
+    "RECOVERY-READY",
+    "os.urandom",
+    "device_observer()",
+    "expected_confirmation",
+    "target_digest",
+):
+    if required not in candidate:
+        fail(f"physical candidate entrypoint is incomplete: {required}")
+for forbidden in ("sgdisk", "mkfs", "wipefs", "parted", "subprocess", "shell=True"):
+    if forbidden in candidate:
+        fail(f"physical candidate entrypoint gained inline write authority: {forbidden}")
+for required in ("usage: sudo blossom-physical-install", "cd /opt/blossom", "physical_candidate_install"):
+    if required not in candidate_entrypoint:
+        fail(f"physical candidate command is incomplete: {required}")
+for required in (
+    "linux-lts",
+    "linux-firmware",
+    "intel-ucode",
+    "networkmanager",
+    "sof-firmware",
+    "vulkan-intel",
+    "blossom-rootfs.tar.zst",
+    "blossom-physical-install",
+    'rm -f "$profile/airootfs/etc/systemd/system/blossom-evidence-install.service"',
+):
+    if required not in candidate_builder:
+        fail(f"physical candidate builder is incomplete: {required}")
+for forbidden in ("systemctl enable",):
+    if forbidden in candidate_builder:
+        fail(f"physical candidate builder retained VM-only behavior: {forbidden}")
+for required in (
+    "workflow_dispatch:",
+    "permissions:",
+    "contents: read",
+    "runs-on: [self-hosted, linux, x64, blossom-gpu]",
+    "build_physical_candidate.sh",
+    "sha256sum --check",
+    "compression-level: 0",
+):
+    if required not in candidate_workflow:
+        fail(f"physical candidate workflow is incomplete: {required}")
+for forbidden in ("pull_request:", "push:", "schedule:"):
+    if forbidden in candidate_workflow:
+        fail(f"physical candidate workflow gained an automatic trigger: {forbidden}")
 print("Phase 11 physical qualification boundary passed.")

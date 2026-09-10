@@ -30,8 +30,9 @@ target. Eligibility is not compatibility, support, or installation proof.
    trackpad, network, audio, battery/power, suspend/resume, recovery, update,
    confirmation, and rollback independently. The once-only physical-install
    harness and exact-target backend are implemented and deterministically
-   tested, but the backend is not yet integrated into a physical candidate and
-   no internal-disk write is authorized yet.
+   tested. The separate manual-only physical-candidate source is implemented;
+   its ISO must still build and pass review before any internal-disk write can
+   be authorized.
 6. Publish a Phase 11 exit audit with immutable evidence and explicit hardware
    limitations. Pending.
 
