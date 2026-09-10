@@ -68,6 +68,17 @@ jobs:
             > "$decision"
           python3 -c 'import json,sys; value=json.load(open(sys.argv[1])); assert value["authority"] == "guard_decision_only"; assert value["result"] == "confirmation_required"; assert value["target"]["purpose"] == "disposable_test"' "$decision"
 
+      - name: Prepare the reviewed local probe launcher
+        run: |
+          launcher=/tmp/blossom-phase11
+          printf '%s\n' \
+            '#!/usr/bin/env bash' \
+            'set -euo pipefail' \
+            "export BLOSSOM_PHASE11_REPO_ROOT='$GITHUB_WORKSPACE'" \
+            "exec '$GITHUB_WORKSPACE/scripts/distribution/run_approved_phase11_probe.sh'" \
+            > "$launcher"
+          chmod 0755 "$launcher"
+
       - name: Upload minimized read-only evidence
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
