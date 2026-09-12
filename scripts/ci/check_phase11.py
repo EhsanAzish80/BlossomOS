@@ -266,6 +266,8 @@ for required in (
         fail(f"candidate builder does not use the repository-owned pacman configuration: {required}")
 if "syslinux" not in candidate_packages.splitlines():
     fail("candidate package list is missing syslinux required by the ArchISO memdisk hook")
+if "Restore runner ownership before checkout" not in candidate_workflow:
+    fail("physical candidate workflow does not repair self-hosted runner ownership")
 for forbidden in ("MacBookPro11,1", "APPLE SSD", "/dev/sda", "pull_request:", "push:", "schedule:"):
     if forbidden in vm_workflow:
         fail(f"generic VM qualification workflow is hardware-specific or automatic: {forbidden}")
