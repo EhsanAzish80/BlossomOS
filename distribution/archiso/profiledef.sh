@@ -13,5 +13,8 @@ pacman_conf="pacman.conf"
 airootfs_image_type="squashfs"
 airootfs_image_tool_options=(-comp zstd -Xcompression-level 15)
 file_permissions=(
+  ["/root/.automated_script.sh"]="0:0:755"
   ["/usr/local/bin/blossom-evidence-install"]="0:0:755"
+  ["/usr/local/bin/blossom-physical-install"]="0:0:755"
+  ["/usr/local/libexec/blossom-physical-install-backend"]="0:0:755"
 )
