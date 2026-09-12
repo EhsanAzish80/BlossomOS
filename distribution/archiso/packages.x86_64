@@ -9,6 +9,7 @@ hyprland
 quickshell
 qt6-base
 qt6-declarative
+zsh
 python
 openssl
 openssh
