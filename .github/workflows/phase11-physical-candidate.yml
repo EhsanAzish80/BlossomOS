@@ -16,6 +16,13 @@ jobs:
     runs-on: [self-hosted, linux, x64, blossom-gpu]
     timeout-minutes: 120
     steps:
+      - name: Restore runner ownership before checkout
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            chown -R "$(id -u):$(id -g)" /workspace
+
       - name: Check out reviewed source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

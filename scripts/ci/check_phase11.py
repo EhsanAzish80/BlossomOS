@@ -38,6 +38,7 @@ candidate_entrypoint = read("distribution/archiso/airootfs/usr/local/bin/blossom
 candidate_builder = read("scripts/distribution/build_physical_candidate.sh")
 candidate_workflow = read(".github/workflows/phase11-physical-candidate.yml")
 candidate_profile = read("distribution/archiso/profiledef.sh")
+candidate_packages = read("distribution/archiso/packages.x86_64")
 vm_workflow = read(".github/workflows/phase11-vm-install-qualification.yml")
 
 evidence_hashes = {
@@ -242,6 +243,8 @@ for required in (
 for required in (
     "workflow_dispatch:",
     "BLOSSOM_CANDIDATE_MODE=vm-qualification",
+    "Restore runner ownership before checkout",
+    'if [[ -z ${PHASE11_VM_DIR:-}',
     "truncate -s 8G",
     "qemu-system-x86_64 -enable-kvm",
     "BLOSSOM_INSTALL_COMPLETE architecture=x86_64 firmware=uefi disk=virtio",
@@ -249,6 +252,22 @@ for required in (
 ):
     if required not in vm_workflow:
         fail(f"generic VM qualification workflow is incomplete: {required}")
+for required in ("rootfs_compressor='zstd -3 -T0'", "-Xcompression-level 3"):
+    if required not in candidate_builder:
+        fail(f"generic VM candidate builder is incomplete: {required}")
+if ".github/workflows/phase9-vm-install-evidence.yml" not in candidate_builder:
+    fail("candidate builder does not package its installed-runtime verifier inputs")
+for required in (
+    'pacstrap -K -C "$repo/distribution/archiso/pacman.conf"',
+    'cp "$repo/distribution/archiso/pacman.conf" "$profile/pacman.conf"',
+    "archiso_pxe_(common|nbd|http|nfs)",
+):
+    if required not in candidate_builder:
+        fail(f"candidate builder does not use the repository-owned pacman configuration: {required}")
+if "syslinux" not in candidate_packages.splitlines():
+    fail("candidate package list is missing syslinux required by the ArchISO memdisk hook")
+if "Restore runner ownership before checkout" not in candidate_workflow:
+    fail("physical candidate workflow does not repair self-hosted runner ownership")
 for forbidden in ("MacBookPro11,1", "APPLE SSD", "/dev/sda", "pull_request:", "push:", "schedule:"):
     if forbidden in vm_workflow:
         fail(f"generic VM qualification workflow is hardware-specific or automatic: {forbidden}")
