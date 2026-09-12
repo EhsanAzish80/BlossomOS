@@ -3,6 +3,7 @@ linux
 linux-firmware
 mkinitcpio-archiso
 systemd
+syslinux
 dbus-broker
 bubblewrap
 hyprland
