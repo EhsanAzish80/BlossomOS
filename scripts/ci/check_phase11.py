@@ -243,6 +243,8 @@ for required in (
 for required in (
     "workflow_dispatch:",
     "BLOSSOM_CANDIDATE_MODE=vm-qualification",
+    "Restore runner ownership before checkout",
+    'if [[ -z ${PHASE11_VM_DIR:-}',
     "truncate -s 8G",
     "qemu-system-x86_64 -enable-kvm",
     "BLOSSOM_INSTALL_COMPLETE architecture=x86_64 firmware=uefi disk=virtio",
