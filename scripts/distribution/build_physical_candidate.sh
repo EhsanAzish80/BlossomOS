@@ -8,6 +8,11 @@ fi
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 output=$(realpath -m "$1")
+mode=${BLOSSOM_CANDIDATE_MODE:-physical}
+case "$mode" in
+  physical|vm-qualification) ;;
+  *) echo "BLOSSOM_CANDIDATE_MODE must be physical or vm-qualification" >&2; exit 2 ;;
+esac
 case "$output" in
   "$repo"|"$repo"/*|/candidate) ;;
   *) echo "output must be the workspace or the isolated /candidate mount" >&2; exit 2 ;;
@@ -60,6 +65,16 @@ ln -sf /usr/lib/systemd/system/bluetooth.service \
   "$rootfs/etc/systemd/system/dbus-org.bluez.service"
 ln -sf /usr/lib/systemd/system/blossom-privileged-helper.service \
   "$rootfs/etc/systemd/system/multi-user.target.wants/blossom-privileged-helper.service"
+if [[ "$mode" == vm-qualification ]]; then
+  install -Dm0755 "$repo/distribution/evidence/blossom-evidence-boot" \
+    "$rootfs/usr/local/bin/blossom-evidence-boot"
+  install -Dm0644 "$repo/distribution/evidence/blossom-evidence-boot.service" \
+    "$rootfs/etc/systemd/system/blossom-evidence-boot.service"
+  ln -sf ../blossom-evidence-boot.service \
+    "$rootfs/etc/systemd/system/multi-user.target.wants/blossom-evidence-boot.service"
+  install -Dm0644 "$repo/distribution/evidence/install-marker.json" \
+    "$rootfs/etc/blossom-os/install.json"
+fi
 sed -i 's/^#Storage=.*/Storage=volatile/' "$rootfs/etc/systemd/journald.conf"
 tar --xattrs --numeric-owner -I 'zstd -19 -T0' \
   -cf "$build/blossom-rootfs.tar.zst" -C "$rootfs" .
@@ -79,6 +94,20 @@ install -Dm0755 "$repo/distribution/archiso/airootfs/usr/local/libexec/blossom-p
   "$profile/airootfs/usr/local/libexec/blossom-physical-install-backend"
 install -d -m 0755 "$profile/airootfs/opt/blossom"
 cp -a "$repo/scripts" "$profile/airootfs/opt/blossom/"
+if [[ "$mode" == vm-qualification ]]; then
+  sed -i 's/iso_application=.*/iso_application="Blossom OS generic VM qualification candidate"/' \
+    "$profile/profiledef.sh"
+  sed -i 's/iso_version=.*/iso_version="0.11.0-vm-qualification"/' "$profile/profiledef.sh"
+  sed -i '/^options /s/$/ console=ttyS0,115200n8 systemd.show_status=yes/' \
+    "$profile/efiboot/loader/entries/"*.conf
+  install -Dm0755 "$repo/distribution/archiso/airootfs/usr/local/bin/blossom-evidence-install" \
+    "$profile/airootfs/usr/local/bin/blossom-evidence-install"
+  install -Dm0644 "$repo/distribution/evidence/blossom-evidence-install.service" \
+    "$profile/airootfs/etc/systemd/system/blossom-evidence-install.service"
+  install -d -m 0755 "$profile/airootfs/etc/systemd/system/multi-user.target.wants"
+  ln -sf ../blossom-evidence-install.service \
+    "$profile/airootfs/etc/systemd/system/multi-user.target.wants/blossom-evidence-install.service"
+fi
 install -Dm0600 "$build/blossom-rootfs.tar.zst" \
   "$profile/airootfs/root/blossom-rootfs.tar.zst"
 mkarchiso -v -w "$build/archiso-work" -o "$iso" "$profile"

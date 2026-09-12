@@ -1,0 +1,98 @@
+name: Phase 11 generic VM installation qualification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase11-generic-vm-install-qualification
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: Install and boot generic x86-64 UEFI image
+    runs-on: [self-hosted, linux, x64, blossom-gpu]
+    timeout-minutes: 75
+    steps:
+      - name: Establish generic virtualization host
+        run: |
+          test "$(uname -m)" = x86_64
+          test -e /dev/kvm
+          docker version >/dev/null
+
+      - name: Check out reviewed source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare isolated VM evidence
+        run: |
+          evidence_dir="$RUNNER_TEMP/phase11-vm-$GITHUB_RUN_ID"
+          echo "PHASE11_VM_DIR=$evidence_dir" >> "$GITHUB_ENV"
+          mkdir -p "$evidence_dir"
+
+      - name: Build generic test-only ISO
+        run: |
+          docker run --rm --privileged \
+            --volume "$GITHUB_WORKSPACE:/workspace:ro" \
+            --volume "$PHASE11_VM_DIR:/candidate" \
+            --workdir /workspace \
+            --env BLOSSOM_CANDIDATE_MODE=vm-qualification \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            bash -euo pipefail -c '
+              cp distribution/evidence/pacman-snapshot.conf /etc/pacman.conf
+              pacman -Syu --noconfirm arch-install-scripts archiso base-devel dosfstools \
+                gptfdisk python rust zstd
+              scripts/distribution/build_physical_candidate.sh /candidate
+            '
+
+      - name: Install onto a blank generic image
+        run: |
+          iso=$(find "$PHASE11_VM_DIR/iso" -maxdepth 1 -name 'blossom-os-*.iso' -print -quit)
+          test -n "$iso"
+          truncate -s 8G "$PHASE11_VM_DIR/blossom.raw"
+          timeout --signal=TERM --kill-after=30s 15m docker run --rm --device /dev/kvm \
+            --volume "$PHASE11_VM_DIR:/evidence" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            bash -euo pipefail -c '
+              pacman -Sy --noconfirm edk2-ovmf qemu-desktop
+              cp /usr/share/edk2/x64/OVMF_VARS.4m.fd /evidence/OVMF_VARS.4m.fd
+              qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 \
+                -machine q35 -nographic -no-reboot \
+                -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd \
+                -drive if=pflash,format=raw,file=/evidence/OVMF_VARS.4m.fd \
+                -drive file=/evidence/blossom.raw,format=raw,if=virtio \
+                -cdrom /evidence/iso/$(basename '"$iso"')
+            ' | tee "$PHASE11_VM_DIR/install.log"
+          grep -q 'BLOSSOM_INSTALL_COMPLETE architecture=x86_64 firmware=uefi disk=virtio' \
+            "$PHASE11_VM_DIR/install.log"
+
+      - name: Boot and verify installed generic image
+        run: |
+          timeout --signal=TERM --kill-after=30s 10m docker run --rm --device /dev/kvm \
+            --volume "$PHASE11_VM_DIR:/evidence" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            bash -euo pipefail -c '
+              pacman -Sy --noconfirm edk2-ovmf qemu-desktop
+              qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 \
+                -machine q35 -nographic -no-reboot \
+                -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd \
+                -drive if=pflash,format=raw,file=/evidence/OVMF_VARS.4m.fd \
+                -drive file=/evidence/blossom.raw,format=raw,if=virtio
+            ' | tee "$PHASE11_VM_DIR/boot.log"
+          grep -q 'BLOSSOM_DISK_BOOT_VERIFIED architecture=x86_64 firmware=uefi lifecycle=verified' \
+            "$PHASE11_VM_DIR/boot.log"
+
+      - name: Record generic image evidence
+        run: |
+          cat "$PHASE11_VM_DIR/iso/SHA256SUMS"
+          sha256sum "$PHASE11_VM_DIR/blossom.raw"
+
+      - name: Remove bounded VM evidence
+        if: always()
+        run: |
+          docker run --rm \
+            --volume "$PHASE11_VM_DIR:/evidence" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            sh -c 'rm -rf /evidence/build /evidence/iso /evidence/blossom.raw \
+              /evidence/OVMF_VARS.4m.fd /evidence/install.log /evidence/boot.log'

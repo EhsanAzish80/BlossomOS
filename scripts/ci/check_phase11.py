@@ -37,6 +37,8 @@ candidate = read("scripts/distribution/physical_candidate_install.py")
 candidate_entrypoint = read("distribution/archiso/airootfs/usr/local/bin/blossom-physical-install")
 candidate_builder = read("scripts/distribution/build_physical_candidate.sh")
 candidate_workflow = read(".github/workflows/phase11-physical-candidate.yml")
+candidate_profile = read("distribution/archiso/profiledef.sh")
+vm_workflow = read(".github/workflows/phase11-vm-install-qualification.yml")
 
 evidence_hashes = {
     "distribution/evidence/phase11-device-preflight-34460218314.json": "5de11cb6ab30605ef4bcda084d2d73994a94269f3e99e9ac436f19b9b1c32c3c",
@@ -230,4 +232,24 @@ for required in (
 for forbidden in ("pull_request:", "push:", "schedule:"):
     if forbidden in candidate_workflow:
         fail(f"physical candidate workflow gained an automatic trigger: {forbidden}")
+for required in (
+    '["/root/.automated_script.sh"]="0:0:755"',
+    '["/usr/local/bin/blossom-physical-install"]="0:0:755"',
+    '["/usr/local/libexec/blossom-physical-install-backend"]="0:0:755"',
+):
+    if required not in candidate_profile:
+        fail(f"physical candidate executable permission is missing: {required}")
+for required in (
+    "workflow_dispatch:",
+    "BLOSSOM_CANDIDATE_MODE=vm-qualification",
+    "truncate -s 8G",
+    "qemu-system-x86_64 -enable-kvm",
+    "BLOSSOM_INSTALL_COMPLETE architecture=x86_64 firmware=uefi disk=virtio",
+    "BLOSSOM_DISK_BOOT_VERIFIED architecture=x86_64 firmware=uefi lifecycle=verified",
+):
+    if required not in vm_workflow:
+        fail(f"generic VM qualification workflow is incomplete: {required}")
+for forbidden in ("MacBookPro11,1", "APPLE SSD", "/dev/sda", "pull_request:", "push:", "schedule:"):
+    if forbidden in vm_workflow:
+        fail(f"generic VM qualification workflow is hardware-specific or automatic: {forbidden}")
 print("Phase 11 physical qualification boundary passed.")
