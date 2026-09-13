@@ -94,7 +94,7 @@ candidate.
 
 The physical candidate is a separate, manually dispatched build and never
 enables the VM evidence auto-installer. Its live environment exposes one short
-operator command, `sudo blossom-physical-install`. That entrypoint reruns the
+operator command, `blossom-physical-install`, from its automatic live root shell. That entrypoint reruns the
 frozen host preflight, requires exact AC-power and recovery-media assertions,
 creates a fresh random challenge, observes the ArchISO live mount and target,
 prints the exact bound erase phrase, then observes the devices again before the

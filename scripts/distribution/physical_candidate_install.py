@@ -42,7 +42,7 @@ def run_interactive(
     challenge_factory: Callable[[int], bytes] = os.urandom,
 ) -> dict[str, Any]:
     if os.geteuid() != 0:
-        raise CandidateError("run this command with sudo")
+        raise CandidateError("run this command from the live root shell")
     preflight = classify(host_observer())
     if preflight["result"] != "eligible_for_qualification":
         raise CandidateError("this is not the frozen qualified host")

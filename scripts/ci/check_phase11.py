@@ -198,7 +198,11 @@ for required in (
 for forbidden in ("sgdisk", "mkfs", "wipefs", "parted", "subprocess", "shell=True"):
     if forbidden in candidate:
         fail(f"physical candidate entrypoint gained inline write authority: {forbidden}")
-for required in ("usage: sudo blossom-physical-install", "cd /opt/blossom", "physical_candidate_install"):
+for required in (
+    "usage: blossom-physical-install (from the live root shell)",
+    "cd /opt/blossom",
+    "physical_candidate_install",
+):
     if required not in candidate_entrypoint:
         fail(f"physical candidate command is incomplete: {required}")
 for required in (
