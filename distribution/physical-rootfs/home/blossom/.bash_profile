@@ -1,3 +1,3 @@
 if [[ -z ${WAYLAND_DISPLAY:-} && ${XDG_VTNR:-0} == 1 ]]; then
-  exec Hyprland
+  exec start-hyprland
 fi

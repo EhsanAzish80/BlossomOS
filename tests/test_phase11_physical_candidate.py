@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -58,16 +60,29 @@ class PhysicalCandidateTests(unittest.TestCase):
                 return {"schema": 1, "result": "physical_install_completed"}
 
             with patch.object(candidate, "STATE_ROOT", Path(directory)):
-                result = candidate.run_interactive(
-                    read=read,
-                    host_observer=host,
-                    device_observer=devices,
-                    executor=execute,
-                    challenge_factory=lambda size: bytes.fromhex("01" * size),
-                )
+                output = StringIO()
+                with redirect_stdout(output):
+                    result = candidate.run_interactive(
+                        read=read,
+                        host_observer=host,
+                        device_observer=devices,
+                        executor=execute,
+                        challenge_factory=lambda size: bytes.fromhex("01" * size),
+                    )
             self.assertEqual(result["result"], "physical_install_completed")
             self.assertEqual(len(calls), 1)
             self.assertEqual(calls[0][3], "ERASE /dev/sda d3e8f7fa8b5ae4af")
+            self.assertIn("internal system disk is selected", output.getvalue())
+            self.assertIn("external disks are never installation targets", output.getvalue())
+
+    def test_desktop_runtime_packages_and_launcher_are_present(self):
+        repository = Path(__file__).resolve().parents[1]
+        builder = (repository / "scripts/distribution/build_physical_candidate.sh").read_text()
+        profile = (repository / "distribution/physical-rootfs/home/blossom/.bash_profile").read_text()
+        self.assertIn("noto-fonts", builder)
+        self.assertIn("noto-fonts-emoji", builder)
+        self.assertIn("exec start-hyprland", profile)
+        self.assertNotIn("exec Hyprland", profile)
 
     @patch("scripts.distribution.physical_candidate_install.os.geteuid", return_value=0)
     def test_prerequisite_cancellation_never_observes_devices(self, _geteuid):

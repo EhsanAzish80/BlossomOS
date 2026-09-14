@@ -212,12 +212,21 @@ for required in (
     "networkmanager",
     "sof-firmware",
     "vulkan-intel",
+    "noto-fonts",
+    "noto-fonts-emoji",
     "blossom-rootfs.tar.zst",
     "blossom-physical-install",
     'rm -f "$profile/airootfs/etc/systemd/system/blossom-evidence-install.service"',
 ):
     if required not in candidate_builder:
         fail(f"physical candidate builder is incomplete: {required}")
+physical_bash_profile = read("distribution/physical-rootfs/home/blossom/.bash_profile")
+if "exec start-hyprland" not in physical_bash_profile:
+    fail("physical desktop session does not use the supported Hyprland launcher")
+if "exec Hyprland" in physical_bash_profile:
+    fail("physical desktop session bypasses start-hyprland")
+if "external disks are never installation targets" not in candidate:
+    fail("physical candidate does not explain its internal-disk-only target policy")
 for forbidden in ("systemctl enable",):
     if forbidden in candidate_builder:
         fail(f"physical candidate builder retained VM-only behavior: {forbidden}")
