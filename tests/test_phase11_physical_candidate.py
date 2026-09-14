@@ -84,6 +84,15 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("exec start-hyprland", profile)
         self.assertNotIn("exec Hyprland", profile)
 
+    def test_macos_builder_uses_an_isolated_x86_64_vm(self):
+        repository = Path(__file__).resolve().parents[1]
+        builder = (repository / "scripts/distribution/build_physical_candidate_macos.sh").read_text()
+        self.assertIn("colima start", builder)
+        self.assertIn("--arch x86_64", builder)
+        self.assertIn("--platform linux/amd64", builder)
+        self.assertIn("archlinux@sha256:", builder)
+        self.assertIn("shasum -a 256 -c SHA256SUMS", builder)
+
     @patch("scripts.distribution.physical_candidate_install.os.geteuid", return_value=0)
     def test_prerequisite_cancellation_never_observes_devices(self, _geteuid):
         observed = []

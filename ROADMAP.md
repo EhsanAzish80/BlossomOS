@@ -491,6 +491,10 @@ until a separate fail-closed disk-safety increment is reviewed and tested.
   protected pre-write observation are complete. The approved `/dev/sdc` probe
   wrote, verified, restored, and re-verified its bounded 4 KiB region; minimized
   result evidence is preserved in the repository.
+- [x] Add a reproducible Apple-silicon maintainer entrypoint for the pinned
+  x86_64 candidate build, plus a checksum-first macOS/Linux media creator with
+  external-disk filtering, exact identity confirmation, re-observation, and
+  byte-for-byte post-write verification. Windows media creation remains open.
 - [ ] Prove installation, boot, essential hardware surfaces, update rollback,
   and recovery on the frozen physical target.
 - [ ] Publish an independent Phase 11 exit audit and exact limitations.

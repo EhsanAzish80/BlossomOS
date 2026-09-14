@@ -36,6 +36,7 @@ disposable_evidence = read("docs/PHASE_11_DISPOSABLE_EVIDENCE.md")
 candidate = read("scripts/distribution/physical_candidate_install.py")
 candidate_entrypoint = read("distribution/archiso/airootfs/usr/local/bin/blossom-physical-install")
 candidate_builder = read("scripts/distribution/build_physical_candidate.sh")
+macos_candidate_builder = read("scripts/distribution/build_physical_candidate_macos.sh")
 candidate_workflow = read(".github/workflows/phase11-physical-candidate.yml")
 candidate_profile = read("distribution/archiso/profiledef.sh")
 candidate_packages = read("distribution/archiso/packages.x86_64")
@@ -232,6 +233,17 @@ for forbidden in ("systemctl enable",):
         fail(f"physical candidate builder retained VM-only behavior: {forbidden}")
 if "sha256sum blossom-os-*.iso > SHA256SUMS" not in candidate_builder:
     fail("physical candidate checksum manifest is not path-independent")
+for required in (
+    "--arch x86_64",
+    "--vm-type qemu",
+    "--platform linux/amd64",
+    "--privileged",
+    "archlinux@sha256:",
+    "build_physical_candidate.sh /candidate",
+    "shasum -a 256 -c SHA256SUMS",
+):
+    if required not in macos_candidate_builder:
+        fail(f"macOS physical candidate builder is incomplete: {required}")
 for required in (
     "workflow_dispatch:",
     "permissions:",

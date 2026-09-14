@@ -5,6 +5,20 @@
 > are not a supported Blossom OS installation path. See the
 > [project README](../README.md) and [roadmap](../ROADMAP.md) for current status.
 
+## Phase 11 candidate build on Apple silicon
+
+The reviewed x86_64 physical candidate can be built locally without a separate
+Linux installation. The command creates an isolated x86_64 Colima VM, runs the
+same pinned Arch Linux build used in CI, and verifies the resulting checksum:
+
+```bash
+scripts/distribution/build_physical_candidate_macos.sh
+```
+
+The ISO and `SHA256SUMS` are written to `.local-phase11-macos/iso/`. This is a
+build artifact only; writing it to physical media remains a separate,
+explicitly authorized operation.
+
 ## Prerequisites
 
 ### On macOS (for building)
@@ -57,11 +71,23 @@ This takes 30-60 minutes and creates a full-featured ISO.
 This launches QEMU with proper Mac acceleration (hvf).
 
 ### Create Bootable USB
+
+The media creator works on Intel and Apple-silicon macOS and on Linux. First run
+it without a target to verify the ISO checksum and show only eligible removable
+external whole disks:
+
 ```bash
-./scripts/create-bootable-usb.sh
+./scripts/create-bootable-usb.sh \
+  --iso /path/to/blossom-os-x86_64.iso \
+  --checksums /path/to/SHA256SUMS
 ```
 
-Follow prompts to write ISO to USB drive.
+After checking the displayed path, model, and size, repeat with
+`--target /dev/...`. The tool requires the complete displayed disk identity as
+its erase confirmation and observes the device again immediately before writing.
+After the copy, it compares every written ISO byte with the source before
+reporting success (and before ejecting on macOS).
+Windows media creation is not yet supported by this command.
 
 ## First Boot
 
