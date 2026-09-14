@@ -22,6 +22,15 @@ TARGET = {
 BLKGETSIZE64 = 0x80081272
 ROOTFS = Path("/root/blossom-rootfs.tar.zst")
 MOUNT = Path("/mnt/blossom-install")
+LSBLK_TARGET = (
+    "lsblk",
+    "--json",
+    "--bytes",
+    "--tree",
+    "--output",
+    "PATH,SIZE,MODEL,TRAN,RM,MOUNTPOINTS",
+    TARGET["path"],
+)
 
 
 class BackendError(RuntimeError):
@@ -81,6 +90,7 @@ def command_plan() -> list[list[str]]:
         ["mkfs.fat", "-F", "32", "-n", "BLOSSOM_EFI", "/dev/sda1"],
         ["mkfs.ext4", "-F", "-L", "BLOSSOM_SYSTEM", "/dev/sda2"],
         ["mount", "/dev/sda2", str(MOUNT)],
+        ["mkdir", "-p", str(MOUNT / "boot")],
         ["mount", "/dev/sda1", str(MOUNT / "boot")],
         ["tar", "--xattrs", "--numeric-owner", "-I", "zstd", "-xf", str(ROOTFS), "-C", str(MOUNT)],
         ["bootctl", f"--esp-path={MOUNT / 'boot'}", "install"],
@@ -89,7 +99,7 @@ def command_plan() -> list[list[str]]:
 
 def _inventory() -> dict[str, Any]:
     result = subprocess.run(
-        ["lsblk", "--json", "--bytes", "--output", "PATH,SIZE,MODEL,TRAN,RM,MOUNTPOINTS", TARGET["path"]],
+        LSBLK_TARGET,
         check=True,
         capture_output=True,
         timeout=5,
@@ -120,7 +130,6 @@ def install(
         os.close(fd)
 
     MOUNT.mkdir(parents=True, exist_ok=True)
-    (MOUNT / "boot").mkdir(parents=True, exist_ok=True)
     mounted_root = False
     mounted_boot = False
     try:

@@ -43,7 +43,7 @@ def _validate_device(device: Any) -> dict[str, Any]:
         raise GuardError("invalid device path")
     if not isinstance(device["model"], str) or not MODEL.fullmatch(device["model"]):
         raise GuardError("invalid device model")
-    if type(device["size_bytes"]) is not int or not MIN_BYTES <= device["size_bytes"] <= MAX_BYTES:
+    if type(device["size_bytes"]) is not int or not 0 < device["size_bytes"] <= MAX_BYTES:
         raise GuardError("invalid device size")
     if device["transport"] not in ("sata", "nvme", "usb"):
         raise GuardError("unsupported device transport")
@@ -97,6 +97,8 @@ def evaluate(observation: dict[str, Any], confirmation: str | None = None) -> di
         raise GuardError(f"exactly one unmounted {target_kind} target is required")
 
     target = candidates[0]
+    if target["size_bytes"] < MIN_BYTES:
+        raise GuardError("invalid target size")
     summary = {
         "challenge": observation["challenge"],
         "model": target["model"],
