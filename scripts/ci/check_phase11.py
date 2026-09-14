@@ -246,8 +246,9 @@ for required in (
         fail(f"physical candidate executable permission is missing: {required}")
 for required in (
     "workflow_dispatch:",
+    "runs-on: ubuntu-24.04",
     "BLOSSOM_CANDIDATE_MODE=vm-qualification",
-    "Restore runner ownership before checkout",
+    "sudo chmod 0666 /dev/kvm",
     'if [[ -z ${PHASE11_VM_DIR:-}',
     "truncate -s 8G",
     "qemu-system-x86_64 -enable-kvm",
