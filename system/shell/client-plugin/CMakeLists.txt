@@ -8,7 +8,9 @@ set(CMAKE_AUTOMOC ON)
 set(QML_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml")
 
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core DBus Qml Quick Widgets)
-qt_policy(SET QTP0001 NEW)
+if(COMMAND qt_policy)
+    qt_policy(SET QTP0001 NEW)
+endif()
 
 qt_add_qml_module(blossom-shell-client-plugin
     URI Blossom.Shell

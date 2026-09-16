@@ -79,6 +79,8 @@ def main() -> None:
             "request start must close the rapid-click race")
     cmake = (PLUGIN / "CMakeLists.txt").read_text()
     for setting in [
+        "if(COMMAND qt_policy)",
+        "qt_policy(SET QTP0001 NEW)",
         "set_target_properties(blossom-shell-client-plugin blossom-shell-client-pluginplugin PROPERTIES",
         'LIBRARY_OUTPUT_DIRECTORY "${QML_OUTPUT_DIRECTORY}/Blossom/Shell"',
         "BUILD_WITH_INSTALL_RPATH TRUE",
