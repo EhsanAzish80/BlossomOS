@@ -34,10 +34,13 @@ build/iso/
 build/out/
 *.iso
 *.img
+*.raw
 *.qcow2
 *.vdi
 *.vmdk
 *.ova
+*.sfs
+.local-phase11-*/
 SHA256SUMS
 MD5SUMS
 

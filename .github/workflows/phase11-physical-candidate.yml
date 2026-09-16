@@ -13,7 +13,7 @@ concurrency:
 jobs:
   build:
     name: Build reviewed physical candidate
-    runs-on: [self-hosted, linux, x64, blossom-gpu]
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - name: Check out reviewed source
@@ -24,8 +24,10 @@ jobs:
       - name: Verify Phase 11 source boundary
         working-directory: phase11-source
         run: |
-          python3 -m unittest discover -s tests -p 'test_phase11*.py' -v
-          python3 scripts/ci/check_phase11.py
+          python3 -m unittest discover -s tests -v
+          for check in scripts/ci/check_*.py; do
+            python3 "$check"
+          done
 
       - name: Build physical candidate in pinned Arch Linux container
         run: |
@@ -38,8 +40,8 @@ jobs:
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
             bash -euo pipefail -c '
               cp distribution/evidence/pacman-snapshot.conf /etc/pacman.conf
-              pacman -Syu --noconfirm arch-install-scripts archiso base-devel dosfstools \
-                gptfdisk python rust zstd
+              pacman -Syu --noconfirm arch-install-scripts archiso base-devel cmake dosfstools \
+                gptfdisk ninja python qt6-base qt6-declarative rust zstd
               scripts/distribution/build_physical_candidate.sh /candidate
             '
 

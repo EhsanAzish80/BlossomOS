@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if (($# != 0)); then
-  echo "usage: sudo blossom-physical-install" >&2
+  echo "usage: blossom-physical-install (from the live root shell)" >&2
   exit 2
 fi
 cd /opt/blossom

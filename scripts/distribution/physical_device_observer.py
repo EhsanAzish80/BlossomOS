@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
+from pathlib import Path
 from typing import Any
 
 
@@ -15,13 +17,15 @@ class ObservationError(ValueError):
 
 MAX_OUTPUT_BYTES = 64 * 1024
 MAX_DEVICES = 8
+MAX_CMDLINE_BYTES = 4 * 1024
+CMDLINE = Path("/proc/cmdline")
 LSBLK = (
     "/usr/bin/lsblk",
     "--bytes",
     "--json",
     "--tree",
     "--output",
-    "PATH,TYPE,MODEL,SIZE,TRAN,RM,MOUNTPOINTS",
+    "PATH,TYPE,MODEL,SIZE,TRAN,RM,UUID,MOUNTPOINTS",
 )
 
 
@@ -42,7 +46,46 @@ def _mountpoints(node: dict[str, Any]) -> list[str]:
     return points
 
 
-def parse_lsblk(payload: bytes) -> tuple[str, list[dict[str, Any]]]:
+def _contains_uuid(node: dict[str, Any], expected: str) -> bool:
+    value = node.get("uuid")
+    if value is not None and not isinstance(value, str):
+        raise ObservationError("invalid filesystem UUID inventory")
+    if isinstance(value, str) and value.casefold() == expected.casefold():
+        return True
+    children = node.get("children", [])
+    if not isinstance(children, list):
+        raise ObservationError("invalid child device inventory")
+    matched = False
+    for child in children:
+        if not isinstance(child, dict):
+            raise ObservationError("invalid child device inventory")
+        matched = _contains_uuid(child, expected) or matched
+    return matched
+
+
+def parse_archiso_search_uuid(payload: bytes) -> str | None:
+    """Read one bounded ArchISO search UUID from the kernel command line."""
+    if len(payload) > MAX_CMDLINE_BYTES:
+        raise ObservationError("kernel command line exceeds the bounded size")
+    try:
+        words = payload.decode("ascii").split()
+    except UnicodeDecodeError as error:
+        raise ObservationError("invalid kernel command line") from error
+    values = [
+        word.split("=", 1)[1]
+        for word in words
+        if word.startswith("archisosearchuuid=")
+    ]
+    if not values:
+        return None
+    if len(values) != 1 or not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", values[0]):
+        raise ObservationError("invalid ArchISO search UUID")
+    return values[0]
+
+
+def parse_lsblk(
+    payload: bytes, archiso_search_uuid: str | None = None
+) -> tuple[str, list[dict[str, Any]]]:
     """Normalize only whole disks and identify one live root or live-media disk."""
     if len(payload) > MAX_OUTPUT_BYTES:
         raise ObservationError("device inventory exceeds the bounded size")
@@ -94,12 +137,14 @@ def parse_lsblk(payload: bytes) -> tuple[str, list[dict[str, Any]]]:
         )
         if "/" in points or "/cdrom" in points or "/run/archiso/bootmnt" in points:
             live.append(path)
+        if archiso_search_uuid is not None and _contains_uuid(node, archiso_search_uuid):
+            live.append(path)
 
     if not 1 <= len(devices) <= MAX_DEVICES:
         raise ObservationError("invalid whole-disk count")
-    if len(live) != 1:
+    if len(set(live)) != 1:
         raise ObservationError("live device identity is ambiguous")
-    return live[0], devices
+    return next(iter(set(live))), devices
 
 
 def observe() -> tuple[str, list[dict[str, Any]]]:
@@ -107,7 +152,12 @@ def observe() -> tuple[str, list[dict[str, Any]]]:
     result = subprocess.run(LSBLK, check=False, capture_output=True, timeout=5)
     if result.returncode != 0 or result.stderr:
         raise ObservationError("read-only device inventory failed")
-    return parse_lsblk(result.stdout)
+    try:
+        with CMDLINE.open("rb") as stream:
+            cmdline = stream.read(MAX_CMDLINE_BYTES + 1)
+    except OSError as error:
+        raise ObservationError("kernel command line read failed") from error
+    return parse_lsblk(result.stdout, parse_archiso_search_uuid(cmdline))
 
 
 def main() -> None:

@@ -17,7 +17,9 @@ content-minimized audit.
 
 Phases 0 through 10 are complete at their separately reviewed boundaries.
 Phase 11 is active with one exact physical-device qualification boundary and a
-read-only preflight; physical installation is not yet enabled or supported.
+fail-closed physical installer. A first installation and console boot have been
+observed, but desktop startup, the hardware matrix, rollback, and recovery are
+not yet qualified or supported.
 Phase 10 produced a verified x86-64 UEFI VM beta-candidate evidence bundle; it
 did not publish a release or establish physical-device support.
 

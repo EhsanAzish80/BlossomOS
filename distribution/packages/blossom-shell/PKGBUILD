@@ -4,14 +4,47 @@ pkgrel=1
 pkgdesc='Blossom OS narrow desktop shell surface'
 arch=('x86_64')
 license=('Apache-2.0')
-depends=('hyprland' 'quickshell' 'qt6-base' 'qt6-declarative')
+depends=('blossom-core' 'hyprland' 'quickshell' 'qt6-base' 'qt6-declarative')
+makedepends=('cmake' 'ninja')
 source=()
 sha256sums=()
+
+build() {
+  local repo_root="$startdir/../../.."
+  cmake -S "$repo_root/system/shell/client-plugin" -B "$srcdir/client-build" \
+    -G Ninja -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$srcdir/client-build"
+  cmake -S "$repo_root/system/desktop-launcher" -B "$srcdir/launcher-build" \
+    -G Ninja -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$srcdir/launcher-build"
+}
 
 package() {
   local repo_root="$startdir/../../.."
   install -d "$pkgdir/usr/share/blossom-os/shell"
   cp -a "$repo_root/system/shell/qml/." \
     "$pkgdir/usr/share/blossom-os/shell/"
+  install -Dm0755 "$srcdir/client-build/blossom-shell-ui" \
+    "$pkgdir/usr/lib/blossom-os/blossom-shell-ui"
+  install -Dm0755 "$srcdir/launcher-build/blossom-desktop-launcher" \
+    "$pkgdir/usr/lib/blossom-os/blossom-desktop-launcher"
+  install -d "$pkgdir/usr/lib/qt6/qml/Blossom/Shell"
+  cp -a "$srcdir/client-build/qml/Blossom/Shell/." \
+    "$pkgdir/usr/lib/qt6/qml/Blossom/Shell/"
+  find "$pkgdir/usr/lib/qt6/qml/Blossom/Shell" -type d -exec chmod 0755 {} +
+  find "$pkgdir/usr/lib/qt6/qml/Blossom/Shell" -type f -exec chmod 0644 {} +
+  find "$pkgdir/usr/lib/qt6/qml/Blossom/Shell" -type f -name '*.so' -exec chmod 0755 {} +
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-ui.service" \
+    "$pkgdir/usr/lib/systemd/user/blossom-shell-ui.service"
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-recovery.service" \
+    "$pkgdir/usr/lib/systemd/user/blossom-shell-recovery.service"
+  install -Dm0644 "$repo_root/system/desktop-launcher/blossom-desktop-launcher.service" \
+    "$pkgdir/usr/lib/systemd/user/blossom-desktop-launcher.service"
+  install -Dm0644 "$repo_root/system/desktop-launcher/org.blossomos.Desktop1.service" \
+    "$pkgdir/usr/share/dbus-1/services/org.blossomos.Desktop1.service"
+  install -Dm0755 "$repo_root/system/shell/packaging/blossom-shell-recovery" \
+    "$pkgdir/usr/local/bin/blossom-shell-recovery"
+  install -Dm0755 "$repo_root/system/shell/runtime/blossom-start-session" \
+    "$pkgdir/usr/local/bin/blossom-start-session"
   find "$pkgdir/usr/share/blossom-os/shell" -type f -exec chmod 0644 {} +
 }

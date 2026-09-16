@@ -16,6 +16,9 @@ and verify packages through pacman's Arch keyring.
 | release binary | `/usr/lib/blossom-os/blossom-shell-service` | `root:root 0755` |
 | `blossom-shell-service.service` | `/usr/lib/systemd/user/blossom-shell-service.service` | `root:root 0644` |
 | `org.blossomos.Shell1.service` | `/usr/share/dbus-1/services/org.blossomos.Shell1.service` | `root:root 0644` |
+| `blossom-shell-ui.service` | `/usr/lib/systemd/user/blossom-shell-ui.service` | `root:root 0644` |
+| `blossom-shell-recovery.service` | `/usr/lib/systemd/user/blossom-shell-recovery.service` | `root:root 0644` |
+| `blossom-shell-recovery` | `/usr/local/bin/blossom-shell-recovery` | `root:root 0755` |
 
 The service runs as the logged-in unprivileged user, owns only the fixed
 session-bus name, and exposes the closed versioned Rust interface. The unit has
@@ -43,5 +46,8 @@ selects the fixed trusted `/usr/bin/uname -s` command itself, exposes `/usr`
 read-only, and exposes no network, procfs, devices, or writable temporary
 filesystem.
 
-This checkpoint does not package QML, start Hyprland or Quickshell, establish a
-graphical session, or claim installed compatibility.
+The Phase 11 package also installs the reviewed QML host, its graphical-session
+unit, and a terminal recovery surface. Hyprland owns the session and imports its
+fixed environment before starting the UI unit. The recovery unit is activated
+only after repeated UI failure and can show status or restart that one unit; it
+does not gain privileges or provide arbitrary command execution.

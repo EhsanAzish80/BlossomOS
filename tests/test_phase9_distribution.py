@@ -102,7 +102,11 @@ class Phase9RepositoryTests(unittest.TestCase):
         self.assertEqual((manifest["architecture"], manifest["boot"], manifest["product"]), ("x86_64", "uefi", "blossom-os"))
         self.assertFalse(manifest["ssh_enabled"])
         self.assertFalse(manifest["telemetry"])
-        text = "\n".join(p.read_text(errors="replace") for p in (root / "distribution").rglob("*.*"))
+        text = "\n".join(
+            p.read_text(errors="replace")
+            for p in (root / "distribution").rglob("*.*")
+            if p.is_file()
+        )
         for forbidden in ("PermitRootLogin yes", "PasswordAuthentication yes", "NOPASSWD", "curl |", "wget |", "sshd.service"):
             self.assertNotIn(forbidden, text)
 

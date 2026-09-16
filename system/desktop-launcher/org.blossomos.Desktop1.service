@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.blossomos.Desktop1
+Exec=/usr/lib/blossom-os/blossom-desktop-launcher
+SystemdService=blossom-desktop-launcher.service

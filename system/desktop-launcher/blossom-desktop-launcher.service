@@ -1,0 +1,17 @@
+[Unit]
+Description=Blossom OS fixed desktop application launcher
+PartOf=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.blossomos.Desktop1
+ExecStart=/usr/lib/blossom-os/blossom-desktop-launcher
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX

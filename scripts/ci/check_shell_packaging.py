@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed if the inactive Phase 6 shell package boundary drifts."""
+"""Fail closed if the broker, desktop UI, or recovery package boundary drifts."""
 
 from pathlib import Path
 import configparser
@@ -13,6 +13,9 @@ EVIDENCE_LOCK = SHELL / "evidence" / "parent-compositors-arch-x86_64.lock.json"
 BUS_NAME = "org.blossomos.Shell1"
 BINARY = "/usr/lib/blossom-os/blossom-shell-service"
 UNIT = "blossom-shell-service.service"
+UI_UNIT = "blossom-shell-ui.service"
+RECOVERY_UNIT = "blossom-shell-recovery.service"
+RECOVERY = "blossom-shell-recovery"
 
 
 def require(condition: bool, message: str) -> None:
@@ -86,12 +89,62 @@ def check_unit() -> None:
         require(value not in text, f"forbidden shell package surface: {value}")
 
 
+def check_ui_unit() -> None:
+    text = (PACKAGE / UI_UNIT).read_text()
+    for value in [
+        "PartOf=graphical-session.target",
+        "After=graphical-session.target blossom-shell-service.service",
+        f"OnFailure={RECOVERY_UNIT}",
+        "StartLimitIntervalSec=30",
+        "StartLimitBurst=3",
+        "Type=exec",
+        "ExecStart=/usr/lib/blossom-os/blossom-shell-ui",
+        "Restart=on-failure",
+        "Environment=QT_QPA_PLATFORM=wayland",
+        "NoNewPrivileges=yes",
+        "ProtectSystem=strict",
+        "ProtectHome=read-only",
+        "RestrictSUIDSGID=yes",
+        "WantedBy=graphical-session.target",
+    ]:
+        require(value in text, f"missing shell UI boundary: {value}")
+    for value in ["User=root", "sudo", "pkexec", "/bin/sh", "sh -c", "bash -c"]:
+        require(value not in text, f"forbidden shell UI surface: {value}")
+
+
+def check_recovery() -> None:
+    unit = (PACKAGE / RECOVERY_UNIT).read_text()
+    for value in [
+        f"ExecStart=/usr/bin/foot --title=Blossom Shell Recovery /usr/local/bin/{RECOVERY}",
+        "NoNewPrivileges=yes",
+        "ProtectSystem=strict",
+        "ProtectHome=read-only",
+        "RestrictSUIDSGID=yes",
+    ]:
+        require(value in unit, f"missing shell recovery boundary: {value}")
+    require("[Install]" not in unit, "recovery unit must not be independently enableable")
+    script = (PACKAGE / RECOVERY).read_text()
+    for value in [
+        "set -euo pipefail",
+        "systemctl --user --no-pager --full status blossom-shell-ui.service",
+        "systemctl --user reset-failed blossom-shell-ui.service",
+        "systemctl --user restart blossom-shell-ui.service",
+        "exec bash --noprofile --norc",
+    ]:
+        require(value in script, f"missing bounded recovery behavior: {value}")
+    for value in ["sudo", "pkexec", "eval ", "curl ", "wget "]:
+        require(value not in script, f"forbidden recovery authority: {value}")
+
+
 def main() -> None:
-    require({path.name for path in PACKAGE.iterdir()} == {"README.md", UNIT, f"{BUS_NAME}.service"}, "unexpected shell package surface")
+    expected = {"README.md", UNIT, f"{BUS_NAME}.service", UI_UNIT, RECOVERY_UNIT, RECOVERY}
+    require({path.name for path in PACKAGE.iterdir()} == expected, "unexpected shell package surface")
     check_lock()
     check_evidence_lock()
     check_activation()
     check_unit()
+    check_ui_unit()
+    check_recovery()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '\nBlossom OS could not start the desktop shell.\n\n'
+printf 'Your files and terminal are still available.\n'
+printf 'Press Super+Enter for another terminal.\n\n'
+printf 'Recent shell status:\n'
+systemctl --user --no-pager --full status blossom-shell-ui.service || true
+printf '\nType restart-shell to try the desktop again, or exit to close this window.\n'
+
+restart-shell() {
+  systemctl --user reset-failed blossom-shell-ui.service
+  systemctl --user restart blossom-shell-ui.service
+}
+
+export -f restart-shell
+exec bash --noprofile --norc

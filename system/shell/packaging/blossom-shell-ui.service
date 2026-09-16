@@ -1,0 +1,27 @@
+[Unit]
+Description=Blossom OS desktop shell UI
+PartOf=graphical-session.target
+After=graphical-session.target blossom-shell-service.service
+OnFailure=blossom-shell-recovery.service
+StartLimitIntervalSec=30
+StartLimitBurst=3
+
+[Service]
+Type=exec
+ExecStart=/usr/lib/blossom-os/blossom-shell-ui
+Restart=on-failure
+RestartSec=2
+Environment=QT_QPA_PLATFORM=wayland
+Environment=QML2_IMPORT_PATH=/usr/lib/qt6/qml
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=graphical-session.target

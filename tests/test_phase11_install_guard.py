@@ -43,6 +43,15 @@ class Phase11InstallGuardTests(unittest.TestCase):
         self.assertEqual(confirmed["result"], "guard_passed_no_write_performed")
         self.assertEqual(confirmed["target_digest"], pending["target_digest"])
 
+    def test_small_live_media_is_allowed_but_small_target_is_rejected(self):
+        value = observation()
+        value["devices"][1]["size_bytes"] = 6655619072
+        self.assertEqual(evaluate(value)["result"], "confirmation_required")
+
+        value["devices"][0]["size_bytes"] = 6655619072
+        with self.assertRaisesRegex(GuardError, "invalid target size"):
+            evaluate(value)
+
     def test_confirmation_rejects_case_spacing_target_and_challenge_changes(self):
         pending = evaluate(observation())
         expected = pending["expected_confirmation"]

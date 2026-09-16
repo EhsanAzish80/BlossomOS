@@ -42,7 +42,7 @@ def run_interactive(
     challenge_factory: Callable[[int], bytes] = os.urandom,
 ) -> dict[str, Any]:
     if os.geteuid() != 0:
-        raise CandidateError("run this command with sudo")
+        raise CandidateError("run this command from the live root shell")
     preflight = classify(host_observer())
     if preflight["result"] != "eligible_for_qualification":
         raise CandidateError("this is not the frozen qualified host")
@@ -56,6 +56,7 @@ def run_interactive(
     initial = _observation(challenge, live, devices)
     decision = evaluate(initial)
     target = decision["target"]
+    print("Qualification target policy: the internal system disk is selected; external disks are never installation targets.")
     print(f"Target: {target['path']} | {target['model']} | {target['size_bytes']} bytes")
     print("This permanently erases the target and consumes this attempt.")
     confirmation = read(f"Type exactly: {decision['expected_confirmation']}\n> ")

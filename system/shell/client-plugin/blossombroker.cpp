@@ -26,6 +26,13 @@ QDBusInterface fixedInterface() {
                           QString::fromLatin1(Interface), QDBusConnection::sessionBus());
 }
 
+QDBusInterface desktopInterface() {
+    return QDBusInterface(QStringLiteral("org.blossomos.Desktop1"),
+                          QStringLiteral("/org/blossomos/Desktop1"),
+                          QStringLiteral("org.blossomos.Desktop1"),
+                          QDBusConnection::sessionBus());
+}
+
 QJsonObject boundedObject(const QByteArray &bytes, bool *ok) {
     *ok = false;
     if (bytes.size() > MaxReplyBytes) {
@@ -63,6 +70,52 @@ QVariantMap BlossomBroker::preview() const { return m_preview; }
 QVariantList BlossomBroker::activity() const { return m_activity; }
 QVariantMap BlossomBroker::battery() const { return m_battery; }
 QVariantMap BlossomBroker::network() const { return m_network; }
+bool BlossomBroker::liveEnvironment() const {
+    return qEnvironmentVariableIsSet("BLOSSOM_LIVE");
+}
+
+void BlossomBroker::openTerminal() {
+    launchDesktop(QStringLiteral("terminal"));
+}
+
+void BlossomBroker::openInstaller() {
+    if (!liveEnvironment()) {
+        return;
+    }
+    launchDesktop(QStringLiteral("installer"));
+}
+
+void BlossomBroker::openFiles() {
+    launchDesktop(QStringLiteral("files"));
+}
+
+void BlossomBroker::openBrowser() {
+    launchDesktop(QStringLiteral("browser"));
+}
+
+void BlossomBroker::openEditor() {
+    launchDesktop(QStringLiteral("editor"));
+}
+
+void BlossomBroker::openNetworkSettings() {
+    launchDesktop(QStringLiteral("network"));
+}
+
+void BlossomBroker::openAudioSettings() {
+    launchDesktop(QStringLiteral("audio"));
+}
+
+void BlossomBroker::restartSystem() {
+    launchDesktop(QStringLiteral("restart"));
+}
+
+void BlossomBroker::powerOff() {
+    launchDesktop(QStringLiteral("poweroff"));
+}
+
+void BlossomBroker::launchDesktop(const QString &action) {
+    desktopInterface().asyncCall(QStringLiteral("Launch1"), action);
+}
 
 void BlossomBroker::requestSystemUname() {
     if (m_state == QStringLiteral("requesting") || m_state == QStringLiteral("waiting") ||

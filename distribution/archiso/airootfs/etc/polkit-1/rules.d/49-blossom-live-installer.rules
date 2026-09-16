@@ -1,0 +1,7 @@
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.policykit.exec" &&
+        action.lookup("program") == "/usr/local/bin/blossom-physical-install" &&
+        subject.user == "blossom" && subject.local && subject.active) {
+        return polkit.Result.YES;
+    }
+});

@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -58,16 +60,121 @@ class PhysicalCandidateTests(unittest.TestCase):
                 return {"schema": 1, "result": "physical_install_completed"}
 
             with patch.object(candidate, "STATE_ROOT", Path(directory)):
-                result = candidate.run_interactive(
-                    read=read,
-                    host_observer=host,
-                    device_observer=devices,
-                    executor=execute,
-                    challenge_factory=lambda size: bytes.fromhex("01" * size),
-                )
+                output = StringIO()
+                with redirect_stdout(output):
+                    result = candidate.run_interactive(
+                        read=read,
+                        host_observer=host,
+                        device_observer=devices,
+                        executor=execute,
+                        challenge_factory=lambda size: bytes.fromhex("01" * size),
+                    )
             self.assertEqual(result["result"], "physical_install_completed")
             self.assertEqual(len(calls), 1)
             self.assertEqual(calls[0][3], "ERASE /dev/sda d3e8f7fa8b5ae4af")
+            self.assertIn("internal system disk is selected", output.getvalue())
+            self.assertIn("external disks are never installation targets", output.getvalue())
+
+    def test_desktop_runtime_packages_and_launcher_are_present(self):
+        repository = Path(__file__).resolve().parents[1]
+        builder = (repository / "scripts/distribution/build_physical_candidate.sh").read_text()
+        packages = (repository / "distribution/archiso/packages.x86_64").read_text()
+        profile = (repository / "distribution/physical-rootfs/home/blossom/.bash_profile").read_text()
+        live_profile = (repository / "distribution/archiso/airootfs/home/blossom/.bash_profile").read_text()
+        autologin = (repository / "distribution/archiso/airootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf").read_text()
+        root_console = (repository / "distribution/archiso/airootfs/etc/systemd/system/getty@tty2.service.d/autologin.conf").read_text()
+        live_hyprland = (repository / "distribution/archiso/airootfs/home/blossom/.config/hypr/hyprland.conf").read_text()
+        installed_hyprland = (repository / "distribution/physical-rootfs/usr/share/blossom-os/physical-home/hyprland.conf").read_text()
+        shell_package = (repository / "distribution/packages/blossom-shell/PKGBUILD").read_text()
+        shell_unit = (repository / "system/shell/packaging/blossom-shell-ui.service").read_text()
+        recovery_unit = (repository / "system/shell/packaging/blossom-shell-recovery.service").read_text()
+        recovery_command = (repository / "system/shell/packaging/blossom-shell-recovery").read_text()
+        session_command = (repository / "system/shell/runtime/blossom-start-session").read_text()
+        shell_qml = (repository / "system/shell/qml/shell.qml").read_text()
+        broker_header = (repository / "system/shell/client-plugin/blossombroker.h").read_text()
+        broker_source = (repository / "system/shell/client-plugin/blossombroker.cpp").read_text()
+        desktop_launcher = (repository / "system/desktop-launcher/main.cpp").read_text()
+        desktop_unit = (repository / "system/desktop-launcher/blossom-desktop-launcher.service").read_text()
+        installer_rule = (repository / "distribution/archiso/airootfs/etc/polkit-1/rules.d/49-blossom-live-installer.rules").read_text()
+        self.assertIn("noto-fonts", builder)
+        self.assertIn("noto-fonts-emoji", builder)
+        for package in ("adwaita-cursors", "foot", "noto-fonts", "noto-fonts-emoji"):
+            self.assertIn(f"\n{package}\n", f"\n{packages}")
+        for package in ("firefox", "gvfs", "mousepad", "network-manager-applet", "pavucontrol", "thunar", "tumbler"):
+            self.assertIn(f"\n{package}\n", f"\n{packages}")
+            self.assertIn(package, builder)
+        self.assertIn("exec start-hyprland", profile)
+        self.assertIn("exec start-hyprland", live_profile)
+        self.assertNotIn("exec Hyprland", profile)
+        self.assertIn(
+            'cp -a "$repo/distribution/archiso/airootfs/." "$profile/airootfs/"',
+            builder,
+        )
+        self.assertIn("--autologin blossom", autologin)
+        self.assertIn("useradd --create-home", autologin)
+        self.assertIn("chown -R blossom:blossom /home/blossom", autologin)
+        self.assertNotIn("--autologin root", autologin)
+        self.assertIn("--autologin root", root_console)
+        for config in (live_hyprland, installed_hyprland):
+            self.assertIn("XCURSOR_THEME,Adwaita", config)
+            self.assertIn("background_color = rgb(0b111b)", config)
+            self.assertIn("/usr/local/bin/blossom-start-session", config)
+            self.assertNotIn("quickshell -p", config)
+        self.assertIn('client-build/blossom-shell-ui', shell_package)
+        self.assertIn('/usr/lib/qt6/qml/Blossom/Shell', shell_package)
+        self.assertIn('blossom-shell-ui.service', shell_package)
+        self.assertIn('blossom-shell-recovery.service', shell_package)
+        self.assertIn('/usr/local/bin/blossom-shell-recovery', shell_package)
+        self.assertIn('/usr/local/bin/blossom-start-session', shell_package)
+        self.assertIn("ExecStart=/usr/lib/blossom-os/blossom-shell-ui", shell_unit)
+        self.assertIn("Restart=on-failure", shell_unit)
+        self.assertIn("OnFailure=blossom-shell-recovery.service", shell_unit)
+        self.assertIn("blossom-shell-recovery", recovery_unit)
+        self.assertIn("restart-shell", recovery_command)
+        self.assertIn("systemctl --user import-environment", session_command)
+        self.assertIn("WAYLAND_DISPLAY", session_command)
+        self.assertIn("graphical-session.target blossom-shell-ui.service", session_command)
+        self.assertIn('bsdtar -xpf "$package" -C "$profile/airootfs"', builder)
+        self.assertIn('"$packages"/blossom-core-*.pkg.tar.zst', builder)
+        self.assertIn('"$packages"/blossom-shell-*.pkg.tar.zst', builder)
+        self.assertIn("Welcome to Blossom OS", shell_qml)
+        self.assertIn("Install Blossom OS", shell_qml)
+        self.assertIn("External disks are excluded", shell_qml)
+        for surface in ("Applications", "Files", "Web Browser", "Text Editor", "Network Settings", "Audio Settings"):
+            self.assertIn(surface, shell_qml)
+        self.assertIn("liveEnvironment", broker_header)
+        self.assertIn('/usr/local/bin/blossom-physical-install', desktop_launcher)
+        for method in ("openFiles", "openBrowser", "openEditor", "openNetworkSettings", "openAudioSettings"):
+            self.assertIn(method, broker_header)
+        for method in ("restartSystem", "powerOff"):
+            self.assertIn(method, broker_header)
+        self.assertNotIn("QProcess", broker_source)
+        self.assertIn('QStringLiteral("Launch1")', broker_source)
+        for executable in ("/usr/bin/thunar", "/usr/bin/firefox", "/usr/bin/mousepad", "/usr/bin/nmtui", "/usr/bin/pavucontrol"):
+            self.assertIn(executable, desktop_launcher)
+        self.assertIn('/usr/bin/hyprctl', desktop_launcher)
+        self.assertIn('/usr/bin/systemctl', desktop_launcher)
+        self.assertIn("NoNewPrivileges=yes", desktop_unit)
+        for config in (live_hyprland, installed_hyprland):
+            for binding in ("SUPER, Q, killactive", "SUPER, F, fullscreen", "SUPER, E, exec, thunar", "SUPER, 1, workspace, 1"):
+                self.assertIn(binding, config)
+        self.assertIn('subject.user == "blossom"', installer_rule)
+        self.assertIn('action.lookup("program") == "/usr/local/bin/blossom-physical-install"', installer_rule)
+        self.assertIn("Blossom OS Recovery Console", builder)
+        self.assertIn("vt.global_cursor_default=0", builder)
+        self.assertIn("blossom.recovery=1", live_profile)
+
+    def test_macos_builder_uses_an_isolated_x86_64_vm(self):
+        repository = Path(__file__).resolve().parents[1]
+        builder = (repository / "scripts/distribution/build_physical_candidate_macos.sh").read_text()
+        self.assertIn("colima start", builder)
+        self.assertIn("--arch x86_64", builder)
+        self.assertIn("--platform linux/amd64", builder)
+        self.assertIn("--dns 1.1.1.1", builder)
+        self.assertIn('--env "BLOSSOM_CANDIDATE_MODE=$mode"', builder)
+        self.assertIn("physical|vm-qualification", builder)
+        self.assertIn("archlinux@sha256:", builder)
+        self.assertIn("shasum -a 256 -c SHA256SUMS", builder)
 
     @patch("scripts.distribution.physical_candidate_install.os.geteuid", return_value=0)
     def test_prerequisite_cancellation_never_observes_devices(self, _geteuid):
