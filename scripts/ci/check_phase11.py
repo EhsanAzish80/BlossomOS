@@ -36,12 +36,14 @@ disposable_evidence = read("docs/PHASE_11_DISPOSABLE_EVIDENCE.md")
 candidate = read("scripts/distribution/physical_candidate_install.py")
 candidate_entrypoint = read("distribution/archiso/airootfs/usr/local/bin/blossom-physical-install")
 candidate_builder = read("scripts/distribution/build_physical_candidate.sh")
+candidate_image_verifier = read("scripts/distribution/verify_physical_candidate_image.sh")
 macos_candidate_builder = read("scripts/distribution/build_physical_candidate_macos.sh")
 candidate_workflow = read(".github/workflows/phase11-physical-candidate.yml")
 candidate_profile = read("distribution/archiso/profiledef.sh")
 candidate_packages = read("distribution/archiso/packages.x86_64")
 vm_workflow = read(".github/workflows/phase11-vm-install-qualification.yml")
 shell_package = read("distribution/packages/blossom-shell/PKGBUILD")
+core_package = read("distribution/packages/blossom-core/PKGBUILD")
 shell_unit = read("system/shell/packaging/blossom-shell-ui.service")
 recovery_unit = read("system/shell/packaging/blossom-shell-recovery.service")
 recovery_command = read("system/shell/packaging/blossom-shell-recovery")
@@ -50,6 +52,9 @@ shell_qml = read("system/shell/qml/shell.qml")
 broker_header = read("system/shell/client-plugin/blossombroker.h")
 broker_source = read("system/shell/client-plugin/blossombroker.cpp")
 installer_rule = read("distribution/archiso/airootfs/etc/polkit-1/rules.d/49-blossom-live-installer.rules")
+desktop_probe = read("distribution/archiso/airootfs/usr/local/bin/blossom-desktop-probe")
+desktop_probe_unit = read("distribution/archiso/airootfs/etc/systemd/system/blossom-desktop-probe.service")
+desktop_probe_link = ROOT / "distribution/archiso/airootfs/etc/systemd/system/multi-user.target.wants/blossom-desktop-probe.service"
 
 evidence_hashes = {
     "distribution/evidence/phase11-device-preflight-34460218314.json": "5de11cb6ab30605ef4bcda084d2d73994a94269f3e99e9ac436f19b9b1c32c3c",
@@ -265,11 +270,51 @@ for required in (
 ):
     if required not in candidate_workflow:
         fail(f"physical candidate workflow is incomplete: {required}")
+for required in (
+    "Boot exact candidate and require the graphical desktop",
+    "blossom.desktop-probe=1",
+    "BLOSSOM_DESKTOP_READY shell=active broker=active windows=2",
+    "-device virtio-vga",
+    "archisosearchuuid=$uuid",
+):
+    if required not in candidate_workflow:
+        fail(f"physical candidate graphical acceptance is incomplete: {required}")
+for required in (
+    "blossom-shell-ui.service",
+    "blossom-shell-service.service",
+    '"Blossom OS"',
+    '"Welcome to Blossom OS"',
+    "BLOSSOM_DESKTOP_FAILED",
+):
+    if required not in desktop_probe:
+        fail(f"physical candidate desktop probe is incomplete: {required}")
+if "ExecCondition=/usr/bin/grep -qw blossom.desktop-probe=1 /proc/cmdline" not in desktop_probe_unit:
+    fail("desktop probe must remain dormant outside explicit qualification boots")
+if not desktop_probe_link.is_symlink() or desktop_probe_link.readlink() != Path("../blossom-desktop-probe.service"):
+    fail("desktop probe is not enabled for the live qualification boot")
+for required in (
+    "verify_physical_candidate_image.sh",
+    "blossom-shell-service",
+    "blossom-shell-ui",
+    "blossom-start-session",
+    'test -x "$root/$path"',
+    "Welcome to Blossom OS",
+):
+    if required not in candidate_workflow and required not in candidate_image_verifier:
+        fail(f"physical candidate image verification is incomplete: {required}")
 for forbidden in ("pull_request:", "push:", "schedule:"):
     if forbidden in candidate_workflow:
         fail(f"physical candidate workflow gained an automatic trigger: {forbidden}")
 for required in (
     '["/root/.automated_script.sh"]="0:0:755"',
+    '["/usr/lib/blossom-os/blossom-shell-service"]="0:0:755"',
+    '["/usr/lib/blossom-os/blossom-model-gateway"]="0:0:755"',
+    '["/usr/lib/blossom-os/blossom-privileged-helper"]="0:0:755"',
+    '["/usr/lib/blossom-os/blossom-shell-ui"]="0:0:755"',
+    '["/usr/lib/blossom-os/blossom-desktop-launcher"]="0:0:755"',
+    '["/usr/local/bin/blossom-shell-recovery"]="0:0:755"',
+    '["/usr/local/bin/blossom-start-session"]="0:0:755"',
+    '["/usr/local/bin/blossom-desktop-probe"]="0:0:755"',
     '["/usr/local/bin/blossom-physical-install"]="0:0:755"',
     '["/usr/local/libexec/blossom-physical-install-backend"]="0:0:755"',
 ):
@@ -315,6 +360,12 @@ for required in (
     if required not in shell_package:
         fail(f"Blossom shell package omits installed desktop artifact: {required}")
 for required in (
+    "--package blossom-shell-service",
+    "--features production-dbus-service",
+):
+    if required not in core_package:
+        fail(f"Blossom core package builds an inactive shell broker: {required}")
+for required in (
     "ExecStart=/usr/lib/blossom-os/blossom-shell-ui",
     "Restart=on-failure",
     "NoNewPrivileges=yes",
@@ -327,6 +378,11 @@ for required in ("blossom-shell-recovery", "NoNewPrivileges=yes"):
         fail(f"Blossom shell recovery service is incomplete: {required}")
 if "restart-shell" not in recovery_command:
     fail("Blossom shell recovery command cannot restart the shell")
+session_command = read("system/shell/runtime/blossom-start-session")
+if "systemctl --user start blossom-shell-ui.service" not in session_command:
+    fail("desktop session does not start the concrete shell unit")
+if "start graphical-session.target" in session_command:
+    fail("desktop session attempts to manually start a protected systemd special target")
 for required in (
     "XCURSOR_THEME,Adwaita",
     "background_color = rgb(0b111b)",

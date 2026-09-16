@@ -13,6 +13,13 @@ build() {
   local repo_root="$startdir/../../.."
   CARGO_TARGET_DIR="$srcdir/target" \
     cargo build --locked --offline --release --manifest-path "$repo_root/Cargo.toml"
+  # The workspace default intentionally builds the shell broker inert. Release
+  # media must replace that artifact with the reviewed production D-Bus build.
+  CARGO_TARGET_DIR="$srcdir/target" \
+    cargo build --locked --offline --release \
+      --manifest-path "$repo_root/Cargo.toml" \
+      --package blossom-shell-service \
+      --features production-dbus-service
 }
 
 package() {

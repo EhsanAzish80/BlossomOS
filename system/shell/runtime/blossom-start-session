@@ -14,4 +14,7 @@ if [[ -n ${BLOSSOM_LIVE:-} ]]; then
   systemctl --user import-environment BLOSSOM_LIVE
 fi
 
-systemctl --user start graphical-session.target blossom-shell-ui.service
+# graphical-session.target is a systemd special target with RefuseManualStart.
+# The compositor owns this session's lifecycle, so start the concrete shell
+# unit and let its PartOf= relationship stop it with the graphical session.
+systemctl --user start blossom-shell-ui.service

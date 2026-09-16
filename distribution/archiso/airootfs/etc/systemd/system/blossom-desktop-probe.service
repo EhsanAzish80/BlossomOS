@@ -1,0 +1,14 @@
+[Unit]
+Description=Blossom OS exact-artifact graphical acceptance probe
+After=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecCondition=/usr/bin/grep -qw blossom.desktop-probe=1 /proc/cmdline
+ExecStart=/usr/local/bin/blossom-desktop-probe
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
