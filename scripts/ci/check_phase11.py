@@ -330,7 +330,7 @@ if "restart-shell" not in recovery_command:
 for required in (
     "XCURSOR_THEME,Adwaita",
     "background_color = rgb(0b111b)",
-    "systemctl --user start blossom-shell-ui.service",
+    "/usr/local/bin/blossom-start-session",
 ):
     if required not in live_hyprland:
         fail(f"live desktop startup is incomplete: {required}")

@@ -35,5 +35,7 @@ package() {
     "$pkgdir/usr/lib/systemd/user/blossom-shell-recovery.service"
   install -Dm0755 "$repo_root/system/shell/packaging/blossom-shell-recovery" \
     "$pkgdir/usr/local/bin/blossom-shell-recovery"
+  install -Dm0755 "$repo_root/system/shell/runtime/blossom-start-session" \
+    "$pkgdir/usr/local/bin/blossom-start-session"
   find "$pkgdir/usr/share/blossom-os/shell" -type f -exec chmod 0644 {} +
 }

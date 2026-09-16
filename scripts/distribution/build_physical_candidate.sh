@@ -94,6 +94,13 @@ cp "$repo/distribution/archiso/profiledef.sh" "$profile/profiledef.sh"
 cp "$repo/distribution/archiso/pacman.conf" "$profile/pacman.conf"
 cp "$repo/distribution/archiso/packages.x86_64" "$profile/packages.x86_64"
 cp -a "$repo/distribution/archiso/airootfs/." "$profile/airootfs/"
+# The live environment must contain the same reviewed Blossom packages as the
+# installable rootfs. Package metadata is pacman-only and is not part of the
+# live filesystem image.
+for package in "$packages"/blossom-core-*.pkg.tar.zst "$packages"/blossom-shell-*.pkg.tar.zst; do
+  bsdtar -xpf "$package" -C "$profile/airootfs" \
+    --exclude .BUILDINFO --exclude .MTREE --exclude .PKGINFO
+done
 uefi_entries=("$profile/efiboot/loader/entries/"*.conf)
 if ((${#uefi_entries[@]} == 0)); then
   echo "ArchISO profile has no UEFI boot entries" >&2
