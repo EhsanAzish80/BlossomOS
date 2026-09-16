@@ -45,7 +45,7 @@ cp "$build/source"/distribution/packages/blossom-core/blossom-core-*.pkg.tar.zst
 cp "$build/source"/distribution/packages/blossom-shell/blossom-shell-*.pkg.tar.zst "$packages/"
 
 pacstrap -K -C "$repo/distribution/archiso/pacman.conf" "$rootfs" \
-  base bluez bluez-utils brightnessctl bubblewrap dbus-broker dosfstools foot \
+  adwaita-cursors base bluez bluez-utils brightnessctl bubblewrap dbus-broker dosfstools foot \
   gptfdisk hyprland intel-ucode iwd linux-firmware linux-lts mesa networkmanager \
   noto-fonts noto-fonts-emoji openssh openssl pipewire pipewire-alsa pipewire-pulse polkit python quickshell \
   qt6-base qt6-declarative sof-firmware sudo systemd upower vulkan-intel wireplumber zstd
@@ -66,6 +66,9 @@ install -d -m 0755 "$rootfs/etc/systemd/system/getty@tty1.service.d"
 install -m 0644 "$rootfs/usr/share/blossom-os/physical-home/getty-autologin.conf" \
   "$rootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf"
 chown -R 1000:1000 "$rootfs/home/blossom"
+install -d -m 0755 "$rootfs/etc/systemd/user/graphical-session.target.wants"
+ln -sf /usr/lib/systemd/user/blossom-shell-ui.service \
+  "$rootfs/etc/systemd/user/graphical-session.target.wants/blossom-shell-ui.service"
 ln -sf /usr/lib/systemd/system/NetworkManager.service \
   "$rootfs/etc/systemd/system/multi-user.target.wants/NetworkManager.service"
 ln -sf /usr/lib/systemd/system/bluetooth.service \
@@ -90,6 +93,23 @@ cp -a /usr/share/archiso/configs/releng/. "$profile/"
 cp "$repo/distribution/archiso/profiledef.sh" "$profile/profiledef.sh"
 cp "$repo/distribution/archiso/pacman.conf" "$profile/pacman.conf"
 cp "$repo/distribution/archiso/packages.x86_64" "$profile/packages.x86_64"
+cp -a "$repo/distribution/archiso/airootfs/." "$profile/airootfs/"
+uefi_entries=("$profile/efiboot/loader/entries/"*.conf)
+if ((${#uefi_entries[@]} == 0)); then
+  echo "ArchISO profile has no UEFI boot entries" >&2
+  exit 1
+fi
+sed -i 's/^title .*/title Blossom OS Live/' "${uefi_entries[0]}"
+if ((${#uefi_entries[@]} > 1)); then
+  sed -i 's/^title .*/title Blossom OS Live (accessible speech)/' "${uefi_entries[1]}"
+fi
+recovery_entry="$profile/efiboot/loader/entries/90-blossom-recovery.conf"
+cp "${uefi_entries[0]}" "$recovery_entry"
+sed -i 's/^title .*/title Blossom OS Recovery Console/' "$recovery_entry"
+sed -i '/^options /s/$/ blossom.recovery=1/' "$recovery_entry"
+sed -i '/^options /s/$/ vt.global_cursor_default=0 quiet loglevel=3 rd.udev.log_level=3/' \
+  "${uefi_entries[@]}"
+sed -i -E 's/^timeout .*/timeout 5/' "$profile/efiboot/loader/loader.conf"
 sed -i -E 's/ archiso_pxe_(common|nbd|http|nfs)//g' \
   "$profile/airootfs/etc/mkinitcpio.conf.d/archiso.conf"
 sed -i 's/iso_application=.*/iso_application="Blossom OS physical qualification candidate"/' \

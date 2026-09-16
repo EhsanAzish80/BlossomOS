@@ -38,8 +38,8 @@ jobs:
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
             bash -euo pipefail -c '
               cp distribution/evidence/pacman-snapshot.conf /etc/pacman.conf
-              pacman -Syu --noconfirm arch-install-scripts archiso base-devel dosfstools \
-                gptfdisk python rust zstd
+              pacman -Syu --noconfirm arch-install-scripts archiso base-devel cmake dosfstools \
+                gptfdisk ninja python qt6-base qt6-declarative rust zstd
               scripts/distribution/build_physical_candidate.sh /candidate
             '
 

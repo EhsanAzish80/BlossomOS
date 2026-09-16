@@ -41,6 +41,15 @@ candidate_workflow = read(".github/workflows/phase11-physical-candidate.yml")
 candidate_profile = read("distribution/archiso/profiledef.sh")
 candidate_packages = read("distribution/archiso/packages.x86_64")
 vm_workflow = read(".github/workflows/phase11-vm-install-qualification.yml")
+shell_package = read("distribution/packages/blossom-shell/PKGBUILD")
+shell_unit = read("system/shell/packaging/blossom-shell-ui.service")
+recovery_unit = read("system/shell/packaging/blossom-shell-recovery.service")
+recovery_command = read("system/shell/packaging/blossom-shell-recovery")
+live_hyprland = read("distribution/archiso/airootfs/home/blossom/.config/hypr/hyprland.conf")
+shell_qml = read("system/shell/qml/shell.qml")
+broker_header = read("system/shell/client-plugin/blossombroker.h")
+broker_source = read("system/shell/client-plugin/blossombroker.cpp")
+installer_rule = read("distribution/archiso/airootfs/etc/polkit-1/rules.d/49-blossom-live-installer.rules")
 
 evidence_hashes = {
     "distribution/evidence/phase11-device-preflight-34460218314.json": "5de11cb6ab30605ef4bcda084d2d73994a94269f3e99e9ac436f19b9b1c32c3c",
@@ -238,6 +247,7 @@ for required in (
     "--vm-type qemu",
     "--platform linux/amd64",
     "--privileged",
+    "--dns 1.1.1.1",
     "archlinux@sha256:",
     "build_physical_candidate.sh /candidate",
     "shasum -a 256 -c SHA256SUMS",
@@ -292,6 +302,53 @@ for required in (
         fail(f"candidate builder does not use the repository-owned pacman configuration: {required}")
 if "syslinux" not in candidate_packages.splitlines():
     fail("candidate package list is missing syslinux required by the ArchISO memdisk hook")
+for required in ("adwaita-cursors", "foot", "noto-fonts", "noto-fonts-emoji"):
+    if required not in candidate_packages.splitlines():
+        fail(f"candidate package list is missing desktop dependency: {required}")
+for required in (
+    "client-build/blossom-shell-ui",
+    "/usr/lib/qt6/qml/Blossom/Shell",
+    "blossom-shell-ui.service",
+    "blossom-shell-recovery.service",
+    "/usr/local/bin/blossom-shell-recovery",
+):
+    if required not in shell_package:
+        fail(f"Blossom shell package omits installed desktop artifact: {required}")
+for required in (
+    "ExecStart=/usr/lib/blossom-os/blossom-shell-ui",
+    "Restart=on-failure",
+    "NoNewPrivileges=yes",
+    "OnFailure=blossom-shell-recovery.service",
+):
+    if required not in shell_unit:
+        fail(f"Blossom shell UI service is incomplete: {required}")
+for required in ("blossom-shell-recovery", "NoNewPrivileges=yes"):
+    if required not in recovery_unit:
+        fail(f"Blossom shell recovery service is incomplete: {required}")
+if "restart-shell" not in recovery_command:
+    fail("Blossom shell recovery command cannot restart the shell")
+for required in (
+    "XCURSOR_THEME,Adwaita",
+    "background_color = rgb(0b111b)",
+    "systemctl --user start blossom-shell-ui.service",
+):
+    if required not in live_hyprland:
+        fail(f"live desktop startup is incomplete: {required}")
+for required in ("Welcome to Blossom OS", "Install Blossom OS", "External disks are excluded"):
+    if required not in shell_qml:
+        fail(f"Blossom welcome surface is incomplete: {required}")
+for required in ("liveEnvironment", "openTerminal", "openInstaller"):
+    if required not in broker_header:
+        fail(f"Blossom shell broker action is missing: {required}")
+for required in ("/usr/bin/foot", "/usr/bin/pkexec", "/usr/local/bin/blossom-physical-install"):
+    if required not in broker_source:
+        fail(f"Blossom shell broker command is missing: {required}")
+for required in ('subject.user == "blossom"', 'action.lookup("program") == "/usr/local/bin/blossom-physical-install"'):
+    if required not in installer_rule:
+        fail(f"live installer privilege boundary is incomplete: {required}")
+for required in ("Blossom OS Recovery Console", "vt.global_cursor_default=0", "blossom.recovery=1"):
+    if required not in candidate_builder:
+        fail(f"candidate boot experience is incomplete: {required}")
 for forbidden in ("MacBookPro11,1", "APPLE SSD", "/dev/sda", "pull_request:", "push:", "schedule:"):
     if forbidden in vm_workflow:
         fail(f"generic VM qualification workflow is hardware-specific or automatic: {forbidden}")

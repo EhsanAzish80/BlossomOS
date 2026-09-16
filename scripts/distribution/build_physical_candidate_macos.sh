@@ -3,9 +3,15 @@ set -euo pipefail
 
 repo=$(cd "$(dirname "$0")/../.." && pwd -P)
 output=${1:-"$repo/.local-phase11-macos"}
+mode=${BLOSSOM_CANDIDATE_MODE:-physical}
 profile=${BLOSSOM_COLIMA_PROFILE:-blossom-x86}
 context="colima-$profile"
 image='archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34'
+
+case "$mode" in
+  physical|vm-qualification) ;;
+  *) echo "error: BLOSSOM_CANDIDATE_MODE must be physical or vm-qualification" >&2; exit 2 ;;
+esac
 
 if [[ $(uname -s) != Darwin ]]; then
   echo "error: this entrypoint is for macOS" >&2
@@ -53,14 +59,16 @@ trap cleanup EXIT INT TERM
 docker --context "$context" volume create "$volume" >/dev/null
 
 docker --context "$context" run --name "$container" --platform linux/amd64 --privileged \
+  --dns 1.1.1.1 \
+  --env "BLOSSOM_CANDIDATE_MODE=$mode" \
   --volume "$repo:/workspace:ro" \
   --mount "type=volume,source=$volume,target=/candidate" \
   --workdir /workspace \
   "$image" \
   bash -euo pipefail -c '
     cp distribution/evidence/pacman-snapshot.conf /etc/pacman.conf
-    pacman -Syu --noconfirm arch-install-scripts archiso base-devel dosfstools \
-      gptfdisk python rust zstd
+    pacman -Syu --noconfirm arch-install-scripts archiso base-devel cmake dosfstools \
+      gptfdisk ninja python qt6-base qt6-declarative rust zstd
     scripts/distribution/build_physical_candidate.sh /candidate
   '
 
@@ -72,4 +80,4 @@ docker --context "$context" cp "$container:/candidate/iso/." "$output/iso"
   shasum -a 256 -c SHA256SUMS
 )
 
-echo "Candidate ready: $output/iso"
+echo "Candidate ready ($mode): $output/iso"

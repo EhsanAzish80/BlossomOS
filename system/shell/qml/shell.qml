@@ -35,6 +35,100 @@ ApplicationWindow {
         requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
     }
 
+    ApplicationWindow {
+        id: welcomeWindow
+        visible: true
+        width: Math.min(760, screen ? screen.width - 64 : 760)
+        height: Math.min(500, screen ? screen.height - 116 : 500)
+        x: screen ? Math.round((screen.width - width) / 2) : 32
+        y: screen ? Math.round((screen.height - height) / 2) : 84
+        color: "#111823"
+        title: "Welcome to Blossom OS"
+
+        Rectangle {
+            anchors.fill: parent
+            color: "#111823"
+            border.color: "#31435c"
+            border.width: 1
+            radius: 16
+
+            Column {
+                anchors {
+                    fill: parent
+                    margins: 48
+                }
+                spacing: 22
+
+                Label {
+                    color: "#8dd7c7"
+                    font.pixelSize: 15
+                    font.bold: true
+                    text: BlossomBroker.liveEnvironment ? "LIVE SESSION" : "BLOSSOM OS"
+                }
+
+                Label {
+                    width: parent.width
+                    color: "#f4f7fb"
+                    font.pixelSize: 36
+                    font.bold: true
+                    wrapMode: Text.WordWrap
+                    text: BlossomBroker.liveEnvironment
+                        ? "Welcome to Blossom OS"
+                        : "Your local-first workspace is ready"
+                }
+
+                Label {
+                    width: parent.width
+                    color: "#b8c4d6"
+                    font.pixelSize: 17
+                    lineHeight: 1.25
+                    wrapMode: Text.WordWrap
+                    text: BlossomBroker.liveEnvironment
+                        ? "Explore the desktop without changing this computer. When you are ready, the installer will identify the internal target and require an exact confirmation before writing anything."
+                        : "The desktop shell is running. Open a terminal with the button below or press Super + Enter."
+                }
+
+                Row {
+                    spacing: 14
+
+                    Button {
+                        text: "Open terminal"
+                        activeFocusOnTab: true
+                        Accessible.name: text
+                        Accessible.description: "Open the Blossom OS terminal."
+                        onClicked: BlossomBroker.openTerminal()
+                    }
+
+                    Button {
+                        visible: BlossomBroker.liveEnvironment
+                        text: "Install Blossom OS"
+                        activeFocusOnTab: true
+                        Accessible.name: text
+                        Accessible.description: "Open the guarded Blossom OS installer."
+                        onClicked: BlossomBroker.openInstaller()
+                    }
+
+                    Button {
+                        text: "Continue to desktop"
+                        activeFocusOnTab: true
+                        Accessible.name: text
+                        onClicked: welcomeWindow.hide()
+                    }
+                }
+
+                Label {
+                    width: parent.width
+                    color: "#8190a5"
+                    font.pixelSize: 14
+                    wrapMode: Text.WordWrap
+                    text: BlossomBroker.liveEnvironment
+                        ? "Installation is never automatic. External disks are excluded from installation targets."
+                        : "System status remains available in the bar at the top of the screen."
+                }
+            }
+        }
+    }
+
     Connections {
         target: BlossomBroker
         function onStateChanged() {

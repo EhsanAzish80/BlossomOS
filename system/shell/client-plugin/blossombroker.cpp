@@ -7,6 +7,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QFileInfo>
+#include <QProcess>
 
 #include <chrono>
 
@@ -63,6 +65,24 @@ QVariantMap BlossomBroker::preview() const { return m_preview; }
 QVariantList BlossomBroker::activity() const { return m_activity; }
 QVariantMap BlossomBroker::battery() const { return m_battery; }
 QVariantMap BlossomBroker::network() const { return m_network; }
+bool BlossomBroker::liveEnvironment() const {
+    return QFileInfo::exists(QStringLiteral("/run/archiso/airootfs"));
+}
+
+void BlossomBroker::openTerminal() {
+    QProcess::startDetached(QStringLiteral("/usr/bin/foot"), {});
+}
+
+void BlossomBroker::openInstaller() {
+    if (!liveEnvironment()) {
+        return;
+    }
+    QProcess::startDetached(
+        QStringLiteral("/usr/bin/foot"),
+        {QStringLiteral("--title=Install Blossom OS"),
+         QStringLiteral("/usr/bin/pkexec"),
+         QStringLiteral("/usr/local/bin/blossom-physical-install")});
+}
 
 void BlossomBroker::requestSystemUname() {
     if (m_state == QStringLiteral("requesting") || m_state == QStringLiteral("waiting") ||

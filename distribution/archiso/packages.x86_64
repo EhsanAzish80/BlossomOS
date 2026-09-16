@@ -1,3 +1,4 @@
+adwaita-cursors
 base
 linux
 linux-firmware
@@ -6,13 +7,17 @@ systemd
 syslinux
 dbus-broker
 bubblewrap
+foot
 hyprland
 quickshell
 qt6-base
 qt6-declarative
+noto-fonts
+noto-fonts-emoji
 zsh
 python
 openssl
+polkit
 openssh
 parted
 arch-install-scripts

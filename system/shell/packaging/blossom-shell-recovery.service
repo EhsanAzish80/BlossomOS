@@ -1,0 +1,12 @@
+[Unit]
+Description=Blossom OS shell recovery surface
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/foot --title=Blossom Shell Recovery /usr/local/bin/blossom-shell-recovery
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+RestrictSUIDSGID=yes
+LockPersonality=yes

@@ -16,6 +16,7 @@ class BlossomBroker final : public QObject {
     Q_PROPERTY(QVariantList activity READ activity NOTIFY activityChanged FINAL)
     Q_PROPERTY(QVariantMap battery READ battery NOTIFY batteryChanged FINAL)
     Q_PROPERTY(QVariantMap network READ network NOTIFY networkChanged FINAL)
+    Q_PROPERTY(bool liveEnvironment READ liveEnvironment CONSTANT FINAL)
 
 public:
     explicit BlossomBroker(QObject *parent = nullptr);
@@ -25,6 +26,7 @@ public:
     [[nodiscard]] QVariantList activity() const;
     [[nodiscard]] QVariantMap battery() const;
     [[nodiscard]] QVariantMap network() const;
+    [[nodiscard]] bool liveEnvironment() const;
 
     Q_INVOKABLE void requestSystemUname();
     Q_INVOKABLE void approveOnce();
@@ -33,6 +35,8 @@ public:
     Q_INVOKABLE void refreshActivity(qulonglong afterSequence = 0, bool hasCursor = false);
     Q_INVOKABLE void refreshBattery();
     Q_INVOKABLE void refreshNetwork();
+    Q_INVOKABLE void openTerminal();
+    Q_INVOKABLE void openInstaller();
 
 signals:
     void stateChanged();
