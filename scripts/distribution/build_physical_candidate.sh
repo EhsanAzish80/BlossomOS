@@ -46,9 +46,10 @@ cp "$build/source"/distribution/packages/blossom-shell/blossom-shell-*.pkg.tar.z
 
 pacstrap -K -C "$repo/distribution/archiso/pacman.conf" "$rootfs" \
   adwaita-cursors base bluez bluez-utils brightnessctl bubblewrap dbus-broker dosfstools foot \
-  gptfdisk hyprland intel-ucode iwd linux-firmware linux-lts mesa networkmanager \
-  noto-fonts noto-fonts-emoji openssh openssl pipewire pipewire-alsa pipewire-pulse polkit python quickshell \
-  qt6-base qt6-declarative sof-firmware sudo systemd upower vulkan-intel wireplumber zstd
+  firefox gptfdisk gvfs hyprland intel-ucode iwd linux-firmware linux-lts mesa mousepad networkmanager \
+  network-manager-applet noto-fonts noto-fonts-emoji openssh openssl pavucontrol pipewire pipewire-alsa \
+  pipewire-pulse polkit python quickshell qt6-base qt6-declarative sof-firmware sudo systemd thunar \
+  tumbler upower vulkan-intel wireplumber zstd
 pacman --root "$rootfs" --config /etc/pacman.conf --noconfirm -U "$packages"/*.pkg.tar.zst
 
 cp -a "$repo/distribution/physical-rootfs/." "$rootfs/"

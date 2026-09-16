@@ -37,6 +37,13 @@ public:
     Q_INVOKABLE void refreshNetwork();
     Q_INVOKABLE void openTerminal();
     Q_INVOKABLE void openInstaller();
+    Q_INVOKABLE void openFiles();
+    Q_INVOKABLE void openBrowser();
+    Q_INVOKABLE void openEditor();
+    Q_INVOKABLE void openNetworkSettings();
+    Q_INVOKABLE void openAudioSettings();
+    Q_INVOKABLE void restartSystem();
+    Q_INVOKABLE void powerOff();
 
 signals:
     void stateChanged();
@@ -46,6 +53,7 @@ signals:
     void networkChanged();
 
 private:
+    void launchDesktop(const QString &action);
     void armExpiryTimer();
     void submitDecision(const QString &decision);
     void handleOutcome(const QByteArray &bytes);

@@ -340,9 +340,9 @@ for required in ("Welcome to Blossom OS", "Install Blossom OS", "External disks 
 for required in ("liveEnvironment", "openTerminal", "openInstaller"):
     if required not in broker_header:
         fail(f"Blossom shell broker action is missing: {required}")
-for required in ("/usr/bin/foot", "/usr/bin/pkexec", "/usr/local/bin/blossom-physical-install"):
+for required in ("openTerminal", "openInstaller", 'QStringLiteral("Launch1")'):
     if required not in broker_source:
-        fail(f"Blossom shell broker command is missing: {required}")
+        fail(f"Blossom shell broker action is missing: {required}")
 for required in ('subject.user == "blossom"', 'action.lookup("program") == "/usr/local/bin/blossom-physical-install"'):
     if required not in installer_rule:
         fail(f"live installer privilege boundary is incomplete: {required}")

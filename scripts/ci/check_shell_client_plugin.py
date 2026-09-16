@@ -25,6 +25,9 @@ def main() -> None:
         '"ReadActivity1"',
         '"ReadBatterySummary1"',
         '"ReadNetworkConnectivity1"',
+        '"org.blossomos.Desktop1"',
+        '"/org/blossomos/Desktop1"',
+        'QStringLiteral("Launch1")',
         'constexpr quint16 ProtocolVersion = 1',
         'constexpr quint16 ActivityLimit = 64',
     ]:
@@ -44,7 +47,7 @@ def main() -> None:
     ]:
         require(forbidden not in text, f"forbidden client authority: {forbidden}")
     header = (PLUGIN / "blossombroker.h").read_text()
-    require(header.count("Q_INVOKABLE") == 7, "client invokable surface drift")
+    require(header.count("Q_INVOKABLE") == 16, "client invokable surface drift")
     client = (PLUGIN / "blossombroker.cpp").read_text()
     require(client.count("QVariant::fromValue(ProtocolVersion)") == 4,
             "all version arguments must preserve unsigned 16-bit wire type")

@@ -10,5 +10,8 @@ systemctl --user import-environment \
   XDG_CURRENT_DESKTOP \
   XDG_SESSION_DESKTOP \
   XDG_SESSION_TYPE
+if [[ -n ${BLOSSOM_LIVE:-} ]]; then
+  systemctl --user import-environment BLOSSOM_LIVE
+fi
 
 systemctl --user start graphical-session.target blossom-shell-ui.service

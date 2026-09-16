@@ -1,29 +1,31 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Layouts
 import QtQuick.Window
 import Blossom.Shell
 
 ApplicationWindow {
-    id: commandBar
+    id: shellBar
     visible: true
-    x: 0
-    y: 0
-    width: screen ? screen.width : 800
-    height: 52
+    x: 0; y: 0
+    width: screen ? screen.width : 1280
+    height: 58
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
-    color: "#11151c"
+    color: "#f2171d27"
     title: "Blossom OS"
+    property string clockText: Qt.formatDateTime(new Date(), "ddd HH:mm")
 
-    function restoreRequestFocus() {
-        if (requestButton.enabled) {
-            commandBar.requestActivate()
-            requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
-        }
+    Timer {
+        interval: 30000
+        running: true
+        repeat: true
+        onTriggered: shellBar.clockText = Qt.formatDateTime(new Date(), "ddd HH:mm")
     }
 
-    onActiveChanged: {
-        if (active && requestButton.enabled) {
-            requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
+    function restoreRequestFocus() {
+        if (agentButton.enabled) {
+            shellBar.requestActivate()
+            agentButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
         }
     }
 
@@ -31,100 +33,163 @@ ApplicationWindow {
         BlossomBroker.refreshActivity()
         BlossomBroker.refreshBattery()
         BlossomBroker.refreshNetwork()
-        requestActivate()
-        requestButton.forceActiveFocus(Qt.ActiveWindowFocusReason)
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: "#f2171d27"
+        border.color: "#2e3a4b"
+        border.width: 1
+        RowLayout {
+            anchors { fill: parent; leftMargin: 12; rightMargin: 12 }
+            spacing: 10
+            Button {
+                text: "Applications"
+                activeFocusOnTab: true
+                Accessible.description: "Open the Blossom OS application launcher."
+                onClicked: {
+                    launcherWindow.visible = !launcherWindow.visible
+                    if (launcherWindow.visible) launcherWindow.requestActivate()
+                }
+            }
+            Label { text: "Blossom OS"; color: "#f4f7fb"; font.bold: true; font.pixelSize: 17 }
+            Item { Layout.fillWidth: true }
+            Label {
+                text: "Network: " + BlossomBroker.network.connectivity
+                color: BlossomBroker.network.connectivity === "offline" ? "#ff9b93" : "#b8c4d6"
+                Accessible.name: text
+            }
+            Label {
+                text: BlossomBroker.battery.status === "present"
+                    ? "Battery: " + BlossomBroker.battery.percentage + "%"
+                    : BlossomBroker.battery.status === "absent" ? "AC power" : "Battery unavailable"
+                color: "#b8c4d6"
+                Accessible.name: text
+            }
+            Button {
+                text: "Activity"
+                onClicked: activityPanel.visible = !activityPanel.visible
+                Accessible.description: "Show or hide authoritative agent activity."
+            }
+            Button {
+                id: agentButton
+                text: "Agent check"
+                Accessible.name: "Request kernel identity"
+                enabled: !["requesting", "waiting", "submitting", "cancelling"].includes(BlossomBroker.state)
+                onClicked: BlossomBroker.requestSystemUname()
+                Accessible.description: "Request the fixed kernel identity diagnostic."
+            }
+            Label { text: shellBar.clockText; color: "#f4f7fb"; Accessible.name: text }
+            Label {
+                text: BlossomBroker.state === "idle" ? "Ready" : BlossomBroker.state
+                color: BlossomBroker.state === "unavailable" ? "#ff9b93" : "#8dd7c7"
+                Accessible.role: Accessible.AlertMessage
+                Accessible.name: "Agent status: " + text
+            }
+        }
+    }
+
+    ApplicationWindow {
+        id: launcherWindow
+        visible: false
+        x: 12; y: 66
+        width: Math.min(520, screen ? screen.width - 24 : 520)
+        height: Math.min(570, screen ? screen.height - 84 : 570)
+        flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+        color: "#f2171d27"
+        title: "Applications"
+        Rectangle {
+            anchors.fill: parent
+            color: "#171d27"
+            border.color: "#3b4a60"
+            border.width: 1
+            radius: 16
+            ColumnLayout {
+                anchors { fill: parent; margins: 24 }
+                spacing: 14
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label { Layout.fillWidth: true; text: "Applications"; color: "#f4f7fb"; font.pixelSize: 26; font.bold: true }
+                    Button { text: "Close"; onClicked: launcherWindow.hide() }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: "Work, browse, manage files, and configure this computer."
+                    color: "#aebbd0"; wrapMode: Text.WordWrap
+                }
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: 2
+                    columnSpacing: 12; rowSpacing: 12
+                    Button { Layout.fillWidth: true; text: "Files"; Accessible.ignored: false; onClicked: { BlossomBroker.openFiles(); launcherWindow.hide() } }
+                    Button { Layout.fillWidth: true; text: "Web Browser"; Accessible.ignored: false; onClicked: { BlossomBroker.openBrowser(); launcherWindow.hide() } }
+                    Button { Layout.fillWidth: true; text: "Text Editor"; Accessible.ignored: false; onClicked: { BlossomBroker.openEditor(); launcherWindow.hide() } }
+                    Button { Layout.fillWidth: true; text: "Terminal"; Accessible.ignored: false; onClicked: { BlossomBroker.openTerminal(); launcherWindow.hide() } }
+                    Button { Layout.fillWidth: true; text: "Network Settings"; Accessible.ignored: false; onClicked: { BlossomBroker.openNetworkSettings(); launcherWindow.hide() } }
+                    Button { Layout.fillWidth: true; text: "Audio Settings"; Accessible.ignored: false; onClicked: { BlossomBroker.openAudioSettings(); launcherWindow.hide() } }
+                }
+                Rectangle { Layout.fillWidth: true; height: 1; color: "#334155" }
+                Button {
+                    Layout.fillWidth: true
+                    visible: BlossomBroker.liveEnvironment
+                    text: "Install Blossom OS"
+                    onClicked: { BlossomBroker.openInstaller(); launcherWindow.hide() }
+                    Accessible.description: "Open the guarded installer. No disk is changed automatically."
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Button { Layout.fillWidth: true; text: "Restart"; onClicked: { launcherWindow.hide(); restartDialog.open() } }
+                    Button { Layout.fillWidth: true; text: "Shut Down"; onClicked: { launcherWindow.hide(); shutdownDialog.open() } }
+                }
+                Label {
+                    Layout.fillWidth: true; Layout.fillHeight: true
+                    verticalAlignment: Text.AlignBottom
+                    text: BlossomBroker.liveEnvironment
+                        ? "Live session · External disks are excluded from installation targets, and installation requires a separate exact confirmation."
+                        : "Installed system · your files remain local by default."
+                    color: "#8190a5"; wrapMode: Text.WordWrap
+                }
+            }
+        }
     }
 
     ApplicationWindow {
         id: welcomeWindow
         visible: true
-        width: Math.min(760, screen ? screen.width - 64 : 760)
-        height: Math.min(500, screen ? screen.height - 116 : 500)
+        width: Math.min(780, screen ? screen.width - 64 : 780)
+        height: Math.min(510, screen ? screen.height - 116 : 510)
         x: screen ? Math.round((screen.width - width) / 2) : 32
         y: screen ? Math.round((screen.height - height) / 2) : 84
         color: "#111823"
         title: "Welcome to Blossom OS"
-
         Rectangle {
             anchors.fill: parent
             color: "#111823"
-            border.color: "#31435c"
-            border.width: 1
-            radius: 16
-
-            Column {
-                anchors {
-                    fill: parent
-                    margins: 48
-                }
-                spacing: 22
-
+            border.color: "#31435c"; border.width: 1; radius: 18
+            ColumnLayout {
+                anchors { fill: parent; margins: 48 }
+                spacing: 20
+                Label { text: BlossomBroker.liveEnvironment ? "LIVE SESSION" : "BLOSSOM OS"; color: "#8dd7c7"; font.bold: true }
                 Label {
-                    color: "#8dd7c7"
-                    font.pixelSize: 15
-                    font.bold: true
-                    text: BlossomBroker.liveEnvironment ? "LIVE SESSION" : "BLOSSOM OS"
+                    Layout.fillWidth: true
+                    text: BlossomBroker.liveEnvironment ? "Welcome to Blossom OS" : "Your workspace is ready"
+                    color: "#f4f7fb"; font.pixelSize: 38; font.bold: true; wrapMode: Text.WordWrap
                 }
-
                 Label {
-                    width: parent.width
-                    color: "#f4f7fb"
-                    font.pixelSize: 36
-                    font.bold: true
-                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
                     text: BlossomBroker.liveEnvironment
-                        ? "Welcome to Blossom OS"
-                        : "Your local-first workspace is ready"
+                        ? "Try the browser, files, editor, terminal, network, and audio tools without changing this computer. Install only when you choose the guarded installer."
+                        : "Open Applications to browse, work with files, adjust settings, or use the local-first agent surfaces."
+                    color: "#b8c4d6"; font.pixelSize: 17; wrapMode: Text.WordWrap
                 }
-
-                Label {
-                    width: parent.width
-                    color: "#b8c4d6"
-                    font.pixelSize: 17
-                    lineHeight: 1.25
-                    wrapMode: Text.WordWrap
-                    text: BlossomBroker.liveEnvironment
-                        ? "Explore the desktop without changing this computer. When you are ready, the installer will identify the internal target and require an exact confirmation before writing anything."
-                        : "The desktop shell is running. Open a terminal with the button below or press Super + Enter."
+                RowLayout {
+                    spacing: 12
+                    Button { text: "Explore applications"; onClicked: { welcomeWindow.hide(); launcherWindow.show(); launcherWindow.requestActivate() } }
+                    Button { text: "Open terminal"; onClicked: BlossomBroker.openTerminal() }
+                    Button { visible: BlossomBroker.liveEnvironment; text: "Install"; onClicked: BlossomBroker.openInstaller() }
                 }
-
-                Row {
-                    spacing: 14
-
-                    Button {
-                        text: "Open terminal"
-                        activeFocusOnTab: true
-                        Accessible.name: text
-                        Accessible.description: "Open the Blossom OS terminal."
-                        onClicked: BlossomBroker.openTerminal()
-                    }
-
-                    Button {
-                        visible: BlossomBroker.liveEnvironment
-                        text: "Install Blossom OS"
-                        activeFocusOnTab: true
-                        Accessible.name: text
-                        Accessible.description: "Open the guarded Blossom OS installer."
-                        onClicked: BlossomBroker.openInstaller()
-                    }
-
-                    Button {
-                        text: "Continue to desktop"
-                        activeFocusOnTab: true
-                        Accessible.name: text
-                        onClicked: welcomeWindow.hide()
-                    }
-                }
-
-                Label {
-                    width: parent.width
-                    color: "#8190a5"
-                    font.pixelSize: 14
-                    wrapMode: Text.WordWrap
-                    text: BlossomBroker.liveEnvironment
-                        ? "Installation is never automatic. External disks are excluded from installation targets."
-                        : "System status remains available in the bar at the top of the screen."
-                }
+                Item { Layout.fillHeight: true }
+                Label { Layout.fillWidth: true; text: "Tip: press Super + Enter at any time for a terminal."; color: "#8190a5"; wrapMode: Text.WordWrap }
             }
         }
     }
@@ -132,97 +197,26 @@ ApplicationWindow {
     Connections {
         target: BlossomBroker
         function onStateChanged() {
-            if (BlossomBroker.state !== "waiting"
-                    && BlossomBroker.state !== "submitting"
-                    && BlossomBroker.state !== "cancelling") {
-                // Let the modal visibility binding unmap its Wayland surface
-                // before returning activation to the command bar.
-                Qt.callLater(commandBar.restoreRequestFocus)
-            }
+            if (!["waiting", "submitting", "cancelling"].includes(BlossomBroker.state))
+                Qt.callLater(shellBar.restoreRequestFocus)
         }
     }
-
-    Row {
-        anchors {
-            fill: parent
-            leftMargin: 18
-            rightMargin: 18
-        }
-        spacing: 16
-        Accessible.role: Accessible.Grouping
-        Accessible.name: "Blossom OS controls"
-        Accessible.ignored: false
-
-        Label {
-            anchors.verticalCenter: parent.verticalCenter
-            color: "#f4f7fb"
-            font.bold: true
-            text: "Blossom OS"
-        }
-
-        Label {
-            anchors.verticalCenter: parent.verticalCenter
-            color: "#b8c4d6"
-            text: "Network: " + BlossomBroker.network.connectivity
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
-            Accessible.ignored: false
-        }
-
-        Label {
-            anchors.verticalCenter: parent.verticalCenter
-            color: "#b8c4d6"
-            text: BlossomBroker.battery.status === "present"
-                ? "Battery: " + BlossomBroker.battery.percentage + "% (" + BlossomBroker.battery.state + ")"
-                : BlossomBroker.battery.status === "absent" ? "Battery: none" : "Battery: unavailable"
-            Accessible.role: Accessible.StaticText
-            Accessible.name: text
-            Accessible.ignored: false
-        }
-
-        Button {
-            id: requestButton
-            anchors.verticalCenter: parent.verticalCenter
-            text: "Request kernel identity"
-            enabled: BlossomBroker.state !== "requesting"
-                && BlossomBroker.state !== "waiting"
-                && BlossomBroker.state !== "submitting"
-                && BlossomBroker.state !== "cancelling"
-            activeFocusOnTab: true
-            KeyNavigation.tab: refreshButton
-            KeyNavigation.backtab: refreshButton
-            Accessible.name: text
-            Accessible.description: "Request the fixed kernel identity diagnostic."
-            Accessible.role: Accessible.Button
-            Accessible.ignored: false
-            onClicked: BlossomBroker.requestSystemUname()
-        }
-
-        Label {
-            id: statusLabel
-            anchors.verticalCenter: parent.verticalCenter
-            color: BlossomBroker.state === "unavailable" ? "#ff8a80" : "#b8c4d6"
-            text: "Status: " + BlossomBroker.state
-            Accessible.role: Accessible.AlertMessage
-            Accessible.name: text
-            Accessible.ignored: false
-        }
-
-        Button {
-            id: refreshButton
-            anchors.verticalCenter: parent.verticalCenter
-            text: "Refresh activity"
-            activeFocusOnTab: true
-            KeyNavigation.tab: requestButton
-            KeyNavigation.backtab: requestButton
-            Accessible.name: text
-            Accessible.description: "Refresh the bounded authoritative activity list."
-            Accessible.role: Accessible.Button
-            Accessible.ignored: false
-            onClicked: BlossomBroker.refreshActivity()
-        }
+    Dialog {
+        id: restartDialog
+        title: "Restart Blossom OS?"
+        modal: true
+        standardButtons: Dialog.Cancel | Dialog.Ok
+        onAccepted: BlossomBroker.restartSystem()
+        Label { text: "Close your work before restarting."; color: "#f4f7fb" }
     }
-
+    Dialog {
+        id: shutdownDialog
+        title: "Shut down Blossom OS?"
+        modal: true
+        standardButtons: Dialog.Cancel | Dialog.Ok
+        onAccepted: BlossomBroker.powerOff()
+        Label { text: "Close your work before shutting down."; color: "#f4f7fb" }
+    }
     ApprovalPanel {}
-    ActivityPanel {}
+    ActivityPanel { id: activityPanel }
 }

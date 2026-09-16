@@ -495,6 +495,14 @@ until a separate fail-closed disk-safety increment is reviewed and tested.
   x86_64 candidate build, plus a checksum-first macOS/Linux media creator with
   external-disk filtering, exact identity confirmation, re-observation, and
   byte-for-byte post-write verification. Windows media creation remains open.
+- [x] Add the minimum coherent desktop surface before another physical image:
+  first-run guidance, application launcher, browser, files, editor, terminal,
+  network and audio settings, session controls, workspaces, status, guarded
+  installer entry, and a local Apple-silicon x86_64 emulation launcher.
+- [ ] Pass the desktop usability matrix in a fresh generic VM: every fixed app
+  action launches, welcome and launcher remain readable at 1280x720, keyboard
+  window/workspace controls work, live installation stays explicit, and
+  restart/shutdown confirmations behave correctly.
 - [ ] Prove installation, boot, essential hardware surfaces, update rollback,
   and recovery on the frozen physical target.
 - [ ] Publish an independent Phase 11 exit audit and exact limitations.

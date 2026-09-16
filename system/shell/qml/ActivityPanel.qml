@@ -5,7 +5,7 @@ import QtQuick.Window
 import Blossom.Shell
 
 Window {
-    visible: true
+    visible: false
     width: Math.min(340, screen ? screen.width : 800)
     height: Math.max(1, (screen ? screen.height : 600) - 60)
     x: Math.max(0, (screen ? screen.width : 800) - width)

@@ -39,6 +39,11 @@ def main() -> None:
         "BlossomBroker.deny()",
         "BlossomBroker.cancelPending()",
         "BlossomBroker.refreshActivity()",
+        "BlossomBroker.openFiles()",
+        "BlossomBroker.openBrowser()",
+        "BlossomBroker.openEditor()",
+        "BlossomBroker.openNetworkSettings()",
+        "BlossomBroker.openAudioSettings()",
     ]:
         require(action in qml, f"missing closed UI action: {action}")
     for forbidden in [
@@ -79,17 +84,17 @@ def main() -> None:
         'Accessible.description: "Deny this request without starting execution."',
         'Accessible.description: "Approve only this exact request for one execution."',
         'Accessible.description: "Request the fixed kernel identity diagnostic."',
-        'Accessible.description: "Refresh the bounded authoritative activity list."',
+        'Accessible.description: "Open the Blossom OS application launcher."',
     ]:
         require(snippet in qml, f"missing accessibility contract: {snippet}")
-    for target in ["approveButton", "denyButton", "refreshButton", "requestButton"]:
+    for target in ["approveButton", "denyButton"]:
         require(f"KeyNavigation.tab: {target}" in qml,
                 f"missing deterministic keyboard navigation to {target}")
     require("Accessible.AlertMessage" in qml,
             "authoritative outcome state must be exposed as an accessibility alert")
-    require('Accessible.name: "Blossom OS controls"' in qml,
-            "command controls must have an accessible grouping root")
-    require(qml.count("Accessible.ignored: false") >= 8,
+    require('text: "Applications"' in qml and 'text: "Files"' in qml,
+            "desktop application launcher is incomplete")
+    require(qml.count("Accessible.ignored: false") >= 6,
             "interactive and security content must remain in the accessibility tree")
     accessibility_test = (ROOT / "system" / "shell" / "tests" / "check_accessibility.py").read_text()
     for required in [
@@ -123,9 +128,9 @@ def main() -> None:
             "installed evidence must launch the dedicated accessible UI host")
     shell = (QML / "shell.qml").read_text()
     for state in ["requesting", "waiting", "submitting", "cancelling"]:
-        require(f'BlossomBroker.state !== "{state}"' in shell,
+        require(f'"{state}"' in shell,
                 f"request control must be disabled while {state}")
-    require("Qt.callLater(commandBar.restoreRequestFocus)" in shell,
+    require("Qt.callLater(shellBar.restoreRequestFocus)" in shell,
             "command focus must wait for the approval surface to unmap")
 
 

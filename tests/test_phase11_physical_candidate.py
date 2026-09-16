@@ -93,11 +93,16 @@ class PhysicalCandidateTests(unittest.TestCase):
         shell_qml = (repository / "system/shell/qml/shell.qml").read_text()
         broker_header = (repository / "system/shell/client-plugin/blossombroker.h").read_text()
         broker_source = (repository / "system/shell/client-plugin/blossombroker.cpp").read_text()
+        desktop_launcher = (repository / "system/desktop-launcher/main.cpp").read_text()
+        desktop_unit = (repository / "system/desktop-launcher/blossom-desktop-launcher.service").read_text()
         installer_rule = (repository / "distribution/archiso/airootfs/etc/polkit-1/rules.d/49-blossom-live-installer.rules").read_text()
         self.assertIn("noto-fonts", builder)
         self.assertIn("noto-fonts-emoji", builder)
         for package in ("adwaita-cursors", "foot", "noto-fonts", "noto-fonts-emoji"):
             self.assertIn(f"\n{package}\n", f"\n{packages}")
+        for package in ("firefox", "gvfs", "mousepad", "network-manager-applet", "pavucontrol", "thunar", "tumbler"):
+            self.assertIn(f"\n{package}\n", f"\n{packages}")
+            self.assertIn(package, builder)
         self.assertIn("exec start-hyprland", profile)
         self.assertIn("exec start-hyprland", live_profile)
         self.assertNotIn("exec Hyprland", profile)
@@ -135,8 +140,24 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("Welcome to Blossom OS", shell_qml)
         self.assertIn("Install Blossom OS", shell_qml)
         self.assertIn("External disks are excluded", shell_qml)
+        for surface in ("Applications", "Files", "Web Browser", "Text Editor", "Network Settings", "Audio Settings"):
+            self.assertIn(surface, shell_qml)
         self.assertIn("liveEnvironment", broker_header)
-        self.assertIn('/usr/local/bin/blossom-physical-install', broker_source)
+        self.assertIn('/usr/local/bin/blossom-physical-install', desktop_launcher)
+        for method in ("openFiles", "openBrowser", "openEditor", "openNetworkSettings", "openAudioSettings"):
+            self.assertIn(method, broker_header)
+        for method in ("restartSystem", "powerOff"):
+            self.assertIn(method, broker_header)
+        self.assertNotIn("QProcess", broker_source)
+        self.assertIn('QStringLiteral("Launch1")', broker_source)
+        for executable in ("/usr/bin/thunar", "/usr/bin/firefox", "/usr/bin/mousepad", "/usr/bin/nmtui", "/usr/bin/pavucontrol"):
+            self.assertIn(executable, desktop_launcher)
+        self.assertIn('/usr/bin/hyprctl', desktop_launcher)
+        self.assertIn('/usr/bin/systemctl', desktop_launcher)
+        self.assertIn("NoNewPrivileges=yes", desktop_unit)
+        for config in (live_hyprland, installed_hyprland):
+            for binding in ("SUPER, Q, killactive", "SUPER, F, fullscreen", "SUPER, E, exec, thunar", "SUPER, 1, workspace, 1"):
+                self.assertIn(binding, config)
         self.assertIn('subject.user == "blossom"', installer_rule)
         self.assertIn('action.lookup("program") == "/usr/local/bin/blossom-physical-install"', installer_rule)
         self.assertIn("Blossom OS Recovery Console", builder)
