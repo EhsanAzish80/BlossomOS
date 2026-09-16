@@ -52,8 +52,12 @@ jobs:
           iso=$(find "$PHASE11_VM_DIR/iso" -maxdepth 1 -name 'blossom-os-*.iso' -print -quit)
           test -n "$iso"
           truncate -s 8G "$PHASE11_VM_DIR/blossom.raw"
+          iso_name=$(basename "$iso")
+          # Expanded by the explicitly invoked container shell, not this host shell.
+          # shellcheck disable=SC2016
           timeout --signal=TERM --kill-after=30s 15m docker run --rm --device /dev/kvm \
             --volume "$PHASE11_VM_DIR:/evidence" \
+            --env "ISO_NAME=$iso_name" \
             archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
             bash -euo pipefail -c '
               pacman -Sy --noconfirm edk2-ovmf qemu-desktop
@@ -63,7 +67,7 @@ jobs:
                 -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd \
                 -drive if=pflash,format=raw,file=/evidence/OVMF_VARS.4m.fd \
                 -drive file=/evidence/blossom.raw,format=raw,if=virtio \
-                -cdrom /evidence/iso/$(basename '"$iso"')
+                -cdrom "/evidence/iso/$ISO_NAME"
             ' | tee "$PHASE11_VM_DIR/install.log"
           grep -q 'BLOSSOM_INSTALL_COMPLETE architecture=x86_64 firmware=uefi disk=virtio' \
             "$PHASE11_VM_DIR/install.log"

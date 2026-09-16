@@ -24,8 +24,10 @@ jobs:
       - name: Verify Phase 11 source boundary
         working-directory: phase11-source
         run: |
-          python3 -m unittest discover -s tests -p 'test_phase11*.py' -v
-          python3 scripts/ci/check_phase11.py
+          python3 -m unittest discover -s tests -v
+          for check in scripts/ci/check_*.py; do
+            python3 "$check"
+          done
 
       - name: Build physical candidate in pinned Arch Linux container
         run: |
