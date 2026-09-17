@@ -16,6 +16,9 @@ instead of hiding them in the application launcher:
 - notification do-not-disturb control backed by a declared Mako mode;
 - logout, restart and shutdown with confirmation.
 
+Destructive session confirmations use a centred modal layer. Escape dismisses
+launcher, quick-settings, agent and system overlays without invoking an action.
+
 Every action is a fixed entry in the root-owned desktop launcher allowlist. The
 QML shell does not receive a generic command, shell string, root authority or a
 device mutation API. Unsupported/unavailable battery and network states remain

@@ -16,6 +16,17 @@ ShellRoot {
     property string clockText: Qt.formatDateTime(new Date(), "ddd HH:mm")
 
     Timer { interval: 30000; running: true; repeat: true; onTriggered: root.clockText = Qt.formatDateTime(new Date(), "ddd HH:mm") }
+    Shortcut {
+        sequence: "Escape"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            root.launcherVisible = false
+            root.activityVisible = false
+            root.quickVisible = false
+            root.powerVisible = false
+            root.powerAction = ""
+        }
+    }
     Component.onCompleted: {
         BlossomBroker.refreshActivity()
         BlossomBroker.refreshBattery()
@@ -139,7 +150,7 @@ ShellRoot {
                 anchor.rect.x: Math.max(12, topBar.width - width - 12)
                 anchor.rect.y: topBar.height + 8
                 width: 340
-                height: root.powerAction === "" ? 230 : 220
+                height: 250
                 visible: root.powerVisible
                 grabFocus: true
                 color: "transparent"
@@ -147,16 +158,45 @@ ShellRoot {
                     anchors.fill: parent; radius: 18; color: "#f2171d27"; border { color: "#40536d"; width: 1 }
                     ColumnLayout {
                         anchors { fill: parent; margins: 20 }; spacing: 12
-                        Label { Layout.fillWidth: true; text: root.powerAction === "" ? "System" : (root.powerAction === "restart" ? "Restart Blossom OS?" : root.powerAction === "logout" ? "Log out of Blossom OS?" : "Shut down Blossom OS?"); color: "#f4f7fb"; font.pixelSize: 20; font.bold: true; wrapMode: Text.WordWrap }
-                        Label { Layout.fillWidth: true; visible: root.powerAction !== ""; text: "Save your work before continuing."; color: "#b8c4d6"; wrapMode: Text.WordWrap }
-                        Label { Layout.fillWidth: true; visible: root.powerAction === ""; text: "Super+Tab switches windows · Super+Q closes the active window"; color: "#8fa0b7"; wrapMode: Text.WordWrap }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Button { Layout.fillWidth: true; text: root.powerAction === "" ? "Restart" : "Cancel"; onClicked: root.powerAction === "" ? root.powerAction = "restart" : root.powerAction = "" }
-                            Button { Layout.fillWidth: true; visible: root.powerAction !== "logout"; text: root.powerAction === "" ? "Shut Down" : "Confirm"; onClicked: { if (root.powerAction === "restart") BlossomBroker.restartSystem(); else if (root.powerAction === "shutdown") BlossomBroker.powerOff(); else root.powerAction = "shutdown" } }
-                        }
-                        Button { Layout.fillWidth: true; visible: root.powerAction === ""; text: "Log Out"; onClicked: root.powerAction = "logout" }
-                        Button { Layout.fillWidth: true; visible: root.powerAction === "logout"; text: "Confirm Log Out"; onClicked: BlossomBroker.logOut() }
+                        Label { Layout.fillWidth: true; text: "System"; color: "#f4f7fb"; font.pixelSize: 20; font.bold: true }
+                        Label { Layout.fillWidth: true; text: "Super+Tab switches windows · Super+Q closes the active window"; color: "#8fa0b7"; wrapMode: Text.WordWrap }
+                        Button { Layout.fillWidth: true; text: "Log Out"; onClicked: { root.powerAction = "logout"; root.powerVisible = false } }
+                        Button { Layout.fillWidth: true; text: "Restart"; onClicked: { root.powerAction = "restart"; root.powerVisible = false } }
+                        Button { Layout.fillWidth: true; text: "Shut Down"; onClicked: { root.powerAction = "shutdown"; root.powerVisible = false } }
+                    }
+                }
+            }
+        }
+    }
+
+    Variants {
+        model: Quickshell.screens
+        PanelWindow {
+            required property var modelData
+            screen: modelData
+            anchors { top: true; bottom: true; left: true; right: true }
+            aboveWindows: true
+            focusable: true
+            exclusiveZone: 0
+            visible: root.powerAction !== "" && modelData === Quickshell.screens[0]
+            color: "#88070b12"
+            WlrLayershell.namespace: "blossom-system-confirmation"
+            Rectangle {
+                anchors.centerIn: parent
+                width: Math.min(460, parent.width - 48)
+                height: 250
+                radius: 22
+                color: "#f2171d27"
+                border { color: "#506987"; width: 1 }
+                ColumnLayout {
+                    anchors { fill: parent; margins: 30 }; spacing: 16
+                    Label { Layout.fillWidth: true; text: root.powerAction === "restart" ? "Restart Blossom OS?" : root.powerAction === "logout" ? "Log out of Blossom OS?" : "Shut down Blossom OS?"; color: "#f4f7fb"; font.pixelSize: 25; font.bold: true; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
+                    Label { Layout.fillWidth: true; text: "Save your work before continuing."; color: "#b8c4d6"; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
+                    Item { Layout.fillHeight: true }
+                    RowLayout {
+                        Layout.fillWidth: true; spacing: 12
+                        Button { Layout.fillWidth: true; text: "Cancel"; onClicked: root.powerAction = "" }
+                        Button { Layout.fillWidth: true; text: root.powerAction === "logout" ? "Log Out" : root.powerAction === "restart" ? "Restart" : "Shut Down"; onClicked: { if (root.powerAction === "logout") BlossomBroker.logOut(); else if (root.powerAction === "restart") BlossomBroker.restartSystem(); else BlossomBroker.powerOff() } }
                     }
                 }
             }

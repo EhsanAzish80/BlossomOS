@@ -29,6 +29,12 @@ class DesktopFoundationLayoutTests(unittest.TestCase):
         self.assertIn("Super+Tab switches windows", SHELL)
         self.assertIn("Super+Q closes the active window", SHELL)
         self.assertIn("BlossomBroker.desktopMessage", SHELL)
+        self.assertIn('sequence: "Escape"', SHELL)
+
+    def test_destructive_session_confirmations_are_centered(self):
+        self.assertIn('WlrLayershell.namespace: "blossom-system-confirmation"', SHELL)
+        self.assertIn("anchors.centerIn: parent", SHELL)
+        self.assertIn('text: "Save your work before continuing."', SHELL)
 
     def test_top_bar_exposes_normal_system_controls(self):
         for label in ("Network ", "Sound", "Bluetooth", "Quick settings", "Wi-Fi & Ethernet", "Toggle do not disturb", "Log Out"):
