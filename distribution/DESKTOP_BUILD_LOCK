@@ -1,0 +1,3 @@
+Blossom Desktop Foundation is under source review.
+Do not build a candidate until docs/DESKTOP_FOUNDATION.md has passed review and
+this file is removed in the same reviewed change that opens the build gate.

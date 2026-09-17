@@ -30,6 +30,7 @@ jobs:
       - name: Verify Phase 11 source boundary
         working-directory: phase11-source
         run: |
+          test ! -e distribution/DESKTOP_BUILD_LOCK
           python3 -m unittest discover -s tests -v
           for check in scripts/ci/check_*.py; do
             python3 "$check"

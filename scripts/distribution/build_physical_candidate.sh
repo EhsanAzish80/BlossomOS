@@ -7,6 +7,11 @@ if (($# != 1)); then
 fi
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+if [[ -e "$repo/distribution/DESKTOP_BUILD_LOCK" ]]; then
+  echo "candidate build blocked: Blossom Desktop Foundation source gate is active" >&2
+  echo "review docs/DESKTOP_FOUNDATION.md; do not bypass this lock" >&2
+  exit 1
+fi
 output=$(realpath -m "$1")
 mode=${BLOSSOM_CANDIDATE_MODE:-physical}
 case "$mode" in
