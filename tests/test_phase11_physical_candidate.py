@@ -109,7 +109,7 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("noto-fonts-emoji", builder)
         for package in ("adwaita-cursors", "foot", "noto-fonts", "noto-fonts-emoji"):
             self.assertIn(f"\n{package}\n", f"\n{packages}")
-        for package in ("firefox", "gvfs", "mousepad", "network-manager-applet", "pavucontrol", "thunar", "tumbler"):
+        for package in ("firefox", "gvfs", "mousepad", "network-manager-applet", "nm-connection-editor", "pavucontrol", "thunar", "tumbler"):
             self.assertIn(f"\n{package}\n", f"\n{packages}")
             self.assertIn(package, builder)
         self.assertIn("exec start-hyprland", profile)
@@ -168,7 +168,7 @@ class PhysicalCandidateTests(unittest.TestCase):
             self.assertIn(method, broker_header)
         self.assertNotIn("QProcess", broker_source)
         self.assertIn('QStringLiteral("Launch1")', broker_source)
-        for executable in ("/usr/bin/thunar", "/usr/bin/firefox", "/usr/bin/mousepad", "/usr/bin/nmtui", "/usr/bin/pavucontrol"):
+        for executable in ("/usr/bin/thunar", "/usr/bin/firefox", "/usr/bin/mousepad", "/usr/bin/nm-connection-editor", "/usr/bin/pavucontrol"):
             self.assertIn(executable, desktop_launcher)
         self.assertIn('/usr/bin/hyprctl', desktop_launcher)
         self.assertIn('/usr/bin/systemctl', desktop_launcher)

@@ -9,6 +9,10 @@ normalized_plan = " ".join(plan.split())
 lock = ROOT / "distribution/DESKTOP_BUILD_LOCK"
 builder = (ROOT / "scripts/distribution/build_physical_candidate.sh").read_text(encoding="utf-8")
 workflow = (ROOT / ".github/workflows/phase11-physical-candidate.yml").read_text(encoding="utf-8")
+hardware = (ROOT / "docs/HARDWARE_SUPPORT_MATRIX.md").read_text(encoding="utf-8")
+normalized_hardware = " ".join(hardware.split())
+issue = (ROOT / "distribution/archiso/airootfs/etc/issue").read_text(encoding="utf-8")
+motd = (ROOT / "distribution/archiso/airootfs/etc/motd").read_text(encoding="utf-8")
 
 required = (
     "candidate builds are intentionally blocked",
@@ -35,5 +39,18 @@ if lock.exists():
         raise SystemExit("desktop plan status disagrees with active build lock")
 elif "Status: build gate open" not in plan:
     raise SystemExit("removing the desktop build lock requires opening the documented gate")
+
+for statement in (
+    "absence from this table means unverified, not unsupported",
+    "Adapter not yet identified",
+    "base system installs from the ISO without network access",
+    "Agent/model availability is reported separately",
+):
+    if statement not in normalized_hardware:
+        raise SystemExit(f"hardware support boundary missing: {statement}")
+if "Blossom OS Live" not in issue or "Arch Linux" in issue:
+    raise SystemExit("live console identity is not Blossom-owned")
+if "does not require an Internet connection" not in motd:
+    raise SystemExit("offline installation message is missing")
 
 print("desktop foundation source gate verified")

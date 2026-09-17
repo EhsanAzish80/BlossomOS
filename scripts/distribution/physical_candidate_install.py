@@ -43,6 +43,9 @@ def run_interactive(
 ) -> dict[str, Any]:
     if os.geteuid() != 0:
         raise CandidateError("run this command from the live root shell")
+    print("Blossom OS installs its verified base system from this boot media.")
+    print("An Internet connection is optional and is not required to install.")
+    print("Network setup, updates, applications, and agent models can be configured later.")
     preflight = classify(host_observer())
     if preflight["result"] != "eligible_for_qualification":
         raise CandidateError("this is not the frozen qualified host")

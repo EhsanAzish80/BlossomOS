@@ -15,7 +15,7 @@ public slots:
         else if (action == QStringLiteral("files")) command = {QStringLiteral("/usr/bin/thunar")};
         else if (action == QStringLiteral("browser")) command = {QStringLiteral("/usr/bin/firefox")};
         else if (action == QStringLiteral("editor")) command = {QStringLiteral("/usr/bin/mousepad")};
-        else if (action == QStringLiteral("network")) command = {QStringLiteral("/usr/bin/foot"), QStringLiteral("--title=Network Settings"), QStringLiteral("/usr/bin/nmtui")};
+        else if (action == QStringLiteral("network")) command = {QStringLiteral("/usr/bin/nm-connection-editor")};
         else if (action == QStringLiteral("audio")) command = {QStringLiteral("/usr/bin/pavucontrol")};
         else if (action == QStringLiteral("installer")) command = {QStringLiteral("/usr/bin/foot"), QStringLiteral("--title=Install Blossom OS"), QStringLiteral("/usr/bin/pkexec"), QStringLiteral("/usr/local/bin/blossom-physical-install")};
         else if (action == QStringLiteral("restart")) command = {QStringLiteral("/usr/bin/systemctl"), QStringLiteral("reboot")};

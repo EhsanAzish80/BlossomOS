@@ -52,7 +52,7 @@ cp "$build/source"/distribution/packages/blossom-shell/blossom-shell-*.pkg.tar.z
 pacstrap -K -C "$repo/distribution/archiso/pacman.conf" "$rootfs" \
   adwaita-cursors base bluez bluez-utils brightnessctl bubblewrap dbus-broker dosfstools foot \
   firefox gptfdisk gvfs hyprland intel-ucode iwd linux-firmware linux-lts mesa mousepad networkmanager \
-  network-manager-applet noto-fonts noto-fonts-emoji openssh openssl pavucontrol pipewire pipewire-alsa \
+  network-manager-applet nm-connection-editor noto-fonts noto-fonts-emoji openssh openssl pavucontrol pipewire pipewire-alsa \
   pipewire-pulse polkit python quickshell qt6-base qt6-declarative sof-firmware sudo systemd thunar \
   tumbler upower vulkan-intel wireplumber zstd
 pacman --root "$rootfs" --config /etc/pacman.conf --noconfirm -U "$packages"/*.pkg.tar.zst
@@ -122,6 +122,10 @@ sed -i 's/^title .*/title Blossom OS Recovery Console/' "$recovery_entry"
 sed -i '/^options /s/$/ blossom.recovery=1/' "$recovery_entry"
 sed -i '/^options /s/$/ vt.global_cursor_default=0 quiet loglevel=3 rd.udev.log_level=3/' \
   "${uefi_entries[@]}"
+# The recovery entry is intentionally verbose and must not inherit the quiet
+# normal-boot presentation.
+sed -i -E 's/ quiet( |$)/ /g; s/ loglevel=3( |$)/ loglevel=7 /g; s/ rd\.udev\.log_level=3( |$)/ rd.udev.log_level=7 /g' \
+  "$recovery_entry"
 sed -i -E 's/^timeout .*/timeout 5/' "$profile/efiboot/loader/loader.conf"
 sed -i -E 's/ archiso_pxe_(common|nbd|http|nfs)//g' \
   "$profile/airootfs/etc/mkinitcpio.conf.d/archiso.conf"
