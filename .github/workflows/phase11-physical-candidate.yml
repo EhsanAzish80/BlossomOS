@@ -84,7 +84,7 @@ jobs:
                 -cdrom "/candidate/iso/$ISO_NAME" \
                 -kernel /tmp/direct-boot/blossom/boot/x86_64/vmlinuz-linux \
                 -initrd /tmp/direct-boot/blossom/boot/x86_64/initramfs-linux.img \
-                -append "archisobasedir=blossom archisosearchuuid=$uuid console=ttyS0,115200n8 systemd.show_status=yes blossom.desktop-probe=1"
+                -append "archisobasedir=blossom archisosearchuuid=$uuid console=ttyS0,115200n8 systemd.show_status=yes systemd.getty_auto=no blossom.desktop-probe=1"
             ' | tee "$CANDIDATE_OUTPUT/desktop-probe.log"
           grep -q 'BLOSSOM_DESKTOP_READY shell=active broker=active windows=2' \
             "$CANDIDATE_OUTPUT/desktop-probe.log"

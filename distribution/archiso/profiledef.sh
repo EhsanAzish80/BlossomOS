@@ -22,6 +22,7 @@ file_permissions=(
   ["/usr/local/bin/blossom-shell-recovery"]="0:0:755"
   ["/usr/local/bin/blossom-start-session"]="0:0:755"
   ["/usr/local/bin/blossom-desktop-probe"]="0:0:755"
+  ["/usr/local/libexec/blossom-provision-live-user"]="0:0:755"
   ["/usr/local/bin/blossom-evidence-install"]="0:0:755"
   ["/usr/local/bin/blossom-physical-install"]="0:0:755"
   ["/usr/local/libexec/blossom-physical-install-backend"]="0:0:755"

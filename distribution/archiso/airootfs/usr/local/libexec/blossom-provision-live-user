@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! id -u blossom >/dev/null 2>&1; then
+  useradd --create-home --groups audio,input,video --shell /bin/bash blossom
+fi
+
+chown -R blossom:blossom /home/blossom
+chmod 0700 /home/blossom /home/blossom/.config /home/blossom/.config/hypr
+test "$(id -u blossom)" = 1000

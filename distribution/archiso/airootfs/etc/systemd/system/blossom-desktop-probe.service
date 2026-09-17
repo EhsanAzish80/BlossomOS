@@ -1,6 +1,7 @@
 [Unit]
 Description=Blossom OS exact-artifact graphical acceptance probe
-After=getty@tty1.service
+Requires=blossom-live-user.service
+After=blossom-live-user.service getty@tty1.service
 
 [Service]
 Type=oneshot
