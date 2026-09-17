@@ -67,7 +67,8 @@ for statement in (
         raise SystemExit(f"graphical smoke contract missing: {statement}")
 
 for statement in (
-    "Status: blocked before execution",
+    "Status: Linux compile qualified; graphical runtime blocked",
+    "compiled successfully",
     "stale evidence",
     "No lock was bypassed",
     "logout to ReGreet",

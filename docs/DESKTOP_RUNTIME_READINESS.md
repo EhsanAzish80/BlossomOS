@@ -1,15 +1,25 @@
 # Desktop Runtime Readiness
 
-Status: blocked before execution  
-Date: 2026-09-17  
-Reviewed source: `983598b` plus the graphical-smoke contract in this change
+Status: Linux compile qualified; graphical runtime blocked
+Date: 2026-09-17
+Reviewed source: `e2a9617`
 
 ## Preflight result
 
 The Apple-silicon development host has `qemu-system-x86_64`, `qemu-img` and
-UEFI-capable VM launch tooling. It does not have a local Qt 6 QML development
-runtime, Quickshell, or a running Linux container/Wayland environment capable of
-executing the current shell directly.
+UEFI-capable VM launch tooling. A disposable x86-64 Arch Linux container was
+created under software emulation and received the committed source through a
+read-only archive stream.
+
+The following Linux Qt 6 components configured and compiled successfully with
+their repository `-Wall -Wextra -Wpedantic -Werror` policies:
+
+- `system/desktop-launcher`;
+- `system/shell/client-plugin`, including the broker, QML module and UI host;
+- `system/installer`.
+
+The compile environment did not contain Quickshell or a nested Wayland
+compositor, so this proves Linux build correctness but not the rendered shell.
 
 No ISO representing the reviewed desktop source exists. The three
 `blossom-os-0.11.0-physical-candidate-x86_64.iso` files found under
@@ -20,7 +30,7 @@ The candidate builder was invoked normally and refused to start with exit code
 1 because `distribution/DESKTOP_BUILD_LOCK` is present. No lock was bypassed,
 no image was compiled and no physical disk was touched.
 
-## Gates that remain runtime-only
+## Gates that remain graphical-runtime-only
 
 - 1280x720, 1920x1080 and 2x HiDPI visual captures;
 - top-bar and popup fit, keyboard navigation and Escape dismissal;
