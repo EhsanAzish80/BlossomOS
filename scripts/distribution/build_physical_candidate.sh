@@ -7,17 +7,17 @@ if (($# != 1)); then
 fi
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-if [[ -e "$repo/distribution/DESKTOP_BUILD_LOCK" ]]; then
-  echo "candidate build blocked: Blossom Desktop Foundation source gate is active" >&2
-  echo "review docs/DESKTOP_FOUNDATION.md; do not bypass this lock" >&2
-  exit 1
-fi
-output=$(realpath -m "$1")
 mode=${BLOSSOM_CANDIDATE_MODE:-physical}
 case "$mode" in
   physical|vm-qualification) ;;
   *) echo "BLOSSOM_CANDIDATE_MODE must be physical or vm-qualification" >&2; exit 2 ;;
 esac
+if [[ -e "$repo/distribution/DESKTOP_BUILD_LOCK" && "$mode" != vm-qualification ]]; then
+  echo "physical candidate build blocked: Blossom Desktop Foundation runtime gate is active" >&2
+  echo "only BLOSSOM_CANDIDATE_MODE=vm-qualification is allowed; do not bypass this lock" >&2
+  exit 1
+fi
+output=$(realpath -m "$1")
 rootfs_compressor='zstd -19 -T0'
 if [[ "$mode" == vm-qualification ]]; then
   rootfs_compressor='zstd -3 -T0'

@@ -1,11 +1,12 @@
 # Blossom Desktop Foundation
 
-Status: source-design gate active; candidate builds are intentionally blocked.
+Status: VM qualification gate open; physical candidate builds remain blocked.
 
 The first physical graphical boot proved that the kernel, compositor, packaged
 shell and fixed broker can reach the qualified Intel Mac. It did not prove a
-usable desktop or a general-purpose installer. No new ISO may be produced until
-the source requirements and pre-build checks in this document are complete.
+usable desktop or a general-purpose installer. Only a disposable
+VM-qualification ISO may now be produced to execute the graphical smoke gate.
+Physical candidates and removable-media writes remain blocked.
 
 ## Product boundary
 
@@ -93,5 +94,5 @@ storage and architecture.
 - [ ] A local graphical smoke run records screenshots and interactions before ISO work.
 
 Only after every item is reviewed may this document be changed to
-`Status: build gate open` and the deliberate build lock be removed in the same
-reviewed change.
+`Status: physical build gate open` and the deliberate build lock be removed in
+the same reviewed change.

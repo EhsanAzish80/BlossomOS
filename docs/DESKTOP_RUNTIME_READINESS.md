@@ -26,9 +26,10 @@ No ISO representing the reviewed desktop source exists. The three
 `/private/tmp` predate the current desktop toolbar, installer identity and login
 changes. They are stale evidence and must not be used to qualify this source.
 
-The candidate builder was invoked normally and refused to start with exit code
-1 because `distribution/DESKTOP_BUILD_LOCK` is present. No lock was bypassed,
-no image was compiled and no physical disk was touched.
+The candidate builder still refuses its default physical mode while
+`distribution/DESKTOP_BUILD_LOCK` is present. The reviewed exception permits
+only `BLOSSOM_CANDIDATE_MODE=vm-qualification`, producing disposable media for
+this graphical gate. No physical disk may be touched.
 
 ## Gates that remain graphical-runtime-only
 

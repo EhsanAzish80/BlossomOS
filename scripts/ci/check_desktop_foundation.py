@@ -17,7 +17,7 @@ smoke = (ROOT / "docs/DESKTOP_GRAPHICAL_SMOKE.md").read_text(encoding="utf-8")
 runtime = (ROOT / "docs/DESKTOP_RUNTIME_READINESS.md").read_text(encoding="utf-8")
 
 required = (
-    "candidate builds are intentionally blocked",
+    "physical candidate builds remain blocked",
     "both a normal personal computer and an agent-native computer",
     "normal path contains no ArchISO branding",
     "complete desktop appears behind a dismissible",
@@ -33,13 +33,14 @@ for statement in required:
         raise SystemExit(f"desktop foundation requirement missing: {statement}")
 
 if lock.exists():
-    if "DESKTOP_BUILD_LOCK" not in builder or "do not bypass this lock" not in builder:
+    if "DESKTOP_BUILD_LOCK" not in builder or "do not bypass this lock" not in builder or \
+            '"$mode" != vm-qualification' not in builder:
         raise SystemExit("desktop build lock is not enforced by the builder")
     if "test ! -e distribution/DESKTOP_BUILD_LOCK" not in workflow:
         raise SystemExit("desktop build lock is not enforced by the workflow")
-    if "Status: source-design gate active" not in plan:
+    if "Status: VM qualification gate open" not in plan:
         raise SystemExit("desktop plan status disagrees with active build lock")
-elif "Status: build gate open" not in plan:
+elif "Status: physical build gate open" not in plan:
     raise SystemExit("removing the desktop build lock requires opening the documented gate")
 
 for statement in (
@@ -70,7 +71,7 @@ for statement in (
     "Status: Linux compile qualified; graphical runtime blocked",
     "compiled successfully",
     "stale evidence",
-    "No lock was bypassed",
+    "No physical disk may be touched",
     "logout to ReGreet",
     "require one image built from the reviewed commit",
 ):
