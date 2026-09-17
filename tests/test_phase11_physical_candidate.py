@@ -87,7 +87,6 @@ class PhysicalCandidateTests(unittest.TestCase):
         live_user_unit = (repository / "distribution/archiso/airootfs/etc/systemd/system/blossom-live-user.service").read_text()
         live_user_link = repository / "distribution/archiso/airootfs/etc/systemd/system/multi-user.target.wants/blossom-live-user.service"
         packages = (repository / "distribution/archiso/packages.x86_64").read_text()
-        profile = (repository / "distribution/physical-rootfs/home/blossom/.bash_profile").read_text()
         live_profile = (repository / "distribution/archiso/airootfs/home/blossom/.bash_profile").read_text()
         autologin = (repository / "distribution/archiso/airootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf").read_text()
         root_console = (repository / "distribution/archiso/airootfs/etc/systemd/system/getty@tty2.service.d/autologin.conf").read_text()
@@ -105,6 +104,8 @@ class PhysicalCandidateTests(unittest.TestCase):
         desktop_launcher = (repository / "system/desktop-launcher/main.cpp").read_text()
         desktop_unit = (repository / "system/desktop-launcher/blossom-desktop-launcher.service").read_text()
         installer_rule = (repository / "distribution/archiso/airootfs/etc/polkit-1/rules.d/49-blossom-live-installer.rules").read_text()
+        greetd = (repository / "distribution/physical-rootfs/etc/greetd/config.toml").read_text()
+        session = (repository / "distribution/physical-rootfs/usr/share/wayland-sessions/blossom.desktop").read_text()
         self.assertIn("noto-fonts", builder)
         self.assertIn("noto-fonts-emoji", builder)
         for package in ("adwaita-cursors", "foot", "noto-fonts", "noto-fonts-emoji"):
@@ -119,9 +120,14 @@ class PhysicalCandidateTests(unittest.TestCase):
         ):
             self.assertIn(f"\n{package}\n", f"\n{packages}")
             self.assertIn(package, builder)
-        self.assertIn("exec start-hyprland", profile)
         self.assertIn("exec start-hyprland", live_profile)
-        self.assertNotIn("exec Hyprland", profile)
+        self.assertNotIn('useradd --root "$rootfs"', builder)
+        self.assertNotIn("getty-autologin.conf", builder)
+        self.assertIn("greetd", builder)
+        self.assertIn("regreet", builder)
+        self.assertIn('command = "Hyprland --config /etc/greetd/hyprland.conf"', greetd)
+        self.assertIn("Exec=/usr/bin/start-hyprland", session)
+        self.assertIn('graphical.target.wants/greetd.service', builder)
         self.assertIn(
             'cp -a "$repo/distribution/archiso/airootfs/." "$profile/airootfs/"',
             builder,
@@ -143,6 +149,7 @@ class PhysicalCandidateTests(unittest.TestCase):
             self.assertIn("/usr/local/bin/blossom-start-session", config)
             self.assertNotIn("quickshell -p", config)
         self.assertIn('client-build/blossom-shell-ui', shell_package)
+        self.assertIn('installer-build/blossom-installer', shell_package)
         self.assertIn('/usr/lib/qt6/qml/Blossom/Shell', shell_package)
         self.assertIn('blossom-shell-ui.service', shell_package)
         self.assertIn('blossom-shell-recovery.service', shell_package)
@@ -174,7 +181,7 @@ class PhysicalCandidateTests(unittest.TestCase):
         for surface in ("Applications", "Files", "Web Browser", "Text Editor", "Network Settings", "Audio Settings"):
             self.assertIn(surface, shell_qml)
         self.assertIn("liveEnvironment", broker_header)
-        self.assertIn('/usr/local/bin/blossom-physical-install', desktop_launcher)
+        self.assertIn('/usr/lib/blossom-os/blossom-installer', desktop_launcher)
         for method in ("openFiles", "openBrowser", "openEditor", "openNetworkSettings", "openAudioSettings"):
             self.assertIn(method, broker_header)
         for method in ("restartSystem", "powerOff"):
@@ -190,7 +197,7 @@ class PhysicalCandidateTests(unittest.TestCase):
             for binding in ("SUPER, Q, killactive", "SUPER, F, fullscreen", "SUPER, E, exec, thunar", "SUPER, 1, workspace, 1"):
                 self.assertIn(binding, config)
         self.assertIn('subject.user == "blossom"', installer_rule)
-        self.assertIn('action.lookup("program") == "/usr/local/bin/blossom-physical-install"', installer_rule)
+        self.assertIn('action.lookup("program") == "/usr/local/libexec/blossom-graphical-install-backend"', installer_rule)
         self.assertIn("Blossom OS Recovery Console", builder)
         self.assertIn("vt.global_cursor_default=0", builder)
         self.assertIn("blossom.recovery=1", live_profile)

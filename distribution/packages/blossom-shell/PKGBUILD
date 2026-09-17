@@ -20,6 +20,9 @@ build() {
   cmake -S "$repo_root/system/desktop-launcher" -B "$srcdir/launcher-build" \
     -G Ninja -DCMAKE_BUILD_TYPE=Release
   cmake --build "$srcdir/launcher-build"
+  cmake -S "$repo_root/system/installer" -B "$srcdir/installer-build" \
+    -G Ninja -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$srcdir/installer-build"
 }
 
 package() {
@@ -31,6 +34,11 @@ package() {
     "$pkgdir/usr/lib/blossom-os/blossom-shell-ui"
   install -Dm0755 "$srcdir/launcher-build/blossom-desktop-launcher" \
     "$pkgdir/usr/lib/blossom-os/blossom-desktop-launcher"
+  install -Dm0755 "$srcdir/installer-build/blossom-installer" \
+    "$pkgdir/usr/lib/blossom-os/blossom-installer"
+  install -d "$pkgdir/usr/share/blossom-os/installer"
+  cp -a "$repo_root/system/installer/qml/." \
+    "$pkgdir/usr/share/blossom-os/installer/"
   install -d "$pkgdir/usr/lib/qt6/qml/Blossom/Shell"
   cp -a "$srcdir/client-build/qml/Blossom/Shell/." \
     "$pkgdir/usr/lib/qt6/qml/Blossom/Shell/"
@@ -54,4 +62,5 @@ package() {
   install -Dm0755 "$repo_root/system/shell/runtime/blossom-screenshot" \
     "$pkgdir/usr/local/bin/blossom-screenshot"
   find "$pkgdir/usr/share/blossom-os/shell" -type f -exec chmod 0644 {} +
+  find "$pkgdir/usr/share/blossom-os/installer" -type f -exec chmod 0644 {} +
 }

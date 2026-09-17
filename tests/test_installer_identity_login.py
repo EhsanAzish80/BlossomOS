@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -7,6 +8,7 @@ from scripts.distribution.installation_profile import (
     ProfileError, validate_password, validate_profile,
 )
 from scripts.distribution.provision_installed_identity import provision
+from scripts.distribution.graphical_install_backend import _load_request
 
 
 def profile():
@@ -18,6 +20,17 @@ def profile():
 
 
 class InstallerIdentityLoginTests(unittest.TestCase):
+    def test_graphical_backend_accepts_only_the_closed_request_schema(self):
+        value = {
+            "schema": 1, "observation": "/run/user/1000/blossom-installer/observation.json",
+            "confirmation": "ERASE /dev/sda digest", "profile": {},
+            "password": "secret-not-logged", "password_confirmation": "secret-not-logged",
+        }
+        import json
+        self.assertEqual(_load_request(StringIO(json.dumps(value))), value)
+        with self.assertRaises(ValueError):
+            _load_request(StringIO(json.dumps({**value, "debug": True})))
+
     def test_public_record_cannot_contain_a_password(self):
         record = profile().public_record()
         self.assertNotIn("password", record)
@@ -54,6 +67,7 @@ class InstallerIdentityLoginTests(unittest.TestCase):
             self.assertNotIn("a-long-passphrase-9", argv)
             password_call = next(item for item in calls if item[0][0] == "chpasswd")
             self.assertEqual(password_call[1]["input"], "ehsan:a-long-passphrase-9\n")
+            self.assertTrue(any(item[0][:1] == ["arch-chroot"] for item in calls))
             owner = (root / "var/lib/blossom/installation/owner.json").read_text()
             self.assertNotIn("password", owner)
             self.assertNotIn("a-long-passphrase-9", owner)
@@ -66,8 +80,9 @@ class InstallerIdentityLoginTests(unittest.TestCase):
         for text in ("Language and keyboard", "Connect or continue offline", "Choose an installation disk", "Create your account", "Review before erasing"):
             self.assertIn(text, qml)
         self.assertIn('echoMode: TextInput.Password', qml)
-        self.assertIn('command = "regreet"', greetd)
-        self.assertIn("Exec=/usr/local/bin/blossom-start-session", session)
+        self.assertIn('password.text = ""', qml)
+        self.assertIn('command = "Hyprland --config /etc/greetd/hyprland.conf"', greetd)
+        self.assertIn("Exec=/usr/bin/start-hyprland", session)
 
 
 if __name__ == "__main__":

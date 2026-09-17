@@ -51,34 +51,29 @@ cp "$build/source"/distribution/packages/blossom-shell/blossom-shell-*.pkg.tar.z
 
 pacstrap -K -C "$repo/distribution/archiso/pacman.conf" "$rootfs" \
   adwaita-cursors base bluez bluez-utils brightnessctl bubblewrap dbus-broker dosfstools foot \
-  firefox gptfdisk grim gvfs hyprland hyprpolkitagent intel-ucode iwd libnotify linux-firmware linux-lts mako mesa mousepad networkmanager \
+  firefox gptfdisk greetd grim gvfs hyprland hyprpolkitagent intel-ucode iwd libnotify linux-firmware linux-lts mako mesa mousepad networkmanager \
   network-manager-applet nm-connection-editor noto-fonts noto-fonts-emoji openssh openssl pavucontrol pipewire pipewire-alsa \
-  pipewire-pulse polkit python quickshell qt6-base qt6-declarative qt6-wayland slurp sof-firmware sudo systemd thunar \
+  pipewire-pulse polkit python quickshell greetd-regreet qt6-base qt6-declarative qt6-wayland slurp sof-firmware sudo systemd thunar \
   tumbler upower vulkan-intel wireplumber xdg-desktop-portal xdg-desktop-portal-gtk \
   xdg-desktop-portal-hyprland xorg-xwayland zstd
 pacman --root "$rootfs" --config /etc/pacman.conf --noconfirm -U "$packages"/*.pkg.tar.zst
 
 cp -a "$repo/distribution/physical-rootfs/." "$rootfs/"
+chmod 0440 "$rootfs/etc/sudoers.d/10-blossom-wheel"
 install -d -m 0755 "$rootfs/opt/blossom" "$rootfs/etc/blossom-os"
 cp -a "$repo/scripts" "$repo/tests" "$repo/distribution" "$rootfs/opt/blossom/"
 install -d -m 0755 "$rootfs/opt/blossom/.github/workflows"
 install -m 0644 "$repo/.github/workflows/phase9-vm-install-evidence.yml" \
   "$rootfs/opt/blossom/.github/workflows/phase9-vm-install-evidence.yml"
-useradd --root "$rootfs" -m -G audio,input,video,wheel -s /bin/bash blossom
-passwd --root "$rootfs" --lock blossom
-install -d -m 0700 "$rootfs/home/blossom/.config/hypr"
+install -d -m 0755 "$rootfs/usr/share/blossom-os/default-home/.config/hypr"
 install -m 0600 "$rootfs/usr/share/blossom-os/physical-home/hyprland.conf" \
-  "$rootfs/home/blossom/.config/hypr/hyprland.conf"
-install -d -m 0700 "$rootfs/home/blossom/.config/mako" \
-  "$rootfs/home/blossom/.config/xdg-desktop-portal"
+  "$rootfs/usr/share/blossom-os/default-home/.config/hypr/hyprland.conf"
+install -d -m 0755 "$rootfs/usr/share/blossom-os/default-home/.config/mako" \
+  "$rootfs/usr/share/blossom-os/default-home/.config/xdg-desktop-portal"
 install -m 0600 "$rootfs/usr/share/blossom-os/physical-home/mako.conf" \
-  "$rootfs/home/blossom/.config/mako/config"
+  "$rootfs/usr/share/blossom-os/default-home/.config/mako/config"
 install -m 0600 "$rootfs/usr/share/blossom-os/physical-home/hyprland-portals.conf" \
-  "$rootfs/home/blossom/.config/xdg-desktop-portal/hyprland-portals.conf"
-install -d -m 0755 "$rootfs/etc/systemd/system/getty@tty1.service.d"
-install -m 0644 "$rootfs/usr/share/blossom-os/physical-home/getty-autologin.conf" \
-  "$rootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf"
-chown -R 1000:1000 "$rootfs/home/blossom"
+  "$rootfs/usr/share/blossom-os/default-home/.config/xdg-desktop-portal/hyprland-portals.conf"
 install -d -m 0755 "$rootfs/etc/systemd/user/graphical-session.target.wants"
 ln -sf /usr/lib/systemd/user/blossom-shell-ui.service \
   "$rootfs/etc/systemd/user/graphical-session.target.wants/blossom-shell-ui.service"
@@ -88,6 +83,11 @@ ln -sf /usr/lib/systemd/system/bluetooth.service \
   "$rootfs/etc/systemd/system/dbus-org.bluez.service"
 ln -sf /usr/lib/systemd/system/blossom-privileged-helper.service \
   "$rootfs/etc/systemd/system/multi-user.target.wants/blossom-privileged-helper.service"
+ln -sf /usr/lib/systemd/system/greetd.service \
+  "$rootfs/etc/systemd/system/display-manager.service"
+ln -sf /usr/lib/systemd/system/greetd.service \
+  "$rootfs/etc/systemd/system/graphical.target.wants/greetd.service"
+ln -sf /usr/lib/systemd/system/graphical.target "$rootfs/etc/systemd/system/default.target"
 if [[ "$mode" == vm-qualification ]]; then
   install -Dm0755 "$repo/distribution/evidence/blossom-evidence-boot" \
     "$rootfs/usr/local/bin/blossom-evidence-boot"

@@ -47,16 +47,22 @@ test proves PAM unlock, logout/login, restart persistence and recovery access.
 
 ## Activation checklist
 
-- [ ] Replace the terminal launcher with the packaged graphical installer.
-- [ ] Connect the wizard to the guarded target observer without adding write authority.
-- [ ] Pass a short-lived secret channel separately from public installation state.
-- [ ] Invoke owner provisioning only after rootfs extraction and before unmount.
-- [ ] Remove the build-time installed `blossom` account and installed getty autologin.
-- [ ] Package and enable greetd/ReGreet only in the installed rootfs.
-- [ ] Preserve live-session autologin and hide the installer after installation.
-- [ ] Test invalid/reserved names, password mismatch and secret non-retention.
+- [x] Replace the terminal launcher with the packaged graphical installer.
+- [x] Connect the wizard to the guarded target observer without adding write authority.
+- [x] Pass a short-lived secret channel separately from public installation state.
+- [x] Invoke owner provisioning only after rootfs extraction and before unmount.
+- [x] Remove the build-time installed `blossom` account and installed getty autologin.
+- [x] Package and enable greetd/ReGreet only in the installed rootfs.
+- [x] Preserve live-session autologin and hide the installer after installation.
+- [x] Test invalid/reserved names, password mismatch and secret non-retention.
 - [ ] Test login failure/success, logout/login, reboot, power controls and recovery.
 - [ ] Test keyboard-only, large text and 1x/2x display scale.
+
+After a disposable installed boot, run
+`sudo /opt/blossom/scripts/distribution/verify_installed_identity_login.sh USERNAME`
+to collect the non-secret identity/session portion of the runtime gate. Successful
+password rejection/acceptance, logout/relogin and accessibility interactions
+remain human-observed graphical evidence and cannot be replaced by source tests.
 
 The candidate build lock remains active until these items and the Desktop
 Foundation gate are reviewed. These source files do not claim a working installer

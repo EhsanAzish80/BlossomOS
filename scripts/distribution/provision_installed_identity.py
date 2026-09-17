@@ -29,6 +29,9 @@ def provision(
     if root == Path("/") or not (root / "etc").is_dir():
         raise ProvisionError("installation root is not mounted")
     validate_password(password, confirmation, profile.username)
+    zone = root / "usr/share/zoneinfo" / profile.timezone
+    if not zone.is_file():
+        raise ProvisionError("selected time zone is not installed")
     groups = "audio,input,video"
     if profile.administrator:
         groups += ",wheel"
@@ -47,14 +50,18 @@ def provision(
     destination = root / "home" / profile.username
     if source.is_dir():
         shutil.copytree(source, destination, dirs_exist_ok=True)
-    zone = root / "usr/share/zoneinfo" / profile.timezone
-    if not zone.is_file():
-        raise ProvisionError("selected time zone is not installed")
+    hyprland = destination / ".config/hypr/hyprland.conf"
+    if hyprland.is_file():
+        contents = hyprland.read_text(encoding="utf-8")
+        contents = contents.replace("kb_layout = us", f"kb_layout = {profile.keymap}", 1)
+        hyprland.write_text(contents, encoding="utf-8")
     localtime = root / "etc/localtime"
     localtime.unlink(missing_ok=True)
     localtime.symlink_to(Path("/usr/share/zoneinfo") / profile.timezone)
     (root / "etc/locale.conf").write_text(f"LANG={profile.locale}\n", encoding="utf-8")
+    (root / "etc/locale.gen").write_text(f"{profile.locale} UTF-8\n", encoding="utf-8")
     (root / "etc/vconsole.conf").write_text(f"KEYMAP={profile.keymap}\n", encoding="utf-8")
+    run(["arch-chroot", str(root), "locale-gen"], check=True, text=True, timeout=120)
     state = root / "var/lib/blossom/installation"
     state.mkdir(parents=True, mode=0o700, exist_ok=True)
     record = state / "owner.json"

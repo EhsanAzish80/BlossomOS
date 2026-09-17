@@ -112,6 +112,7 @@ def _inventory() -> dict[str, Any]:
 def install(
     target: dict[str, Any],
     run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+    provision: Callable[[Path], None] | None = None,
 ) -> None:
     if os.geteuid() != 0:
         raise BackendError("installer backend requires root")
@@ -167,6 +168,8 @@ def install(
             f"UUID={uuids['efi']} /boot vfat umask=0077 0 2\n",
             encoding="utf-8",
         )
+        if provision is not None:
+            provision(MOUNT)
         run(["sync"], check=True, timeout=60)
     finally:
         if mounted_boot:

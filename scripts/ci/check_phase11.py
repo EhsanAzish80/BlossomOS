@@ -52,6 +52,12 @@ shell_qml = read("system/shell/qml/shell.qml")
 broker_header = read("system/shell/client-plugin/blossombroker.h")
 broker_source = read("system/shell/client-plugin/blossombroker.cpp")
 installer_rule = read("distribution/archiso/airootfs/etc/polkit-1/rules.d/49-blossom-live-installer.rules")
+installer_qml = read("system/installer/qml/Main.qml")
+graphical_installer = read("system/installer/main.cpp")
+graphical_backend = read("scripts/distribution/graphical_install_backend.py")
+installed_greetd = read("distribution/physical-rootfs/etc/greetd/config.toml")
+installed_session = read("distribution/physical-rootfs/usr/share/wayland-sessions/blossom.desktop")
+installed_sudoers = read("distribution/physical-rootfs/etc/sudoers.d/10-blossom-wheel")
 desktop_probe = read("distribution/archiso/airootfs/usr/local/bin/blossom-desktop-probe")
 desktop_probe_unit = read("distribution/archiso/airootfs/etc/systemd/system/blossom-desktop-probe.service")
 desktop_probe_link = ROOT / "distribution/archiso/airootfs/etc/systemd/system/multi-user.target.wants/blossom-desktop-probe.service"
@@ -238,11 +244,17 @@ for required in (
 ):
     if required not in candidate_builder:
         fail(f"physical candidate builder is incomplete: {required}")
-physical_bash_profile = read("distribution/physical-rootfs/home/blossom/.bash_profile")
-if "exec start-hyprland" not in physical_bash_profile:
-    fail("physical desktop session does not use the supported Hyprland launcher")
-if "exec Hyprland" in physical_bash_profile:
-    fail("physical desktop session bypasses start-hyprland")
+if 'useradd --root "$rootfs"' in candidate_builder or "getty-autologin.conf" in candidate_builder:
+    fail("installed image must not contain a fixed account or console autologin")
+for required in ("greetd", "regreet", "graphical.target.wants/greetd.service"):
+    if required not in candidate_builder:
+        fail(f"installed graphical login is incomplete: {required}")
+if 'command = "Hyprland --config /etc/greetd/hyprland.conf"' not in installed_greetd:
+    fail("installed greetd session is not Wayland-hosted")
+if "Exec=/usr/bin/start-hyprland" not in installed_session:
+    fail("installed Blossom session bypasses the supported launcher")
+if installed_sudoers.strip() != "%wheel ALL=(ALL:ALL) ALL":
+    fail("installed administrator role is not password-authenticated")
 if "external disks are never installation targets" not in candidate:
     fail("physical candidate does not explain its internal-disk-only target policy")
 for forbidden in ("systemctl enable",):
@@ -332,12 +344,15 @@ for required in (
     '["/usr/lib/blossom-os/blossom-privileged-helper"]="0:0:755"',
     '["/usr/lib/blossom-os/blossom-shell-ui"]="0:0:755"',
     '["/usr/lib/blossom-os/blossom-desktop-launcher"]="0:0:755"',
+    '["/usr/lib/blossom-os/blossom-installer"]="0:0:755"',
     '["/usr/local/bin/blossom-shell-recovery"]="0:0:755"',
     '["/usr/local/bin/blossom-start-session"]="0:0:755"',
     '["/usr/local/bin/blossom-desktop-probe"]="0:0:755"',
     '["/usr/local/libexec/blossom-provision-live-user"]="0:0:755"',
     '["/usr/local/bin/blossom-physical-install"]="0:0:755"',
+    '["/usr/local/bin/blossom-install-observe"]="0:0:755"',
     '["/usr/local/libexec/blossom-physical-install-backend"]="0:0:755"',
+    '["/usr/local/libexec/blossom-graphical-install-backend"]="0:0:755"',
 ):
     if required not in candidate_profile:
         fail(f"physical candidate executable permission is missing: {required}")
@@ -420,9 +435,18 @@ for required in ("liveEnvironment", "openTerminal", "openInstaller"):
 for required in ("openTerminal", "openInstaller", 'QStringLiteral("Launch1")'):
     if required not in broker_source:
         fail(f"Blossom shell broker action is missing: {required}")
-for required in ('subject.user == "blossom"', 'action.lookup("program") == "/usr/local/bin/blossom-physical-install"'):
+for required in ('subject.user == "blossom"', 'action.lookup("program") == "/usr/local/libexec/blossom-graphical-install-backend"'):
     if required not in installer_rule:
         fail(f"live installer privilege boundary is incomplete: {required}")
+for required in ("Language and keyboard", "Connect or continue offline", "Create your account", "Review before erasing", "Installer.install"):
+    if required not in installer_qml:
+        fail(f"graphical installer flow is incomplete: {required}")
+for required in ("blossom-install-observe", "pkexec", "blossom-graphical-install-backend", "closeWriteChannel"):
+    if required not in graphical_installer:
+        fail(f"graphical installer controller is incomplete: {required}")
+for required in ("validate_profile", "validate_password", "run_once", "provision", 'request["password"] = ""'):
+    if required not in graphical_backend:
+        fail(f"graphical installer backend is incomplete: {required}")
 for required in ("Blossom OS Recovery Console", "vt.global_cursor_default=0", "blossom.recovery=1"):
     if required not in candidate_builder:
         fail(f"candidate boot experience is incomplete: {required}")

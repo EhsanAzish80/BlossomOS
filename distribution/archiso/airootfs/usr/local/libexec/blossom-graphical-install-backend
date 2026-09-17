@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+test "$#" -eq 0
+cd /opt/blossom
+exec python3 -m scripts.distribution.graphical_install_backend

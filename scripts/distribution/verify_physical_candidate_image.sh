@@ -27,21 +27,26 @@ executables=(
   usr/lib/blossom-os/blossom-privileged-helper
   usr/lib/blossom-os/blossom-shell-ui
   usr/lib/blossom-os/blossom-desktop-launcher
+  usr/lib/blossom-os/blossom-installer
   usr/local/bin/blossom-shell-recovery
   usr/local/bin/blossom-start-session
   usr/local/bin/blossom-screenshot
   usr/local/bin/blossom-desktop-probe
+  usr/local/bin/blossom-install-observe
+  usr/local/libexec/blossom-graphical-install-backend
 )
 
 required_files=(
   usr/share/blossom-os/shell/shell.qml
   usr/share/blossom-os/shell/SecurityHost.qml
   usr/share/blossom-os/shell/wallpaper.svg
+  usr/share/blossom-os/installer/Main.qml
   usr/lib/systemd/user/blossom-desktop-shell.service
   usr/lib/systemd/user/blossom-shell-ui.service
   usr/lib/systemd/user/blossom-desktop-launcher.service
   home/blossom/.config/mako/config
   home/blossom/.config/xdg-desktop-portal/hyprland-portals.conf
+  root/blossom-rootfs.tar.zst
 )
 
 unsquashfs -quiet -d "$root" "$squashfs" \
@@ -88,4 +93,28 @@ grep -Fq "default=hyprland;gtk" \
   exit 1
 }
 
-echo "Candidate live filesystem executable boundary passed."
+installed="$work/installed"
+mkdir -p "$installed"
+tar --zstd -xf "$root/root/blossom-rootfs.tar.zst" -C "$installed" \
+  ./etc/greetd/config.toml \
+  ./etc/greetd/regreet.toml \
+  ./etc/greetd/hyprland.conf \
+  ./etc/systemd/system/default.target \
+  ./etc/systemd/system/display-manager.service \
+  ./usr/share/wayland-sessions/blossom.desktop
+grep -Fq 'command = "Hyprland --config /etc/greetd/hyprland.conf"' \
+  "$installed/etc/greetd/config.toml" || {
+  echo "installed rootfs does not launch the graphical greeter" >&2
+  exit 1
+}
+grep -Fq 'Exec=/usr/bin/start-hyprland' \
+  "$installed/usr/share/wayland-sessions/blossom.desktop" || {
+  echo "installed rootfs does not register the Blossom Wayland session" >&2
+  exit 1
+}
+if tar --zstd -tf "$root/root/blossom-rootfs.tar.zst" | grep -Eq 'getty@tty1.*autologin|home/blossom/'; then
+  echo "installed rootfs retained a fixed user or console autologin" >&2
+  exit 1
+fi
+
+echo "Candidate live and installed filesystem boundaries passed."
