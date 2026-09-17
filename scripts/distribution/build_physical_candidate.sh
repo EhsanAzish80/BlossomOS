@@ -75,6 +75,7 @@ install -m 0600 "$rootfs/usr/share/blossom-os/physical-home/mako.conf" \
 install -m 0600 "$rootfs/usr/share/blossom-os/physical-home/hyprland-portals.conf" \
   "$rootfs/usr/share/blossom-os/default-home/.config/xdg-desktop-portal/hyprland-portals.conf"
 install -d -m 0755 "$rootfs/etc/systemd/user/graphical-session.target.wants"
+install -d -m 0755 "$rootfs/etc/systemd/system/graphical.target.wants"
 ln -sf /usr/lib/systemd/user/blossom-shell-ui.service \
   "$rootfs/etc/systemd/user/graphical-session.target.wants/blossom-shell-ui.service"
 ln -sf /usr/lib/systemd/system/NetworkManager.service \

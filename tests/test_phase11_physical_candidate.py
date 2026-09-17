@@ -131,6 +131,10 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn('command = "Hyprland --config /etc/greetd/hyprland.conf"', greetd)
         self.assertIn("Exec=/usr/bin/start-hyprland", session)
         self.assertIn('graphical.target.wants/greetd.service', builder)
+        graphical_wants = 'install -d -m 0755 "$rootfs/etc/systemd/system/graphical.target.wants"'
+        greetd_link = '"$rootfs/etc/systemd/system/graphical.target.wants/greetd.service"'
+        self.assertIn(graphical_wants, builder)
+        self.assertLess(builder.index(graphical_wants), builder.index(greetd_link))
         self.assertIn(
             'cp -a "$repo/distribution/archiso/airootfs/." "$profile/airootfs/"',
             builder,
