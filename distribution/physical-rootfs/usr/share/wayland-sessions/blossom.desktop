@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Blossom OS
+Comment=Blossom desktop session
+Exec=/usr/local/bin/blossom-start-session
+Type=Application
+DesktopNames=Blossom;Hyprland
