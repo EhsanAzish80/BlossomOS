@@ -17,6 +17,7 @@ class BlossomBroker final : public QObject {
     Q_PROPERTY(QVariantMap battery READ battery NOTIFY batteryChanged FINAL)
     Q_PROPERTY(QVariantMap network READ network NOTIFY networkChanged FINAL)
     Q_PROPERTY(QString desktopMessage READ desktopMessage NOTIFY desktopMessageChanged FINAL)
+    Q_PROPERTY(bool onboardingRequired READ onboardingRequired NOTIFY onboardingRequiredChanged FINAL)
     Q_PROPERTY(bool liveEnvironment READ liveEnvironment CONSTANT FINAL)
 
 public:
@@ -29,6 +30,7 @@ public:
     [[nodiscard]] QVariantMap network() const;
     [[nodiscard]] bool liveEnvironment() const;
     [[nodiscard]] QString desktopMessage() const;
+    [[nodiscard]] bool onboardingRequired() const;
 
     Q_INVOKABLE void requestSystemUname();
     Q_INVOKABLE void approveOnce();
@@ -46,6 +48,8 @@ public:
     Q_INVOKABLE void openAudioSettings();
     Q_INVOKABLE void restartSystem();
     Q_INVOKABLE void powerOff();
+    Q_INVOKABLE void refreshOnboarding();
+    Q_INVOKABLE void dismissOnboarding();
 
 signals:
     void stateChanged();
@@ -54,6 +58,7 @@ signals:
     void batteryChanged();
     void networkChanged();
     void desktopMessageChanged();
+    void onboardingRequiredChanged();
 
 private:
     void launchDesktop(const QString &action);
@@ -71,6 +76,7 @@ private:
     QVariantMap m_battery{{QStringLiteral("status"), QStringLiteral("unavailable")}};
     QVariantMap m_network{{QStringLiteral("connectivity"), QStringLiteral("unavailable")}};
     QString m_desktopMessage;
+    bool m_onboardingRequired = true;
     QDBusServiceWatcher m_serviceWatcher;
     QTimer m_expiryTimer;
     QTimer m_batteryExpiryTimer;

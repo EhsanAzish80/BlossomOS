@@ -30,6 +30,11 @@ class DesktopFoundationLayoutTests(unittest.TestCase):
         self.assertIn("Super+Q closes the active window", SHELL)
         self.assertIn("BlossomBroker.desktopMessage", SHELL)
 
+    def test_onboarding_is_service_owned_and_dismissible(self):
+        self.assertIn("BlossomBroker.onboardingRequired", SHELL)
+        self.assertIn("BlossomBroker.dismissOnboarding()", SHELL)
+        self.assertNotIn("root.welcomeVisible = false", SHELL)
+
 
 if __name__ == "__main__":
     unittest.main()

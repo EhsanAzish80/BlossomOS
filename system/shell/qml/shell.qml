@@ -8,7 +8,7 @@ import Blossom.Shell
 ShellRoot {
     id: root
     property bool launcherVisible: false
-    property bool welcomeVisible: true
+    property bool welcomeVisible: BlossomBroker.onboardingRequired
     property bool activityVisible: false
     property bool powerVisible: false
     property string powerAction: ""
@@ -191,7 +191,7 @@ ShellRoot {
                     Label { text: BlossomBroker.liveEnvironment ? "LIVE SESSION" : "BLOSSOM OS"; color: "#8dd7c7"; font.bold: true }
                     Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Try Blossom OS" : "Your desktop is ready"; color: "#f4f7fb"; font.pixelSize: 36; font.bold: true; wrapMode: Text.WordWrap }
                     Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Browse, work with files, connect to a network, or install from the verified offline media when you are ready." : "Use Blossom as a normal computer. Open Agent when you want local assistance."; color: "#c0ccdc"; font.pixelSize: 17; wrapMode: Text.WordWrap }
-                    RowLayout { Button { text: "Continue to desktop"; onClicked: root.welcomeVisible = false }; Button { text: "Network"; onClicked: BlossomBroker.openNetworkSettings() }; Button { visible: BlossomBroker.liveEnvironment; text: "Install Blossom OS"; onClicked: BlossomBroker.openInstaller() } }
+                    RowLayout { Button { text: "Continue to desktop"; onClicked: BlossomBroker.dismissOnboarding() }; Button { text: "Network"; onClicked: BlossomBroker.openNetworkSettings() }; Button { visible: BlossomBroker.liveEnvironment; text: "Install Blossom OS"; onClicked: BlossomBroker.openInstaller() } }
                     Item { Layout.fillHeight: true }
                     Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Welcome to Blossom OS. Installing is never automatic. External disks are excluded from installation targets, and you can continue offline." : "Applications and files remain available even when the agent is not configured."; color: "#8190a5"; wrapMode: Text.WordWrap }
                     Label { Layout.fillWidth: true; visible: BlossomBroker.desktopMessage.length > 0; text: BlossomBroker.desktopMessage; color: BlossomBroker.desktopMessage.startsWith("Could not") ? "#ff9b93" : "#8dd7c7"; wrapMode: Text.WordWrap; Accessible.role: Accessible.AlertMessage }

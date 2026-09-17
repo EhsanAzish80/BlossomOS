@@ -39,6 +39,9 @@ def main() -> None:
         "NoNewPrivileges=yes",
         "ProtectSystem=strict",
         "ProtectHome=read-only",
+        "StateDirectory=blossom-os",
+        "StateDirectoryMode=0700",
+        "UMask=0077",
         "RestrictSUIDSGID=yes",
         "RestrictAddressFamilies=AF_UNIX",
     ]:
@@ -50,6 +53,10 @@ def main() -> None:
         f'"{BUS_NAME}"',
         f'"{OBJECT}"',
         "bool Launch1(const QString &action)",
+        "bool OnboardingRequired1() const",
+        "bool CompleteOnboarding1()",
+        'QStringLiteral("/onboarding-complete")',
+        'marker.write("schema=1\\n")',
         'QStringLiteral("/usr/bin/hyprctl")',
         'QStringLiteral("dispatch")',
         'QStringLiteral("exec")',
@@ -65,6 +72,8 @@ def main() -> None:
             "desktop launcher must have exactly one process boundary")
     require("else return false;" in source,
             "unknown desktop actions must fail closed")
+    require(source.count("STATE_DIRECTORY") == 2,
+            "onboarding state must use only the systemd-owned state directory")
     for value in ["system(", "popen(", "/bin/sh", "sh -c", "bash -c", "QDBusMessage"]:
         require(value not in source, f"forbidden desktop launcher authority: {value}")
 

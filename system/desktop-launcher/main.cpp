@@ -1,7 +1,9 @@
 #include <QCoreApplication>
 #include <QDBusConnection>
+#include <QFileInfo>
 #include <QObject>
 #include <QProcess>
+#include <QSaveFile>
 #include <QStringList>
 
 class DesktopLauncher final : public QObject {
@@ -9,6 +11,23 @@ class DesktopLauncher final : public QObject {
     Q_CLASSINFO("D-Bus Interface", "org.blossomos.Desktop1")
 
 public slots:
+    bool OnboardingRequired1() const {
+        if (qEnvironmentVariableIsSet("BLOSSOM_LIVE")) return true;
+        const QString stateDirectory = qEnvironmentVariable("STATE_DIRECTORY");
+        return stateDirectory.isEmpty() ||
+               !QFileInfo::exists(stateDirectory + QStringLiteral("/onboarding-complete"));
+    }
+
+    bool CompleteOnboarding1() {
+        if (qEnvironmentVariableIsSet("BLOSSOM_LIVE")) return true;
+        const QString stateDirectory = qEnvironmentVariable("STATE_DIRECTORY");
+        if (stateDirectory.isEmpty()) return false;
+        QSaveFile marker(stateDirectory + QStringLiteral("/onboarding-complete"));
+        if (!marker.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
+        if (marker.write("schema=1\n") != 9) return false;
+        return marker.commit();
+    }
+
     bool Launch1(const QString &action) {
         QStringList command;
         if (action == QStringLiteral("terminal")) command = {QStringLiteral("/usr/bin/foot")};

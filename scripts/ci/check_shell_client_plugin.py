@@ -47,7 +47,9 @@ def main() -> None:
     ]:
         require(forbidden not in text, f"forbidden client authority: {forbidden}")
     header = (PLUGIN / "blossombroker.h").read_text()
-    require(header.count("Q_INVOKABLE") == 16, "client invokable surface drift")
+    require(header.count("Q_INVOKABLE") == 18, "client invokable surface drift")
+    require("onboardingRequired" in header and "dismissOnboarding" in header,
+            "fixed onboarding surface is missing")
     client = (PLUGIN / "blossombroker.cpp").read_text()
     require(client.count("QVariant::fromValue(ProtocolVersion)") == 4,
             "all version arguments must preserve unsigned 16-bit wire type")

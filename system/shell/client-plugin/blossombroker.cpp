@@ -63,6 +63,7 @@ BlossomBroker::BlossomBroker(QObject *parent) : QObject(parent) {
     connect(&m_batteryExpiryTimer, &QTimer::timeout, this, &BlossomBroker::refreshBattery);
     m_networkExpiryTimer.setSingleShot(true);
     connect(&m_networkExpiryTimer, &QTimer::timeout, this, &BlossomBroker::refreshNetwork);
+    refreshOnboarding();
 }
 
 QString BlossomBroker::state() const { return m_state; }
@@ -74,6 +75,7 @@ bool BlossomBroker::liveEnvironment() const {
     return qEnvironmentVariableIsSet("BLOSSOM_LIVE");
 }
 QString BlossomBroker::desktopMessage() const { return m_desktopMessage; }
+bool BlossomBroker::onboardingRequired() const { return m_onboardingRequired; }
 
 void BlossomBroker::openTerminal() {
     launchDesktop(QStringLiteral("terminal"));
@@ -124,6 +126,33 @@ void BlossomBroker::launchDesktop(const QString &action) {
             ? QStringLiteral("Could not open %1. Try again or open Terminal for recovery.").arg(action)
             : QStringLiteral("Opened %1.").arg(action);
         emit desktopMessageChanged();
+    });
+}
+
+void BlossomBroker::refreshOnboarding() {
+    auto *watcher = new QDBusPendingCallWatcher(
+        desktopInterface().asyncCall(QStringLiteral("OnboardingRequired1")), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher] {
+        const QDBusPendingReply<bool> reply = *watcher;
+        watcher->deleteLater();
+        const bool required = reply.isError() ? true : reply.value();
+        if (required != m_onboardingRequired) {
+            m_onboardingRequired = required;
+            emit onboardingRequiredChanged();
+        }
+    });
+}
+
+void BlossomBroker::dismissOnboarding() {
+    auto *watcher = new QDBusPendingCallWatcher(
+        desktopInterface().asyncCall(QStringLiteral("CompleteOnboarding1")), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher] {
+        const QDBusPendingReply<bool> reply = *watcher;
+        watcher->deleteLater();
+        if (!reply.isError() && reply.value() && m_onboardingRequired) {
+            m_onboardingRequired = false;
+            emit onboardingRequiredChanged();
+        }
     });
 }
 
