@@ -88,6 +88,7 @@ ShellRoot {
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: "#334155" }
                         Button { Layout.fillWidth: true; visible: BlossomBroker.liveEnvironment; text: "Install Blossom OS"; onClicked: { BlossomBroker.openInstaller(); root.launcherVisible = false } }
+                        Label { Layout.fillWidth: true; visible: BlossomBroker.desktopMessage.length > 0; text: BlossomBroker.desktopMessage; color: BlossomBroker.desktopMessage.startsWith("Could not") ? "#ff9b93" : "#8dd7c7"; wrapMode: Text.WordWrap; Accessible.role: Accessible.AlertMessage }
                         Item { Layout.fillHeight: true }
                         Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Installation uses verified files from this media and can proceed offline." : "Installed system · files and settings are persistent."; color: "#8190a5"; wrapMode: Text.WordWrap }
                     }
@@ -109,6 +110,7 @@ ShellRoot {
                         anchors { fill: parent; margins: 20 }; spacing: 12
                         Label { Layout.fillWidth: true; text: root.powerAction === "" ? "System" : (root.powerAction === "restart" ? "Restart Blossom OS?" : "Shut down Blossom OS?"); color: "#f4f7fb"; font.pixelSize: 20; font.bold: true; wrapMode: Text.WordWrap }
                         Label { Layout.fillWidth: true; visible: root.powerAction !== ""; text: "Save your work before continuing."; color: "#b8c4d6"; wrapMode: Text.WordWrap }
+                        Label { Layout.fillWidth: true; visible: root.powerAction === ""; text: "Super+Tab switches windows · Super+Q closes the active window"; color: "#8fa0b7"; wrapMode: Text.WordWrap }
                         RowLayout {
                             Layout.fillWidth: true
                             Button { Layout.fillWidth: true; text: root.powerAction === "" ? "Restart" : "Cancel"; onClicked: root.powerAction === "" ? root.powerAction = "restart" : root.powerAction = "" }
@@ -192,6 +194,7 @@ ShellRoot {
                     RowLayout { Button { text: "Continue to desktop"; onClicked: root.welcomeVisible = false }; Button { text: "Network"; onClicked: BlossomBroker.openNetworkSettings() }; Button { visible: BlossomBroker.liveEnvironment; text: "Install Blossom OS"; onClicked: BlossomBroker.openInstaller() } }
                     Item { Layout.fillHeight: true }
                     Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Welcome to Blossom OS. Installing is never automatic. External disks are excluded from installation targets, and you can continue offline." : "Applications and files remain available even when the agent is not configured."; color: "#8190a5"; wrapMode: Text.WordWrap }
+                    Label { Layout.fillWidth: true; visible: BlossomBroker.desktopMessage.length > 0; text: BlossomBroker.desktopMessage; color: BlossomBroker.desktopMessage.startsWith("Could not") ? "#ff9b93" : "#8dd7c7"; wrapMode: Text.WordWrap; Accessible.role: Accessible.AlertMessage }
                 }
             }
         }

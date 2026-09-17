@@ -73,6 +73,7 @@ QVariantMap BlossomBroker::network() const { return m_network; }
 bool BlossomBroker::liveEnvironment() const {
     return qEnvironmentVariableIsSet("BLOSSOM_LIVE");
 }
+QString BlossomBroker::desktopMessage() const { return m_desktopMessage; }
 
 void BlossomBroker::openTerminal() {
     launchDesktop(QStringLiteral("terminal"));
@@ -114,7 +115,16 @@ void BlossomBroker::powerOff() {
 }
 
 void BlossomBroker::launchDesktop(const QString &action) {
-    desktopInterface().asyncCall(QStringLiteral("Launch1"), action);
+    auto *watcher = new QDBusPendingCallWatcher(
+        desktopInterface().asyncCall(QStringLiteral("Launch1"), action), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, action] {
+        const QDBusPendingReply<bool> reply = *watcher;
+        watcher->deleteLater();
+        m_desktopMessage = reply.isError() || !reply.value()
+            ? QStringLiteral("Could not open %1. Try again or open Terminal for recovery.").arg(action)
+            : QStringLiteral("Opened %1.").arg(action);
+        emit desktopMessageChanged();
+    });
 }
 
 void BlossomBroker::requestSystemUname() {

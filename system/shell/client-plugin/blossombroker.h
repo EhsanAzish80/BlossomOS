@@ -16,6 +16,7 @@ class BlossomBroker final : public QObject {
     Q_PROPERTY(QVariantList activity READ activity NOTIFY activityChanged FINAL)
     Q_PROPERTY(QVariantMap battery READ battery NOTIFY batteryChanged FINAL)
     Q_PROPERTY(QVariantMap network READ network NOTIFY networkChanged FINAL)
+    Q_PROPERTY(QString desktopMessage READ desktopMessage NOTIFY desktopMessageChanged FINAL)
     Q_PROPERTY(bool liveEnvironment READ liveEnvironment CONSTANT FINAL)
 
 public:
@@ -27,6 +28,7 @@ public:
     [[nodiscard]] QVariantMap battery() const;
     [[nodiscard]] QVariantMap network() const;
     [[nodiscard]] bool liveEnvironment() const;
+    [[nodiscard]] QString desktopMessage() const;
 
     Q_INVOKABLE void requestSystemUname();
     Q_INVOKABLE void approveOnce();
@@ -51,6 +53,7 @@ signals:
     void activityChanged();
     void batteryChanged();
     void networkChanged();
+    void desktopMessageChanged();
 
 private:
     void launchDesktop(const QString &action);
@@ -67,6 +70,7 @@ private:
     QVariantList m_activity;
     QVariantMap m_battery{{QStringLiteral("status"), QStringLiteral("unavailable")}};
     QVariantMap m_network{{QStringLiteral("connectivity"), QStringLiteral("unavailable")}};
+    QString m_desktopMessage;
     QDBusServiceWatcher m_serviceWatcher;
     QTimer m_expiryTimer;
     QTimer m_batteryExpiryTimer;

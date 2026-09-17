@@ -88,8 +88,8 @@ def main() -> None:
     ]:
         require(setting in cmake, f"missing relocatable plugin packaging: {setting}")
     host = (PLUGIN / "shellmain.cpp").read_text()
-    require('file:///usr/share/blossom-os/shell/shell.qml' in host,
-            "UI host must load only the fixed installed QML entrypoint")
+    require('file:///usr/share/blossom-os/shell/SecurityHost.qml' in host,
+            "security host must load only the fixed installed accessibility entrypoint")
     require("QApplication application" in host,
             "UI host must provide the standard Qt accessibility runtime")
     require("argc" in host and "argv" in host,
