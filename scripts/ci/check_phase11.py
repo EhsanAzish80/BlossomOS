@@ -276,7 +276,7 @@ for required in (
 for required in (
     "Boot exact candidate and require the graphical desktop",
     "blossom.desktop-probe=1",
-    "BLOSSOM_DESKTOP_READY shell=active broker=active windows=2",
+    "BLOSSOM_DESKTOP_READY security=active broker=active desktop=active layers=4",
     "-device virtio-vga",
     "archisosearchuuid=$uuid",
 ):
@@ -285,8 +285,12 @@ for required in (
 for required in (
     "blossom-shell-ui.service",
     "blossom-shell-service.service",
-    '"Blossom OS"',
-    '"Welcome to Blossom OS"',
+    "hyprctl layers -j",
+    '"blossom-background"',
+    '"blossom-top-bar"',
+    '"blossom-dock"',
+    '"blossom-welcome"',
+    "blossom-desktop-shell.service",
     "BLOSSOM_DESKTOP_FAILED",
 ):
     if required not in desktop_probe:

@@ -17,42 +17,48 @@ user_systemctl() {
     systemctl --user "$@"
 }
 
-desktop_windows_ready() {
-  local instance wayland clients
+desktop_layers_ready() {
+  local instance wayland layers
   id -u blossom >/dev/null 2>&1 || return 1
   instance=$(find "$runtime/hypr" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null || true)
   [[ -n $instance ]] || return 1
   wayland=$(find "$runtime" -maxdepth 1 -type s -name 'wayland-*' -print -quit 2>/dev/null || true)
   [[ -n $wayland ]] || return 1
-  clients=$(runuser -u blossom -- env \
+  layers=$(runuser -u blossom -- env \
     XDG_RUNTIME_DIR="$runtime" \
     WAYLAND_DISPLAY="$(basename "$wayland")" \
     HYPRLAND_INSTANCE_SIGNATURE="$(basename "$instance")" \
-    hyprctl clients -j 2>/dev/null) || return 1
+    hyprctl layers -j 2>/dev/null) || return 1
   python3 -c '
 import json, sys
-clients = json.load(sys.stdin)
-visible = {item.get("title") for item in clients
-           if item.get("mapped") and item.get("visible") and not item.get("hidden")}
-required = {"Blossom OS", "Welcome to Blossom OS"}
-raise SystemExit(0 if required <= visible else 1)
-' <<<"$clients"
+outputs = json.load(sys.stdin)
+namespaces = set()
+for output in outputs.values():
+    for surfaces in output.get("levels", {}).values():
+        for surface in surfaces:
+            namespace = surface.get("namespace")
+            if namespace:
+                namespaces.add(namespace)
+required = {"blossom-background", "blossom-top-bar", "blossom-dock", "blossom-welcome"}
+raise SystemExit(0 if required <= namespaces else 1)
+' <<<"$layers"
 }
 
 while ((SECONDS < deadline)); do
   if [[ $(id -u blossom 2>/dev/null || true) == 1000 ]] \
       && user_systemctl is-active --quiet blossom-shell-ui.service \
       && user_systemctl is-active --quiet blossom-shell-service.service \
-      && desktop_windows_ready; then
-    echo "BLOSSOM_DESKTOP_READY shell=active broker=active windows=2"
+      && user_systemctl is-active --quiet blossom-desktop-shell.service \
+      && desktop_layers_ready; then
+    echo "BLOSSOM_DESKTOP_READY security=active broker=active desktop=active layers=4"
     systemctl poweroff
     exit 0
   fi
   sleep 2
 done
 
-echo "BLOSSOM_DESKTOP_FAILED shell=$(user_systemctl is-active blossom-shell-ui.service 2>/dev/null || true) broker=$(user_systemctl is-active blossom-shell-service.service 2>/dev/null || true)"
-user_systemctl --no-pager --full status blossom-shell-ui.service blossom-shell-service.service || true
+echo "BLOSSOM_DESKTOP_FAILED security=$(user_systemctl is-active blossom-shell-ui.service 2>/dev/null || true) broker=$(user_systemctl is-active blossom-shell-service.service 2>/dev/null || true) desktop=$(user_systemctl is-active blossom-desktop-shell.service 2>/dev/null || true)"
+user_systemctl --no-pager --full status blossom-shell-ui.service blossom-shell-service.service blossom-desktop-shell.service || true
 journalctl -b _UID=1000 --no-pager -n 160 || true
 systemctl poweroff
 exit 1

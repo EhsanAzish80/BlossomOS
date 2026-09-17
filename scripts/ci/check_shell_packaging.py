@@ -145,9 +145,10 @@ def check_recovery() -> None:
     script = (PACKAGE / RECOVERY).read_text()
     for value in [
         "set -euo pipefail",
-        "systemctl --user --no-pager --full status blossom-shell-ui.service",
-        "systemctl --user reset-failed blossom-shell-ui.service",
-        "systemctl --user restart blossom-shell-ui.service",
+        "blossom-desktop-shell.service",
+        "blossom-shell-ui.service",
+        "systemctl --user reset-failed",
+        "systemctl --user restart",
         "exec bash --noprofile --norc",
     ]:
         require(value in script, f"missing bounded recovery behavior: {value}")

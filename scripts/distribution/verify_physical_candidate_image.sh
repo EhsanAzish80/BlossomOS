@@ -25,9 +25,18 @@ executables=(
   usr/local/bin/blossom-desktop-probe
 )
 
+required_files=(
+  usr/share/blossom-os/shell/shell.qml
+  usr/share/blossom-os/shell/SecurityHost.qml
+  usr/share/blossom-os/shell/wallpaper.svg
+  usr/lib/systemd/user/blossom-desktop-shell.service
+  usr/lib/systemd/user/blossom-shell-ui.service
+  usr/lib/systemd/user/blossom-desktop-launcher.service
+)
+
 unsquashfs -quiet -d "$root" "$squashfs" \
   "${executables[@]}" \
-  usr/share/blossom-os/shell/shell.qml
+  "${required_files[@]}"
 
 for path in "${executables[@]}"; do
   test -f "$root/$path" || {
@@ -40,8 +49,27 @@ for path in "${executables[@]}"; do
   }
 done
 
+for path in "${required_files[@]}"; do
+  test -f "$root/$path" || {
+    echo "candidate is missing required desktop content: /$path" >&2
+    exit 1
+  }
+done
+
 grep -Fq "Welcome to Blossom OS" "$root/usr/share/blossom-os/shell/shell.qml" || {
   echo "candidate is missing the visible welcome surface" >&2
+  exit 1
+}
+for namespace in blossom-background blossom-top-bar blossom-dock blossom-welcome; do
+  grep -Fq "WlrLayershell.namespace: \"$namespace\"" \
+    "$root/usr/share/blossom-os/shell/shell.qml" || {
+    echo "candidate is missing desktop layer: $namespace" >&2
+    exit 1
+  }
+done
+grep -Fq "ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/shell" \
+  "$root/usr/lib/systemd/user/blossom-desktop-shell.service" || {
+  echo "candidate desktop service does not launch the packaged shell" >&2
   exit 1
 }
 
