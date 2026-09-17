@@ -115,6 +115,11 @@ for package in "$packages"/blossom-core-*.pkg.tar.zst "$packages"/blossom-shell-
   bsdtar -xpf "$package" -C "$profile/airootfs" \
     --exclude .BUILDINFO --exclude .MTREE --exclude .PKGINFO
 done
+# Git tracks the helper source as data, while the package installs it as a
+# command.  Reassert the live-root mode after overlay extraction so a later
+# profile overlay or archive implementation cannot silently remove execute
+# permission from the screenshot binding.
+chmod 0755 "$profile/airootfs/usr/local/bin/blossom-screenshot"
 uefi_entries=("$profile/efiboot/loader/entries/"*.conf)
 if ((${#uefi_entries[@]} == 0)); then
   echo "ArchISO profile has no UEFI boot entries" >&2

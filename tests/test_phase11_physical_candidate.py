@@ -139,6 +139,10 @@ class PhysicalCandidateTests(unittest.TestCase):
             'cp -a "$repo/distribution/archiso/airootfs/." "$profile/airootfs/"',
             builder,
         )
+        self.assertIn(
+            'chmod 0755 "$profile/airootfs/usr/local/bin/blossom-screenshot"',
+            builder,
+        )
         self.assertIn("--autologin blossom", autologin)
         self.assertIn("Requires=blossom-live-user.service", autologin)
         self.assertNotIn("useradd --create-home", autologin)
