@@ -78,6 +78,11 @@ class PhysicalCandidateTests(unittest.TestCase):
     def test_desktop_runtime_packages_and_launcher_are_present(self):
         repository = Path(__file__).resolve().parents[1]
         builder = (repository / "scripts/distribution/build_physical_candidate.sh").read_text()
+        image_verifier = (repository / "scripts/distribution/verify_physical_candidate_image.sh").read_text()
+        candidate_workflow = (repository / ".github/workflows/phase11-physical-candidate.yml").read_text()
+        desktop_probe = (repository / "distribution/archiso/airootfs/usr/local/bin/blossom-desktop-probe").read_text()
+        desktop_probe_unit = (repository / "distribution/archiso/airootfs/etc/systemd/system/blossom-desktop-probe.service").read_text()
+        desktop_probe_link = repository / "distribution/archiso/airootfs/etc/systemd/system/multi-user.target.wants/blossom-desktop-probe.service"
         packages = (repository / "distribution/archiso/packages.x86_64").read_text()
         profile = (repository / "distribution/physical-rootfs/home/blossom/.bash_profile").read_text()
         live_profile = (repository / "distribution/archiso/airootfs/home/blossom/.bash_profile").read_text()
@@ -86,6 +91,7 @@ class PhysicalCandidateTests(unittest.TestCase):
         live_hyprland = (repository / "distribution/archiso/airootfs/home/blossom/.config/hypr/hyprland.conf").read_text()
         installed_hyprland = (repository / "distribution/physical-rootfs/usr/share/blossom-os/physical-home/hyprland.conf").read_text()
         shell_package = (repository / "distribution/packages/blossom-shell/PKGBUILD").read_text()
+        core_package = (repository / "distribution/packages/blossom-core/PKGBUILD").read_text()
         shell_unit = (repository / "system/shell/packaging/blossom-shell-ui.service").read_text()
         recovery_unit = (repository / "system/shell/packaging/blossom-shell-recovery.service").read_text()
         recovery_command = (repository / "system/shell/packaging/blossom-shell-recovery").read_text()
@@ -126,6 +132,8 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn('blossom-shell-recovery.service', shell_package)
         self.assertIn('/usr/local/bin/blossom-shell-recovery', shell_package)
         self.assertIn('/usr/local/bin/blossom-start-session', shell_package)
+        self.assertIn("--package blossom-shell-service", core_package)
+        self.assertIn("--features production-dbus-service", core_package)
         self.assertIn("ExecStart=/usr/lib/blossom-os/blossom-shell-ui", shell_unit)
         self.assertIn("Restart=on-failure", shell_unit)
         self.assertIn("OnFailure=blossom-shell-recovery.service", shell_unit)
@@ -133,7 +141,8 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("restart-shell", recovery_command)
         self.assertIn("systemctl --user import-environment", session_command)
         self.assertIn("WAYLAND_DISPLAY", session_command)
-        self.assertIn("graphical-session.target blossom-shell-ui.service", session_command)
+        self.assertIn("systemctl --user start blossom-shell-ui.service", session_command)
+        self.assertNotIn("start graphical-session.target", session_command)
         self.assertIn('bsdtar -xpf "$package" -C "$profile/airootfs"', builder)
         self.assertIn('"$packages"/blossom-core-*.pkg.tar.zst', builder)
         self.assertIn('"$packages"/blossom-shell-*.pkg.tar.zst', builder)
@@ -163,6 +172,24 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("Blossom OS Recovery Console", builder)
         self.assertIn("vt.global_cursor_default=0", builder)
         self.assertIn("blossom.recovery=1", live_profile)
+        self.assertIn("verify_physical_candidate_image.sh", candidate_workflow)
+        for executable in (
+            "blossom-shell-service",
+            "blossom-shell-ui",
+            "blossom-start-session",
+        ):
+            self.assertIn(executable, image_verifier)
+        self.assertIn('test -x "$root/$path"', image_verifier)
+        self.assertIn("Boot exact candidate and require the graphical desktop", candidate_workflow)
+        self.assertIn("blossom.desktop-probe=1", candidate_workflow)
+        self.assertIn("BLOSSOM_DESKTOP_READY shell=active broker=active windows=2", candidate_workflow)
+        self.assertIn("Blossom OS", desktop_probe)
+        self.assertIn("Welcome to Blossom OS", desktop_probe)
+        self.assertIn("blossom-shell-ui.service", desktop_probe)
+        self.assertIn("blossom-shell-service.service", desktop_probe)
+        self.assertIn("ExecCondition=/usr/bin/grep -qw blossom.desktop-probe=1 /proc/cmdline", desktop_probe_unit)
+        self.assertTrue(desktop_probe_link.is_symlink())
+        self.assertEqual(desktop_probe_link.readlink(), Path("../blossom-desktop-probe.service"))
 
     def test_macos_builder_uses_an_isolated_x86_64_vm(self):
         repository = Path(__file__).resolve().parents[1]

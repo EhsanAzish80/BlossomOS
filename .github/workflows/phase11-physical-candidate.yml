@@ -16,6 +16,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
+      - name: Establish graphical qualification host
+        run: |
+          test "$(uname -m)" = x86_64
+          test -e /dev/kvm
+          sudo chmod 0666 /dev/kvm
+
       - name: Check out reviewed source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -43,6 +49,8 @@ jobs:
               pacman -Syu --noconfirm arch-install-scripts archiso base-devel cmake dosfstools \
                 gptfdisk ninja python qt6-base qt6-declarative rust zstd
               scripts/distribution/build_physical_candidate.sh /candidate
+              scripts/distribution/verify_physical_candidate_image.sh \
+                /candidate/iso/blossom-os-*.iso
             '
 
       - name: Verify candidate outputs
@@ -51,6 +59,36 @@ jobs:
           test "$(find "$CANDIDATE_OUTPUT/iso" -maxdepth 1 -name 'blossom-os-*.iso' | wc -l)" -eq 1
           cd "$CANDIDATE_OUTPUT/iso"
           sha256sum --check SHA256SUMS
+
+      - name: Boot exact candidate and require the graphical desktop
+        run: |
+          CANDIDATE_OUTPUT="$RUNNER_TEMP/phase11-candidate"
+          iso=$(find "$CANDIDATE_OUTPUT/iso" -maxdepth 1 -name 'blossom-os-*.iso' -print -quit)
+          test -n "$iso"
+          iso_name=$(basename "$iso")
+          timeout --signal=TERM --kill-after=30s 7m docker run --rm --device /dev/kvm \
+            --volume "$CANDIDATE_OUTPUT:/candidate:ro" \
+            --env "ISO_NAME=$iso_name" \
+            archlinux@sha256:694da1fce635e3a14d90751941b08f02c500e8724682f7a00768e7152251ec34 \
+            bash -euo pipefail -c '
+              pacman -Sy --noconfirm libarchive qemu-desktop util-linux
+              mkdir -p /tmp/direct-boot
+              bsdtar -xf "/candidate/iso/$ISO_NAME" -C /tmp/direct-boot \
+                blossom/boot/x86_64/vmlinuz-linux \
+                blossom/boot/x86_64/initramfs-linux.img
+              uuid=$(blkid -s UUID -o value "/candidate/iso/$ISO_NAME")
+              test -n "$uuid"
+              qemu-system-x86_64 -enable-kvm -cpu host -m 4096 -smp 2 \
+                -machine q35 -no-reboot -display vnc=127.0.0.1:1 \
+                -device virtio-vga -serial stdio \
+                -cdrom "/candidate/iso/$ISO_NAME" \
+                -kernel /tmp/direct-boot/blossom/boot/x86_64/vmlinuz-linux \
+                -initrd /tmp/direct-boot/blossom/boot/x86_64/initramfs-linux.img \
+                -append "archisobasedir=blossom archisosearchuuid=$uuid console=ttyS0,115200n8 systemd.show_status=yes blossom.desktop-probe=1"
+            ' | tee "$CANDIDATE_OUTPUT/desktop-probe.log"
+          grep -q 'BLOSSOM_DESKTOP_READY shell=active broker=active windows=2' \
+            "$CANDIDATE_OUTPUT/desktop-probe.log"
+          ! grep -q 'BLOSSOM_DESKTOP_FAILED' "$CANDIDATE_OUTPUT/desktop-probe.log"
 
       - name: Upload candidate and checksum
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
