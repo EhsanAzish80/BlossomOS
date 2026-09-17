@@ -53,6 +53,7 @@ def main() -> None:
         f'"{BUS_NAME}"',
         f'"{OBJECT}"',
         "bool Launch1(const QString &action)",
+        "QByteArray QuickStatus1() const",
         "bool OnboardingRequired1() const",
         "bool CompleteOnboarding1()",
         'QStringLiteral("/onboarding-complete")',
@@ -61,15 +62,23 @@ def main() -> None:
         'QStringLiteral("dispatch")',
         'QStringLiteral("exec")',
         'QStringLiteral("--")',
+        'QStringLiteral("/usr/bin/nmcli")',
+        'QStringLiteral("/usr/bin/wpctl")',
+        'QStringLiteral("/usr/bin/bluetoothctl")',
+        'output.size() > 16 * 1024',
     ]:
         require(value in source, f"missing fixed desktop launcher binding: {value}")
     actions = ["terminal", "files", "browser", "editor", "network", "audio",
-               "installer", "restart", "poweroff"]
+               "bluetooth", "audio-mute", "audio-down", "audio-up", "notifications",
+               "logout", "installer", "restart", "poweroff"]
     for action in actions:
         require(source.count(f'action == QStringLiteral("{action}")') == 1,
                 f"desktop action drift: {action}")
     require(source.count("QProcess::startDetached") == 1,
             "desktop launcher must have exactly one process boundary")
+    require(source.count("QProcess process;") == 1 and
+            "process.waitForStarted(500)" in source and "process.waitForFinished(1000)" in source,
+            "desktop status probes must use one bounded process boundary")
     require("else return false;" in source,
             "unknown desktop actions must fail closed")
     require(source.count("STATE_DIRECTORY") == 2,

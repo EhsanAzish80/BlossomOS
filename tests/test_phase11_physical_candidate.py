@@ -110,7 +110,10 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("noto-fonts-emoji", builder)
         for package in ("adwaita-cursors", "foot", "noto-fonts", "noto-fonts-emoji"):
             self.assertIn(f"\n{package}\n", f"\n{packages}")
-        for package in ("firefox", "gvfs", "mousepad", "network-manager-applet", "nm-connection-editor", "pavucontrol", "thunar", "tumbler"):
+        for package in ("blueman", "bluez", "bluez-utils", "firefox", "gvfs", "mousepad",
+                        "networkmanager", "network-manager-applet", "nm-connection-editor",
+                        "pavucontrol", "pipewire", "pipewire-alsa", "pipewire-pulse",
+                        "thunar", "tumbler", "wireplumber"):
             self.assertIn(f"\n{package}\n", f"\n{packages}")
             self.assertIn(package, builder)
         for package in (
@@ -186,9 +189,11 @@ class PhysicalCandidateTests(unittest.TestCase):
             self.assertIn(method, broker_header)
         for method in ("restartSystem", "powerOff"):
             self.assertIn(method, broker_header)
+        for method in ("openBluetoothSettings", "toggleAudioMute", "lowerVolume", "raiseVolume", "toggleDoNotDisturb", "logOut"):
+            self.assertIn(method, broker_header)
         self.assertNotIn("QProcess", broker_source)
         self.assertIn('QStringLiteral("Launch1")', broker_source)
-        for executable in ("/usr/bin/thunar", "/usr/bin/firefox", "/usr/bin/mousepad", "/usr/bin/nm-connection-editor", "/usr/bin/pavucontrol"):
+        for executable in ("/usr/bin/thunar", "/usr/bin/firefox", "/usr/bin/mousepad", "/usr/bin/nm-connection-editor", "/usr/bin/pavucontrol", "/usr/bin/blueman-manager", "/usr/bin/wpctl", "/usr/bin/makoctl"):
             self.assertIn(executable, desktop_launcher)
         self.assertIn('/usr/bin/hyprctl', desktop_launcher)
         self.assertIn('/usr/bin/systemctl', desktop_launcher)

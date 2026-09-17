@@ -31,22 +31,32 @@ installed_mako = read("distribution/physical-rootfs/usr/share/blossom-os/physica
 record = read("docs/DESKTOP_PLATFORM_INTEGRATION.md")
 
 required_packages = {
+    "blueman",
+    "bluez",
+    "bluez-utils",
     "grim",
     "hyprpolkitagent",
     "libnotify",
     "mako",
+    "networkmanager",
+    "pipewire",
+    "pipewire-alsa",
+    "pipewire-pulse",
     "qt6-wayland",
     "slurp",
     "xdg-desktop-portal",
     "xdg-desktop-portal-gtk",
     "xdg-desktop-portal-hyprland",
     "xorg-xwayland",
+    "wireplumber",
 }
 require(required_packages <= set(packages), "desktop integration package set is incomplete")
 require(manifest["packages"][:-2] == packages, "manifest and ArchISO desktop packages differ")
 for name in required_packages:
     require(name in builder, f"installed rootfs omits desktop integration package: {name}")
-for name in required_packages - {"slurp", "xorg-xwayland"}:
+for name in required_packages - {"blueman", "bluez", "bluez-utils", "networkmanager",
+                                 "pipewire", "pipewire-alsa", "pipewire-pulse",
+                                 "slurp", "wireplumber", "xorg-xwayland"}:
     require(name in package, f"Blossom shell package omits runtime dependency: {name}")
 
 for config in (live_portals, installed_portals):
@@ -54,7 +64,8 @@ for config in (live_portals, installed_portals):
     require("org.freedesktop.impl.portal.FileChooser=gtk" in config,
             "portal file chooser fallback is missing")
 for config in (live_mako, installed_mako):
-    for value in ("anchor=top-right", "layer=overlay", "default-timeout=7000"):
+    for value in ("anchor=top-right", "layer=overlay", "default-timeout=7000",
+                  "[mode=do-not-disturb]", "invisible=1"):
         require(value in config, f"notification configuration is incomplete: {value}")
 
 for value in (

@@ -28,6 +28,7 @@ def main() -> None:
         '"org.blossomos.Desktop1"',
         '"/org/blossomos/Desktop1"',
         'QStringLiteral("Launch1")',
+        'QStringLiteral("QuickStatus1")',
         'constexpr quint16 ProtocolVersion = 1',
         'constexpr quint16 ActivityLimit = 64',
     ]:
@@ -47,7 +48,7 @@ def main() -> None:
     ]:
         require(forbidden not in text, f"forbidden client authority: {forbidden}")
     header = (PLUGIN / "blossombroker.h").read_text()
-    require(header.count("Q_INVOKABLE") == 18, "client invokable surface drift")
+    require(header.count("Q_INVOKABLE") == 25, "client invokable surface drift")
     require("onboardingRequired" in header and "dismissOnboarding" in header,
             "fixed onboarding surface is missing")
     client = (PLUGIN / "blossombroker.cpp").read_text()
@@ -71,6 +72,9 @@ def main() -> None:
             "network projection must enforce fixed lifetime and exact schema")
     require("&BlossomBroker::refreshNetwork" in client,
             "network projection must refresh only on its code-owned expiry timer")
+    require("m_quickStatusTimer.setInterval(5000)" in client and
+            "object.size() != 5" in client and "volume < -1 || volume > 150" in client,
+            "desktop quick status must be bounded and exact-schema validated")
     require("QDBusServiceWatcher::WatchForUnregistration" in client,
             "native client must watch for loss of the fixed service owner")
     require("QDBusServiceWatcher::serviceUnregistered" in client,

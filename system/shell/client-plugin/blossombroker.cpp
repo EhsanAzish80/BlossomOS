@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QStringList>
 
 #include <chrono>
 
@@ -63,6 +64,9 @@ BlossomBroker::BlossomBroker(QObject *parent) : QObject(parent) {
     connect(&m_batteryExpiryTimer, &QTimer::timeout, this, &BlossomBroker::refreshBattery);
     m_networkExpiryTimer.setSingleShot(true);
     connect(&m_networkExpiryTimer, &QTimer::timeout, this, &BlossomBroker::refreshNetwork);
+    m_quickStatusTimer.setInterval(5000);
+    connect(&m_quickStatusTimer, &QTimer::timeout, this, &BlossomBroker::refreshQuickStatus);
+    m_quickStatusTimer.start();
     refreshOnboarding();
 }
 
@@ -71,6 +75,7 @@ QVariantMap BlossomBroker::preview() const { return m_preview; }
 QVariantList BlossomBroker::activity() const { return m_activity; }
 QVariantMap BlossomBroker::battery() const { return m_battery; }
 QVariantMap BlossomBroker::network() const { return m_network; }
+QVariantMap BlossomBroker::quickStatus() const { return m_quickStatus; }
 bool BlossomBroker::liveEnvironment() const {
     return qEnvironmentVariableIsSet("BLOSSOM_LIVE");
 }
@@ -108,12 +113,65 @@ void BlossomBroker::openAudioSettings() {
     launchDesktop(QStringLiteral("audio"));
 }
 
+void BlossomBroker::openBluetoothSettings() {
+    launchDesktop(QStringLiteral("bluetooth"));
+}
+
+void BlossomBroker::toggleAudioMute() {
+    launchDesktop(QStringLiteral("audio-mute"));
+}
+
+void BlossomBroker::lowerVolume() {
+    launchDesktop(QStringLiteral("audio-down"));
+}
+
+void BlossomBroker::raiseVolume() {
+    launchDesktop(QStringLiteral("audio-up"));
+}
+
+void BlossomBroker::toggleDoNotDisturb() {
+    launchDesktop(QStringLiteral("notifications"));
+}
+
+void BlossomBroker::logOut() {
+    launchDesktop(QStringLiteral("logout"));
+}
+
 void BlossomBroker::restartSystem() {
     launchDesktop(QStringLiteral("restart"));
 }
 
 void BlossomBroker::powerOff() {
     launchDesktop(QStringLiteral("poweroff"));
+}
+
+void BlossomBroker::refreshQuickStatus() {
+    const quint64 generation = ++m_quickStatusGeneration;
+    auto *watcher = new QDBusPendingCallWatcher(
+        desktopInterface().asyncCall(QStringLiteral("QuickStatus1")), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, generation] {
+        const QDBusPendingReply<QByteArray> reply = *watcher;
+        watcher->deleteLater();
+        if (generation != m_quickStatusGeneration) return;
+        if (reply.isError() || reply.value().size() > 16 * 1024) {
+            clearQuickStatus();
+            return;
+        }
+        bool parsed = false;
+        const auto object = boundedObject(reply.value(), &parsed);
+        const QString network = object.value(QStringLiteral("network")).toString();
+        const QString bluetooth = object.value(QStringLiteral("bluetooth")).toString();
+        const int volume = object.value(QStringLiteral("volume_percent")).toInt(-1);
+        if (!parsed || object.size() != 5 || object.value(QStringLiteral("schema")).toInt() != 1 ||
+            !QStringList{QStringLiteral("wifi"), QStringLiteral("ethernet"), QStringLiteral("disconnected"), QStringLiteral("unavailable")}.contains(network) ||
+            !QStringList{QStringLiteral("on"), QStringLiteral("off"), QStringLiteral("unavailable")}.contains(bluetooth) ||
+            !object.value(QStringLiteral("muted")).isBool() || volume < -1 || volume > 150) {
+            clearQuickStatus();
+            return;
+        }
+        m_quickStatus = object.toVariantMap();
+        emit quickStatusChanged();
+    });
 }
 
 void BlossomBroker::launchDesktop(const QString &action) {
@@ -126,6 +184,8 @@ void BlossomBroker::launchDesktop(const QString &action) {
             ? QStringLiteral("Could not open %1. Try again or open Terminal for recovery.").arg(action)
             : QStringLiteral("Opened %1.").arg(action);
         emit desktopMessageChanged();
+        if (action.startsWith(QStringLiteral("audio")) || action == QStringLiteral("bluetooth") ||
+            action == QStringLiteral("network")) refreshQuickStatus();
     });
 }
 
@@ -415,6 +475,17 @@ void BlossomBroker::clearNetwork() {
     if (m_network == unavailable) return;
     m_network = unavailable;
     emit networkChanged();
+}
+
+void BlossomBroker::clearQuickStatus() {
+    const QVariantMap unavailable{{QStringLiteral("network"), QStringLiteral("unavailable")},
+                                  {QStringLiteral("volume_percent"), -1},
+                                  {QStringLiteral("muted"), false},
+                                  {QStringLiteral("bluetooth"), QStringLiteral("unavailable")}};
+    if (m_quickStatus != unavailable) {
+        m_quickStatus = unavailable;
+        emit quickStatusChanged();
+    }
 }
 
 void BlossomBroker::setState(const QString &value) {

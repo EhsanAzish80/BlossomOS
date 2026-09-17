@@ -1,5 +1,8 @@
 adwaita-cursors
 base
+blueman
+bluez
+bluez-utils
 linux
 linux-firmware
 mkinitcpio-archiso
@@ -22,12 +25,16 @@ qt6-wayland
 noto-fonts
 noto-fonts-emoji
 mousepad
+networkmanager
 network-manager-applet
 nm-connection-editor
 zsh
 python
 openssl
 pavucontrol
+pipewire
+pipewire-alsa
+pipewire-pulse
 polkit
 openssh
 parted
@@ -36,6 +43,7 @@ dosfstools
 gptfdisk
 thunar
 tumbler
+wireplumber
 slurp
 xdg-desktop-portal
 xdg-desktop-portal-gtk

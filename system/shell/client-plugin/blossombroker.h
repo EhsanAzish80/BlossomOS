@@ -16,6 +16,7 @@ class BlossomBroker final : public QObject {
     Q_PROPERTY(QVariantList activity READ activity NOTIFY activityChanged FINAL)
     Q_PROPERTY(QVariantMap battery READ battery NOTIFY batteryChanged FINAL)
     Q_PROPERTY(QVariantMap network READ network NOTIFY networkChanged FINAL)
+    Q_PROPERTY(QVariantMap quickStatus READ quickStatus NOTIFY quickStatusChanged FINAL)
     Q_PROPERTY(QString desktopMessage READ desktopMessage NOTIFY desktopMessageChanged FINAL)
     Q_PROPERTY(bool onboardingRequired READ onboardingRequired NOTIFY onboardingRequiredChanged FINAL)
     Q_PROPERTY(bool liveEnvironment READ liveEnvironment CONSTANT FINAL)
@@ -28,6 +29,7 @@ public:
     [[nodiscard]] QVariantList activity() const;
     [[nodiscard]] QVariantMap battery() const;
     [[nodiscard]] QVariantMap network() const;
+    [[nodiscard]] QVariantMap quickStatus() const;
     [[nodiscard]] bool liveEnvironment() const;
     [[nodiscard]] QString desktopMessage() const;
     [[nodiscard]] bool onboardingRequired() const;
@@ -39,6 +41,7 @@ public:
     Q_INVOKABLE void refreshActivity(qulonglong afterSequence = 0, bool hasCursor = false);
     Q_INVOKABLE void refreshBattery();
     Q_INVOKABLE void refreshNetwork();
+    Q_INVOKABLE void refreshQuickStatus();
     Q_INVOKABLE void openTerminal();
     Q_INVOKABLE void openInstaller();
     Q_INVOKABLE void openFiles();
@@ -46,6 +49,12 @@ public:
     Q_INVOKABLE void openEditor();
     Q_INVOKABLE void openNetworkSettings();
     Q_INVOKABLE void openAudioSettings();
+    Q_INVOKABLE void openBluetoothSettings();
+    Q_INVOKABLE void toggleAudioMute();
+    Q_INVOKABLE void lowerVolume();
+    Q_INVOKABLE void raiseVolume();
+    Q_INVOKABLE void toggleDoNotDisturb();
+    Q_INVOKABLE void logOut();
     Q_INVOKABLE void restartSystem();
     Q_INVOKABLE void powerOff();
     Q_INVOKABLE void refreshOnboarding();
@@ -57,6 +66,7 @@ signals:
     void activityChanged();
     void batteryChanged();
     void networkChanged();
+    void quickStatusChanged();
     void desktopMessageChanged();
     void onboardingRequiredChanged();
 
@@ -68,6 +78,7 @@ private:
     void failClosed();
     void clearBattery();
     void clearNetwork();
+    void clearQuickStatus();
     void setState(const QString &value);
 
     QString m_state = QStringLiteral("idle");
@@ -75,14 +86,20 @@ private:
     QVariantList m_activity;
     QVariantMap m_battery{{QStringLiteral("status"), QStringLiteral("unavailable")}};
     QVariantMap m_network{{QStringLiteral("connectivity"), QStringLiteral("unavailable")}};
+    QVariantMap m_quickStatus{{QStringLiteral("network"), QStringLiteral("unavailable")},
+                              {QStringLiteral("volume_percent"), -1},
+                              {QStringLiteral("muted"), false},
+                              {QStringLiteral("bluetooth"), QStringLiteral("unavailable")}};
     QString m_desktopMessage;
     bool m_onboardingRequired = true;
     QDBusServiceWatcher m_serviceWatcher;
     QTimer m_expiryTimer;
     QTimer m_batteryExpiryTimer;
     QTimer m_networkExpiryTimer;
+    QTimer m_quickStatusTimer;
     quint64 m_serviceGeneration = 0;
     quint64 m_activityGeneration = 0;
     quint64 m_batteryGeneration = 0;
     quint64 m_networkGeneration = 0;
+    quint64 m_quickStatusGeneration = 0;
 };

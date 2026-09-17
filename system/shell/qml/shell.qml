@@ -10,6 +10,7 @@ ShellRoot {
     property bool launcherVisible: false
     property bool welcomeVisible: BlossomBroker.onboardingRequired
     property bool activityVisible: false
+    property bool quickVisible: false
     property bool powerVisible: false
     property string powerAction: ""
     property string clockText: Qt.formatDateTime(new Date(), "ddd HH:mm")
@@ -19,6 +20,7 @@ ShellRoot {
         BlossomBroker.refreshActivity()
         BlossomBroker.refreshBattery()
         BlossomBroker.refreshNetwork()
+        BlossomBroker.refreshQuickStatus()
     }
 
     Variants {
@@ -56,10 +58,47 @@ ShellRoot {
                 Button { text: "Blossom OS"; onClicked: root.launcherVisible = !root.launcherVisible; Accessible.description: "Open the Blossom OS application launcher." }
                 Label { text: BlossomBroker.liveEnvironment ? "Live session" : "Workspace"; color: "#9fb0c7" }
                 Item { Layout.fillWidth: true }
-                Label { text: "Network: " + BlossomBroker.network.connectivity; color: BlossomBroker.network.connectivity === "offline" ? "#ff9b93" : "#c9d5e6" }
-                Label { text: BlossomBroker.battery.status === "present" ? "Battery " + BlossomBroker.battery.percentage + "%" : BlossomBroker.battery.status === "absent" ? "AC power" : "Battery unavailable"; color: "#c9d5e6" }
+                Button { text: BlossomBroker.quickStatus.network === "wifi" ? "Wi-Fi" : BlossomBroker.quickStatus.network === "ethernet" ? "Ethernet" : "Network " + BlossomBroker.network.connectivity; onClicked: { root.quickVisible = !root.quickVisible; root.powerVisible = false }; Accessible.description: "Open network, sound, Bluetooth and notification controls." }
+                Button { text: BlossomBroker.quickStatus.volume_percent >= 0 ? (BlossomBroker.quickStatus.muted ? "Muted" : "Sound " + BlossomBroker.quickStatus.volume_percent + "%") : "Sound ?"; onClicked: { root.quickVisible = !root.quickVisible; root.powerVisible = false }; Accessible.description: "Open sound quick controls." }
+                Button { text: BlossomBroker.quickStatus.bluetooth === "on" ? "Bluetooth On" : BlossomBroker.quickStatus.bluetooth === "off" ? "Bluetooth Off" : "Bluetooth ?"; onClicked: BlossomBroker.openBluetoothSettings(); Accessible.description: "Open Bluetooth device settings." }
+                Button { text: BlossomBroker.battery.status === "present" ? "Battery " + BlossomBroker.battery.percentage + "%" : BlossomBroker.battery.status === "absent" ? "AC" : "Power ?"; onClicked: root.quickVisible = !root.quickVisible; Accessible.description: "Open quick system controls." }
                 Label { text: root.clockText; color: "#f4f7fb"; font.bold: true }
-                Button { text: "System"; onClicked: { root.powerVisible = !root.powerVisible; root.powerAction = "" } }
+                Button { text: "System"; onClicked: { root.powerVisible = !root.powerVisible; root.quickVisible = false; root.powerAction = "" } }
+            }
+
+            PopupWindow {
+                anchor.window: topBar
+                anchor.rect.x: Math.max(12, topBar.width - width - 110)
+                anchor.rect.y: topBar.height + 8
+                width: 430
+                height: 390
+                visible: root.quickVisible
+                grabFocus: true
+                color: "transparent"
+                Rectangle {
+                    anchors.fill: parent; radius: 18; color: "#f2171d27"; border { color: "#40536d"; width: 1 }
+                    ColumnLayout {
+                        anchors { fill: parent; margins: 20 }; spacing: 12
+                        RowLayout { Layout.fillWidth: true; Label { Layout.fillWidth: true; text: "Quick settings"; color: "#f4f7fb"; font.pixelSize: 22; font.bold: true }; Button { text: "Close"; onClicked: root.quickVisible = false } }
+                        Rectangle {
+                            Layout.fillWidth: true; implicitHeight: 72; radius: 12; color: "#222b38"
+                            RowLayout { anchors { fill: parent; margins: 10 }; Label { Layout.fillWidth: true; text: "Network\n" + BlossomBroker.quickStatus.network + " · " + BlossomBroker.network.connectivity; color: BlossomBroker.network.connectivity === "offline" ? "#ff9b93" : "#dbe5f5" }; Button { text: "Wi-Fi & Ethernet"; onClicked: BlossomBroker.openNetworkSettings() } }
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true; implicitHeight: 72; radius: 12; color: "#222b38"
+                            RowLayout { anchors { fill: parent; margins: 10 }; Label { Layout.fillWidth: true; text: BlossomBroker.quickStatus.volume_percent >= 0 ? "Sound " + BlossomBroker.quickStatus.volume_percent + "%" : "Sound unavailable"; color: "#dbe5f5" }; Button { text: "−"; Accessible.name: "Lower volume"; onClicked: BlossomBroker.lowerVolume() }; Button { text: BlossomBroker.quickStatus.muted ? "Unmute" : "Mute"; onClicked: BlossomBroker.toggleAudioMute() }; Button { text: "+"; Accessible.name: "Raise volume"; onClicked: BlossomBroker.raiseVolume() }; Button { text: "Details"; onClicked: BlossomBroker.openAudioSettings() } }
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true; implicitHeight: 64; radius: 12; color: "#222b38"
+                            RowLayout { anchors { fill: parent; margins: 10 }; Label { Layout.fillWidth: true; text: "Bluetooth " + BlossomBroker.quickStatus.bluetooth; color: "#dbe5f5" }; Button { text: "Devices"; onClicked: BlossomBroker.openBluetoothSettings() } }
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true; implicitHeight: 64; radius: 12; color: "#222b38"
+                            RowLayout { anchors { fill: parent; margins: 10 }; Label { Layout.fillWidth: true; text: "Notifications"; color: "#dbe5f5" }; Button { text: "Toggle do not disturb"; onClicked: BlossomBroker.toggleDoNotDisturb() } }
+                        }
+                        Label { Layout.fillWidth: true; text: BlossomBroker.battery.status === "present" ? "Battery " + BlossomBroker.battery.percentage + "% · " + BlossomBroker.battery.state : BlossomBroker.battery.status === "absent" ? "Connected to AC power" : "Battery information unavailable"; color: "#9fb0c7"; wrapMode: Text.WordWrap }
+                    }
+                }
             }
 
             PopupWindow {
@@ -100,7 +139,7 @@ ShellRoot {
                 anchor.rect.x: Math.max(12, topBar.width - width - 12)
                 anchor.rect.y: topBar.height + 8
                 width: 340
-                height: root.powerAction === "" ? 180 : 220
+                height: root.powerAction === "" ? 230 : 220
                 visible: root.powerVisible
                 grabFocus: true
                 color: "transparent"
@@ -108,14 +147,16 @@ ShellRoot {
                     anchors.fill: parent; radius: 18; color: "#f2171d27"; border { color: "#40536d"; width: 1 }
                     ColumnLayout {
                         anchors { fill: parent; margins: 20 }; spacing: 12
-                        Label { Layout.fillWidth: true; text: root.powerAction === "" ? "System" : (root.powerAction === "restart" ? "Restart Blossom OS?" : "Shut down Blossom OS?"); color: "#f4f7fb"; font.pixelSize: 20; font.bold: true; wrapMode: Text.WordWrap }
+                        Label { Layout.fillWidth: true; text: root.powerAction === "" ? "System" : (root.powerAction === "restart" ? "Restart Blossom OS?" : root.powerAction === "logout" ? "Log out of Blossom OS?" : "Shut down Blossom OS?"); color: "#f4f7fb"; font.pixelSize: 20; font.bold: true; wrapMode: Text.WordWrap }
                         Label { Layout.fillWidth: true; visible: root.powerAction !== ""; text: "Save your work before continuing."; color: "#b8c4d6"; wrapMode: Text.WordWrap }
                         Label { Layout.fillWidth: true; visible: root.powerAction === ""; text: "Super+Tab switches windows · Super+Q closes the active window"; color: "#8fa0b7"; wrapMode: Text.WordWrap }
                         RowLayout {
                             Layout.fillWidth: true
                             Button { Layout.fillWidth: true; text: root.powerAction === "" ? "Restart" : "Cancel"; onClicked: root.powerAction === "" ? root.powerAction = "restart" : root.powerAction = "" }
-                            Button { Layout.fillWidth: true; text: root.powerAction === "" ? "Shut Down" : "Confirm"; onClicked: { if (root.powerAction === "restart") BlossomBroker.restartSystem(); else if (root.powerAction === "shutdown") BlossomBroker.powerOff(); else root.powerAction = "shutdown" } }
+                            Button { Layout.fillWidth: true; visible: root.powerAction !== "logout"; text: root.powerAction === "" ? "Shut Down" : "Confirm"; onClicked: { if (root.powerAction === "restart") BlossomBroker.restartSystem(); else if (root.powerAction === "shutdown") BlossomBroker.powerOff(); else root.powerAction = "shutdown" } }
                         }
+                        Button { Layout.fillWidth: true; visible: root.powerAction === ""; text: "Log Out"; onClicked: root.powerAction = "logout" }
+                        Button { Layout.fillWidth: true; visible: root.powerAction === "logout"; text: "Confirm Log Out"; onClicked: BlossomBroker.logOut() }
                     }
                 }
             }

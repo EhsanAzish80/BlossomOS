@@ -30,6 +30,12 @@ class DesktopFoundationLayoutTests(unittest.TestCase):
         self.assertIn("Super+Q closes the active window", SHELL)
         self.assertIn("BlossomBroker.desktopMessage", SHELL)
 
+    def test_top_bar_exposes_normal_system_controls(self):
+        for label in ("Network ", "Sound", "Bluetooth", "Quick settings", "Wi-Fi & Ethernet", "Toggle do not disturb", "Log Out"):
+            self.assertIn(label, SHELL)
+        for action in ("openNetworkSettings", "openAudioSettings", "openBluetoothSettings", "toggleAudioMute", "lowerVolume", "raiseVolume", "toggleDoNotDisturb", "logOut"):
+            self.assertIn(f"BlossomBroker.{action}", SHELL)
+
     def test_onboarding_is_service_owned_and_dismissible(self):
         self.assertIn("BlossomBroker.onboardingRequired", SHELL)
         self.assertIn("BlossomBroker.dismissOnboarding()", SHELL)
