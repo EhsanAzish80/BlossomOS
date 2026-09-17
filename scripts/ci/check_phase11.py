@@ -55,6 +55,9 @@ installer_rule = read("distribution/archiso/airootfs/etc/polkit-1/rules.d/49-blo
 desktop_probe = read("distribution/archiso/airootfs/usr/local/bin/blossom-desktop-probe")
 desktop_probe_unit = read("distribution/archiso/airootfs/etc/systemd/system/blossom-desktop-probe.service")
 desktop_probe_link = ROOT / "distribution/archiso/airootfs/etc/systemd/system/multi-user.target.wants/blossom-desktop-probe.service"
+live_user = read("distribution/archiso/airootfs/usr/local/libexec/blossom-provision-live-user")
+live_user_unit = read("distribution/archiso/airootfs/etc/systemd/system/blossom-live-user.service")
+live_user_link = ROOT / "distribution/archiso/airootfs/etc/systemd/system/multi-user.target.wants/blossom-live-user.service"
 
 evidence_hashes = {
     "distribution/evidence/phase11-device-preflight-34460218314.json": "5de11cb6ab30605ef4bcda084d2d73994a94269f3e99e9ac436f19b9b1c32c3c",
@@ -290,8 +293,21 @@ for required in (
         fail(f"physical candidate desktop probe is incomplete: {required}")
 if "ExecCondition=/usr/bin/grep -qw blossom.desktop-probe=1 /proc/cmdline" not in desktop_probe_unit:
     fail("desktop probe must remain dormant outside explicit qualification boots")
+if "systemd.getty_auto=no" not in candidate_workflow:
+    fail("graphical qualification must reserve the serial console for probe evidence")
 if not desktop_probe_link.is_symlink() or desktop_probe_link.readlink() != Path("../blossom-desktop-probe.service"):
     fail("desktop probe is not enabled for the live qualification boot")
+for required in (
+    "useradd --create-home",
+    "chown -R blossom:blossom /home/blossom",
+    'test "$(id -u blossom)" = 1000',
+):
+    if required not in live_user:
+        fail(f"live-session account provisioning is incomplete: {required}")
+if "Before=getty@tty1.service blossom-desktop-probe.service" not in live_user_unit:
+    fail("live-session account must be provisioned before autologin and qualification")
+if not live_user_link.is_symlink() or live_user_link.readlink() != Path("../blossom-live-user.service"):
+    fail("live-session account provisioning is not enabled")
 for required in (
     "verify_physical_candidate_image.sh",
     "blossom-shell-service",
@@ -315,6 +331,7 @@ for required in (
     '["/usr/local/bin/blossom-shell-recovery"]="0:0:755"',
     '["/usr/local/bin/blossom-start-session"]="0:0:755"',
     '["/usr/local/bin/blossom-desktop-probe"]="0:0:755"',
+    '["/usr/local/libexec/blossom-provision-live-user"]="0:0:755"',
     '["/usr/local/bin/blossom-physical-install"]="0:0:755"',
     '["/usr/local/libexec/blossom-physical-install-backend"]="0:0:755"',
 ):

@@ -10,6 +10,7 @@ deadline=$((SECONDS + 240))
 runtime=/run/user/1000
 
 user_systemctl() {
+  id -u blossom >/dev/null 2>&1 || return 1
   runuser -u blossom -- env \
     XDG_RUNTIME_DIR="$runtime" \
     DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" \
@@ -18,6 +19,7 @@ user_systemctl() {
 
 desktop_windows_ready() {
   local instance wayland clients
+  id -u blossom >/dev/null 2>&1 || return 1
   instance=$(find "$runtime/hypr" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null || true)
   [[ -n $instance ]] || return 1
   wayland=$(find "$runtime" -maxdepth 1 -type s -name 'wayland-*' -print -quit 2>/dev/null || true)
@@ -38,7 +40,8 @@ raise SystemExit(0 if required <= visible else 1)
 }
 
 while ((SECONDS < deadline)); do
-  if user_systemctl is-active --quiet blossom-shell-ui.service \
+  if [[ $(id -u blossom 2>/dev/null || true) == 1000 ]] \
+      && user_systemctl is-active --quiet blossom-shell-ui.service \
       && user_systemctl is-active --quiet blossom-shell-service.service \
       && desktop_windows_ready; then
     echo "BLOSSOM_DESKTOP_READY shell=active broker=active windows=2"

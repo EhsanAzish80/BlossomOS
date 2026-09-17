@@ -83,6 +83,9 @@ class PhysicalCandidateTests(unittest.TestCase):
         desktop_probe = (repository / "distribution/archiso/airootfs/usr/local/bin/blossom-desktop-probe").read_text()
         desktop_probe_unit = (repository / "distribution/archiso/airootfs/etc/systemd/system/blossom-desktop-probe.service").read_text()
         desktop_probe_link = repository / "distribution/archiso/airootfs/etc/systemd/system/multi-user.target.wants/blossom-desktop-probe.service"
+        live_user = (repository / "distribution/archiso/airootfs/usr/local/libexec/blossom-provision-live-user").read_text()
+        live_user_unit = (repository / "distribution/archiso/airootfs/etc/systemd/system/blossom-live-user.service").read_text()
+        live_user_link = repository / "distribution/archiso/airootfs/etc/systemd/system/multi-user.target.wants/blossom-live-user.service"
         packages = (repository / "distribution/archiso/packages.x86_64").read_text()
         profile = (repository / "distribution/physical-rootfs/home/blossom/.bash_profile").read_text()
         live_profile = (repository / "distribution/archiso/airootfs/home/blossom/.bash_profile").read_text()
@@ -117,8 +120,14 @@ class PhysicalCandidateTests(unittest.TestCase):
             builder,
         )
         self.assertIn("--autologin blossom", autologin)
-        self.assertIn("useradd --create-home", autologin)
-        self.assertIn("chown -R blossom:blossom /home/blossom", autologin)
+        self.assertIn("Requires=blossom-live-user.service", autologin)
+        self.assertNotIn("useradd --create-home", autologin)
+        self.assertIn("useradd --create-home", live_user)
+        self.assertIn("chown -R blossom:blossom /home/blossom", live_user)
+        self.assertIn('test "$(id -u blossom)" = 1000', live_user)
+        self.assertIn("Before=getty@tty1.service blossom-desktop-probe.service", live_user_unit)
+        self.assertTrue(live_user_link.is_symlink())
+        self.assertEqual(live_user_link.readlink(), Path("../blossom-live-user.service"))
         self.assertNotIn("--autologin root", autologin)
         self.assertIn("--autologin root", root_console)
         for config in (live_hyprland, installed_hyprland):
@@ -182,6 +191,7 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn('test -x "$root/$path"', image_verifier)
         self.assertIn("Boot exact candidate and require the graphical desktop", candidate_workflow)
         self.assertIn("blossom.desktop-probe=1", candidate_workflow)
+        self.assertIn("systemd.getty_auto=no", candidate_workflow)
         self.assertIn("BLOSSOM_DESKTOP_READY shell=active broker=active windows=2", candidate_workflow)
         self.assertIn("Blossom OS", desktop_probe)
         self.assertIn("Welcome to Blossom OS", desktop_probe)

@@ -1,0 +1,11 @@
+[Unit]
+Description=Provision the Blossom OS live-session account
+Before=getty@tty1.service blossom-desktop-probe.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/blossom-provision-live-user
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
