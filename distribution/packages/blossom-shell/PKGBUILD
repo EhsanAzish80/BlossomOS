@@ -36,6 +36,8 @@ package() {
   find "$pkgdir/usr/lib/qt6/qml/Blossom/Shell" -type f -name '*.so' -exec chmod 0755 {} +
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-ui.service" \
     "$pkgdir/usr/lib/systemd/user/blossom-shell-ui.service"
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-desktop-shell.service" \
+    "$pkgdir/usr/lib/systemd/user/blossom-desktop-shell.service"
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-recovery.service" \
     "$pkgdir/usr/lib/systemd/user/blossom-shell-recovery.service"
   install -Dm0644 "$repo_root/system/desktop-launcher/blossom-desktop-launcher.service" \

@@ -12,9 +12,10 @@ interval, D-Bus target, or additional field.
 
 The security QML runs in the dedicated standard Qt `blossom-shell-ui` process
 so its complete control tree is available through Linux AT-SPI. The pinned
-Quickshell process remains an independently load-tested, unprivileged desktop
-presentation client, but it does not host the approval ceremony because its
-proxy hierarchy does not publish child controls to AT-SPI.
+Quickshell process owns the unprivileged wallpaper, top bar, dock, launcher,
+welcome and activity surfaces. It does not host the approval ceremony because
+its proxy hierarchy does not publish child controls to AT-SPI. Closing Welcome
+reveals the complete layer-shell desktop rather than closing the shell.
 
 The QML imports the narrow `Blossom.Shell` native plugin. It does not import
 `Quickshell.Io`, launch processes, read files, choose D-Bus identifiers, call

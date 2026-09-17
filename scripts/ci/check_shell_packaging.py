@@ -14,6 +14,7 @@ BUS_NAME = "org.blossomos.Shell1"
 BINARY = "/usr/lib/blossom-os/blossom-shell-service"
 UNIT = "blossom-shell-service.service"
 UI_UNIT = "blossom-shell-ui.service"
+DESKTOP_UNIT = "blossom-desktop-shell.service"
 RECOVERY_UNIT = "blossom-shell-recovery.service"
 RECOVERY = "blossom-shell-recovery"
 
@@ -112,6 +113,24 @@ def check_ui_unit() -> None:
         require(value not in text, f"forbidden shell UI surface: {value}")
 
 
+def check_desktop_unit() -> None:
+    text = (PACKAGE / DESKTOP_UNIT).read_text()
+    for value in [
+        "PartOf=graphical-session.target",
+        "After=graphical-session.target blossom-shell-service.service",
+        f"OnFailure={RECOVERY_UNIT}",
+        "ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/shell",
+        "Restart=on-failure",
+        "NoNewPrivileges=yes",
+        "ProtectSystem=strict",
+        "ProtectHome=read-only",
+        "RestrictSUIDSGID=yes",
+    ]:
+        require(value in text, f"missing desktop shell boundary: {value}")
+    for value in ["User=root", "sudo", "pkexec", "/bin/sh", "sh -c", "bash -c"]:
+        require(value not in text, f"forbidden desktop shell surface: {value}")
+
+
 def check_recovery() -> None:
     unit = (PACKAGE / RECOVERY_UNIT).read_text()
     for value in [
@@ -137,13 +156,14 @@ def check_recovery() -> None:
 
 
 def main() -> None:
-    expected = {"README.md", UNIT, f"{BUS_NAME}.service", UI_UNIT, RECOVERY_UNIT, RECOVERY}
+    expected = {"README.md", UNIT, f"{BUS_NAME}.service", UI_UNIT, DESKTOP_UNIT, RECOVERY_UNIT, RECOVERY}
     require({path.name for path in PACKAGE.iterdir()} == expected, "unexpected shell package surface")
     check_lock()
     check_evidence_lock()
     check_activation()
     check_unit()
     check_ui_unit()
+    check_desktop_unit()
     check_recovery()
 
 
