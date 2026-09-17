@@ -14,6 +14,7 @@ normalized_hardware = " ".join(hardware.split())
 issue = (ROOT / "distribution/archiso/airootfs/etc/issue").read_text(encoding="utf-8")
 motd = (ROOT / "distribution/archiso/airootfs/etc/motd").read_text(encoding="utf-8")
 smoke = (ROOT / "docs/DESKTOP_GRAPHICAL_SMOKE.md").read_text(encoding="utf-8")
+runtime = (ROOT / "docs/DESKTOP_RUNTIME_READINESS.md").read_text(encoding="utf-8")
 
 required = (
     "candidate builds are intentionally blocked",
@@ -58,9 +59,21 @@ for statement in (
     "Desktop after **Continue to desktop**",
     "Installed-mode desktop with no Install action",
     "2880x1800 at scale 2",
+    "Quick Settings with Wi-Fi/Ethernet",
+    "Logout returns to ReGreet",
     "It does not authorize an ISO",
 ):
     if statement not in smoke:
         raise SystemExit(f"graphical smoke contract missing: {statement}")
+
+for statement in (
+    "Status: blocked before execution",
+    "stale evidence",
+    "No lock was bypassed",
+    "logout to ReGreet",
+    "require one image built from the reviewed commit",
+):
+    if statement not in runtime:
+        raise SystemExit(f"runtime readiness boundary missing: {statement}")
 
 print("desktop foundation source gate verified")

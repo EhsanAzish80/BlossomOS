@@ -20,6 +20,10 @@ Capture one lossless screenshot and the associated service log for each state:
 8. Centred restart confirmation and centred shutdown confirmation.
 9. Installed-mode desktop with no Install action.
 10. Installed second session with onboarding still dismissed.
+11. Quick Settings with Wi-Fi/Ethernet, volume/mute, Bluetooth, notifications
+    and battery/AC states visible without horizontal clipping.
+12. Centred logout confirmation followed by the graphical login screen and a
+    successful login with the installer-created account.
 
 ## Layout matrix
 
@@ -35,10 +39,20 @@ background must never receive focus or an active-window border.
 
 - Mouse and keyboard can open and close every overlay.
 - Escape dismisses launcher and system overlays without invoking an action.
+- Volume down/up and mute change the displayed status, and unavailable audio
+  remains explicit rather than disappearing.
+- Wi-Fi and Ethernet are distinguished; an absent adapter and disconnected
+  connection remain readable and Network Settings still opens.
+- Bluetooth on, off and unavailable states are readable; Devices opens the
+  graphical manager without granting shell or root authority.
+- Do Not Disturb suppresses a test notification and toggling it again restores
+  notification delivery.
 - Super+Tab changes the active ordinary application.
 - Super+Q closes only the active ordinary application.
 - Dismissing Welcome never stops the desktop service.
 - The live installer action is absent when `BLOSSOM_LIVE` is absent.
+- Logout returns to ReGreet, a wrong password is rejected, and the selected
+  installer-created account can start a fresh Blossom session.
 - A rejected desktop launch produces an accessibility alert.
 - Approval remains in the standard Qt accessibility host and denial remains the
   safe default.
