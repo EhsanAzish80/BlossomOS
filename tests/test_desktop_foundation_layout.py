@@ -8,6 +8,9 @@ SHELL = (ROOT / "system/shell/qml/shell.qml").read_text(encoding="utf-8")
 
 
 class DesktopFoundationLayoutTests(unittest.TestCase):
+    def test_qml_object_blocks_are_not_semicolon_terminated(self):
+        self.assertNotIn("};", SHELL)
+
     def test_reserved_surfaces_fit_supported_logical_sizes(self):
         top = int(re.search(r"implicitHeight: (\d+)\n\s+exclusiveZone: 52", SHELL).group(1))
         dock_width = int(re.search(r"implicitWidth: (\d+)", SHELL).group(1))

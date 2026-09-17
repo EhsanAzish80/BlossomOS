@@ -75,6 +75,8 @@ def main() -> None:
     require("PanelWindow" not in security_qml,
             "security controls must not use the inaccessible proxy-window hierarchy")
     shell = (QML / "shell.qml").read_text()
+    require("};" not in shell,
+            "shell QML must not terminate grouped properties, child objects, or handlers with semicolons")
     for required in (
         "WlrLayer.Background",
         'WlrLayershell.namespace: "blossom-background"',
