@@ -181,6 +181,7 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("systemctl --user import-environment", session_command)
         self.assertIn("WAYLAND_DISPLAY", session_command)
         self.assertIn("systemctl --user start blossom-shell-ui.service", session_command)
+        self.assertIn("systemctl --user start blossom-shell-service.service", session_command)
         self.assertIn("dbus-update-activation-environment --systemd", session_command)
         for service in (
             "hyprpolkitagent.service", "mako.service",

@@ -11,6 +11,8 @@ Type=exec
 ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/shell
 Restart=on-failure
 RestartSec=2
+RuntimeDirectory=quickshell
+RuntimeDirectoryMode=0700
 Environment=QML2_IMPORT_PATH=/usr/lib/qt6/qml
 NoNewPrivileges=yes
 PrivateTmp=yes

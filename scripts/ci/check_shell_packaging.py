@@ -118,6 +118,8 @@ def check_desktop_unit() -> None:
     for value in [
         "PartOf=graphical-session.target",
         "After=graphical-session.target blossom-shell-service.service",
+        "RuntimeDirectory=quickshell",
+        "RuntimeDirectoryMode=0700",
         f"OnFailure={RECOVERY_UNIT}",
         "ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/shell",
         "Restart=on-failure",
