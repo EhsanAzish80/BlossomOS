@@ -13,6 +13,7 @@ hardware = (ROOT / "docs/HARDWARE_SUPPORT_MATRIX.md").read_text(encoding="utf-8"
 normalized_hardware = " ".join(hardware.split())
 issue = (ROOT / "distribution/archiso/airootfs/etc/issue").read_text(encoding="utf-8")
 motd = (ROOT / "distribution/archiso/airootfs/etc/motd").read_text(encoding="utf-8")
+smoke = (ROOT / "docs/DESKTOP_GRAPHICAL_SMOKE.md").read_text(encoding="utf-8")
 
 required = (
     "candidate builds are intentionally blocked",
@@ -52,5 +53,14 @@ if "Blossom OS Live" not in issue or "Arch Linux" in issue:
     raise SystemExit("live console identity is not Blossom-owned")
 if "does not require an Internet connection" not in motd:
     raise SystemExit("offline installation message is missing")
+for statement in (
+    "Status: defined, not executed",
+    "Desktop after **Continue to desktop**",
+    "Installed-mode desktop with no Install action",
+    "2880x1800 at scale 2",
+    "It does not authorize an ISO",
+):
+    if statement not in smoke:
+        raise SystemExit(f"graphical smoke contract missing: {statement}")
 
 print("desktop foundation source gate verified")
