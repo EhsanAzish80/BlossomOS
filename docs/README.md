@@ -1,6 +1,7 @@
 # Blossom OS documentation
 
 - [Phase 11 release-candidate audit](PHASE_11_RELEASE_AUDIT.md)
+- [Modern desktop capability audit](MODERN_DESKTOP_AUDIT.md)
 
 This directory contains the reviewed engineering record for Blossom OS.
 Documents describe either implemented evidence, an accepted design boundary, or
