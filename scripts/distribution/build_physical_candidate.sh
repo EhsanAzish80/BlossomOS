@@ -51,10 +51,11 @@ cp "$build/source"/distribution/packages/blossom-shell/blossom-shell-*.pkg.tar.z
 
 pacstrap -K -C "$repo/distribution/archiso/pacman.conf" "$rootfs" \
   adwaita-cursors base bluez bluez-utils brightnessctl bubblewrap dbus-broker dosfstools foot \
-  firefox gptfdisk gvfs hyprland intel-ucode iwd linux-firmware linux-lts mesa mousepad networkmanager \
+  firefox gptfdisk grim gvfs hyprland hyprpolkitagent intel-ucode iwd libnotify linux-firmware linux-lts mako mesa mousepad networkmanager \
   network-manager-applet nm-connection-editor noto-fonts noto-fonts-emoji openssh openssl pavucontrol pipewire pipewire-alsa \
-  pipewire-pulse polkit python quickshell qt6-base qt6-declarative sof-firmware sudo systemd thunar \
-  tumbler upower vulkan-intel wireplumber zstd
+  pipewire-pulse polkit python quickshell qt6-base qt6-declarative qt6-wayland slurp sof-firmware sudo systemd thunar \
+  tumbler upower vulkan-intel wireplumber xdg-desktop-portal xdg-desktop-portal-gtk \
+  xdg-desktop-portal-hyprland xorg-xwayland zstd
 pacman --root "$rootfs" --config /etc/pacman.conf --noconfirm -U "$packages"/*.pkg.tar.zst
 
 cp -a "$repo/distribution/physical-rootfs/." "$rootfs/"
@@ -68,6 +69,12 @@ passwd --root "$rootfs" --lock blossom
 install -d -m 0700 "$rootfs/home/blossom/.config/hypr"
 install -m 0600 "$rootfs/usr/share/blossom-os/physical-home/hyprland.conf" \
   "$rootfs/home/blossom/.config/hypr/hyprland.conf"
+install -d -m 0700 "$rootfs/home/blossom/.config/mako" \
+  "$rootfs/home/blossom/.config/xdg-desktop-portal"
+install -m 0600 "$rootfs/usr/share/blossom-os/physical-home/mako.conf" \
+  "$rootfs/home/blossom/.config/mako/config"
+install -m 0600 "$rootfs/usr/share/blossom-os/physical-home/hyprland-portals.conf" \
+  "$rootfs/home/blossom/.config/xdg-desktop-portal/hyprland-portals.conf"
 install -d -m 0755 "$rootfs/etc/systemd/system/getty@tty1.service.d"
 install -m 0644 "$rootfs/usr/share/blossom-os/physical-home/getty-autologin.conf" \
   "$rootfs/etc/systemd/system/getty@tty1.service.d/autologin.conf"

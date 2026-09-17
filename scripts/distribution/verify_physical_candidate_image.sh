@@ -15,6 +15,13 @@ squashfs="$work/blossom/x86_64/airootfs.sfs"
 root="$work/root"
 
 executables=(
+  usr/bin/grim
+  usr/bin/mako
+  usr/bin/notify-send
+  usr/lib/hyprpolkitagent/hyprpolkitagent
+  usr/lib/xdg-desktop-portal
+  usr/lib/xdg-desktop-portal-gtk
+  usr/lib/xdg-desktop-portal-hyprland
   usr/lib/blossom-os/blossom-shell-service
   usr/lib/blossom-os/blossom-model-gateway
   usr/lib/blossom-os/blossom-privileged-helper
@@ -22,6 +29,7 @@ executables=(
   usr/lib/blossom-os/blossom-desktop-launcher
   usr/local/bin/blossom-shell-recovery
   usr/local/bin/blossom-start-session
+  usr/local/bin/blossom-screenshot
   usr/local/bin/blossom-desktop-probe
 )
 
@@ -32,6 +40,8 @@ required_files=(
   usr/lib/systemd/user/blossom-desktop-shell.service
   usr/lib/systemd/user/blossom-shell-ui.service
   usr/lib/systemd/user/blossom-desktop-launcher.service
+  home/blossom/.config/mako/config
+  home/blossom/.config/xdg-desktop-portal/hyprland-portals.conf
 )
 
 unsquashfs -quiet -d "$root" "$squashfs" \
@@ -70,6 +80,11 @@ done
 grep -Fq "ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/shell" \
   "$root/usr/lib/systemd/user/blossom-desktop-shell.service" || {
   echo "candidate desktop service does not launch the packaged shell" >&2
+  exit 1
+}
+grep -Fq "default=hyprland;gtk" \
+  "$root/home/blossom/.config/xdg-desktop-portal/hyprland-portals.conf" || {
+  echo "candidate portal preference is missing the Hyprland and GTK backends" >&2
   exit 1
 }
 

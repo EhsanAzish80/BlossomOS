@@ -10,10 +10,15 @@ bubblewrap
 foot
 firefox
 gvfs
+grim
 hyprland
+hyprpolkitagent
+libnotify
+mako
 quickshell
 qt6-base
 qt6-declarative
+qt6-wayland
 noto-fonts
 noto-fonts-emoji
 mousepad
@@ -31,4 +36,9 @@ dosfstools
 gptfdisk
 thunar
 tumbler
+slurp
+xdg-desktop-portal
+xdg-desktop-portal-gtk
+xdg-desktop-portal-hyprland
+xorg-xwayland
 zstd

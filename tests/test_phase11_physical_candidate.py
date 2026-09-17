@@ -112,6 +112,13 @@ class PhysicalCandidateTests(unittest.TestCase):
         for package in ("firefox", "gvfs", "mousepad", "network-manager-applet", "nm-connection-editor", "pavucontrol", "thunar", "tumbler"):
             self.assertIn(f"\n{package}\n", f"\n{packages}")
             self.assertIn(package, builder)
+        for package in (
+            "grim", "hyprpolkitagent", "libnotify", "mako", "qt6-wayland",
+            "slurp", "xdg-desktop-portal", "xdg-desktop-portal-gtk",
+            "xdg-desktop-portal-hyprland", "xorg-xwayland",
+        ):
+            self.assertIn(f"\n{package}\n", f"\n{packages}")
+            self.assertIn(package, builder)
         self.assertIn("exec start-hyprland", profile)
         self.assertIn("exec start-hyprland", live_profile)
         self.assertNotIn("exec Hyprland", profile)
@@ -151,6 +158,12 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("systemctl --user import-environment", session_command)
         self.assertIn("WAYLAND_DISPLAY", session_command)
         self.assertIn("systemctl --user start blossom-shell-ui.service", session_command)
+        self.assertIn("dbus-update-activation-environment --systemd", session_command)
+        for service in (
+            "hyprpolkitagent.service", "mako.service",
+            "xdg-desktop-portal.service", "xdg-desktop-portal-hyprland.service",
+        ):
+            self.assertIn(service, session_command)
         self.assertNotIn("start graphical-session.target", session_command)
         self.assertIn('bsdtar -xpf "$package" -C "$profile/airootfs"', builder)
         self.assertIn('"$packages"/blossom-core-*.pkg.tar.zst', builder)
@@ -186,6 +199,8 @@ class PhysicalCandidateTests(unittest.TestCase):
             "blossom-shell-service",
             "blossom-shell-ui",
             "blossom-start-session",
+            "blossom-screenshot",
+            "xdg-desktop-portal-hyprland",
         ):
             self.assertIn(executable, image_verifier)
         self.assertIn('test -x "$root/$path"', image_verifier)
