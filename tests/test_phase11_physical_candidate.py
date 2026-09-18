@@ -256,6 +256,11 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("physical|vm-qualification", builder)
         self.assertIn("archlinux@sha256:", builder)
         self.assertIn("shasum -a 256 -c SHA256SUMS", builder)
+        self.assertIn("--detach", builder)
+        self.assertIn('logs --follow "$container"', builder)
+        self.assertIn('wait "$container"', builder)
+        self.assertIn("failed_or_interrupted", builder)
+        self.assertIn("preserving diagnostics and Docker state", builder)
 
     @patch("scripts.distribution.physical_candidate_install.os.geteuid", return_value=0)
     def test_prerequisite_cancellation_never_observes_devices(self, _geteuid):
