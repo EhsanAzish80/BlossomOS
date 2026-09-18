@@ -4,6 +4,7 @@ import QtQuick.Controls
 Button {
     id: control
     property string symbol: ""
+    property url iconSource: ""
     property string description: text
     property bool running: false
     property bool selected: false
@@ -20,14 +21,18 @@ Button {
     ToolTip.delay: 350
 
     contentItem: Item {
-        Text {
+        Image {
             anchors.centerIn: parent
             anchors.verticalCenterOffset: -2
-            text: control.symbol
-            color: "#f4f7fb"
-            font.pixelSize: 24
-            font.weight: Font.DemiBold
+            width: 26
+            height: 26
+            source: control.iconSource
+            sourceSize.width: 52
+            sourceSize.height: 52
+            fillMode: Image.PreserveAspectFit
+            visible: control.iconSource.toString().length > 0
         }
+        Text { anchors.centerIn: parent; text: control.symbol; color: "#f4f7fb"; font.pixelSize: 24; font.weight: Font.DemiBold; visible: control.iconSource.toString().length === 0 }
         Rectangle {
             visible: control.running || control.selected
             anchors.horizontalCenter: parent.horizontalCenter

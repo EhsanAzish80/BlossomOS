@@ -223,12 +223,12 @@ ShellRoot {
                 RowLayout {
                     anchors { fill: parent; margins: 10 } spacing: 8
                     Item { Layout.fillWidth: true }
-                    BlossomDockItem { symbol: "⊞"; text: "Applications"; description: "Applications"; selected: root.launcherVisible; onClicked: root.launcherVisible = !root.launcherVisible }
-                    BlossomDockItem { symbol: "▰"; text: "Files"; description: "Files"; onClicked: BlossomBroker.openFiles() }
-                    BlossomDockItem { symbol: "◎"; text: "Browser"; description: "Web Browser"; onClicked: BlossomBroker.openBrowser() }
-                    BlossomDockItem { symbol: ">_"; text: "Terminal"; description: "Terminal"; onClicked: BlossomBroker.openTerminal() }
+                    BlossomDockItem { iconSource: "icon-apps.svg"; text: "Applications"; description: "Applications"; selected: root.launcherVisible; onClicked: root.launcherVisible = !root.launcherVisible }
+                    BlossomDockItem { iconSource: "icon-files.svg"; text: "Files"; description: "Files"; onClicked: BlossomBroker.openFiles() }
+                    BlossomDockItem { iconSource: "icon-browser.svg"; text: "Browser"; description: "Web Browser"; onClicked: BlossomBroker.openBrowser() }
+                    BlossomDockItem { iconSource: "icon-terminal.svg"; text: "Terminal"; description: "Terminal"; onClicked: BlossomBroker.openTerminal() }
                     Rectangle { width: 1; height: 34; color: "#405066" }
-                    BlossomDockItem { symbol: "✦"; text: "Agent"; description: "Blossom Agent"; selected: root.activityVisible; onClicked: root.activityVisible = !root.activityVisible }
+                    BlossomDockItem { iconSource: "icon-agent.svg"; text: "Agent"; description: "Blossom Agent"; selected: root.activityVisible; onClicked: root.activityVisible = !root.activityVisible }
                     Item { Layout.fillWidth: true }
                 }
             }
