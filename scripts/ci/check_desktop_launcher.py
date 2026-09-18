@@ -58,10 +58,9 @@ def main() -> None:
         "bool CompleteOnboarding1()",
         'QStringLiteral("/onboarding-complete")',
         'marker.write("schema=1\\n")',
-        'QStringLiteral("/usr/bin/hyprctl")',
-        'QStringLiteral("dispatch")',
-        'QStringLiteral("exec")',
-        'QStringLiteral("--")',
+        "const QFileInfo executable(program)",
+        "executable.isFile()",
+        "executable.isExecutable()",
         'QStringLiteral("/usr/bin/nmcli")',
         'QStringLiteral("/usr/bin/wpctl")',
         'QStringLiteral("/usr/bin/bluetoothctl")',
@@ -76,6 +75,8 @@ def main() -> None:
                 f"desktop action drift: {action}")
     require(source.count("QProcess::startDetached") == 1,
             "desktop launcher must have exactly one process boundary")
+    require("QProcess::startDetached(program, command)" in source,
+            "desktop launcher must report whether the selected executable started")
     require(source.count("QProcess process;") == 1 and
             "process.waitForStarted(500)" in source and "process.waitForFinished(1000)" in source,
             "desktop status probes must use one bounded process boundary")

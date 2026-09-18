@@ -85,9 +85,10 @@ public slots:
         else if (action == QStringLiteral("poweroff")) command = {QStringLiteral("/usr/bin/systemctl"), QStringLiteral("poweroff")};
         else return false;
 
-        QStringList dispatch{QStringLiteral("dispatch"), QStringLiteral("exec"), QStringLiteral("--")};
-        dispatch.append(command);
-        return QProcess::startDetached(QStringLiteral("/usr/bin/hyprctl"), dispatch);
+        const QString program = command.takeFirst();
+        const QFileInfo executable(program);
+        if (!executable.isFile() || !executable.isExecutable()) return false;
+        return QProcess::startDetached(program, command);
     }
 
 private:

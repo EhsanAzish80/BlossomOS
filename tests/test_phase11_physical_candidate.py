@@ -123,7 +123,8 @@ class PhysicalCandidateTests(unittest.TestCase):
         ):
             self.assertIn(f"\n{package}\n", f"\n{packages}")
             self.assertIn(package, builder)
-        self.assertIn("exec start-hyprland", live_profile)
+        self.assertIn('start-hyprland >"$session_log" 2>&1', live_profile)
+        self.assertIn("Blossom OS could not start the desktop", live_profile)
         self.assertNotIn('useradd --root "$rootfs"', builder)
         self.assertNotIn("getty-autologin.conf", builder)
         self.assertIn("greetd", builder)

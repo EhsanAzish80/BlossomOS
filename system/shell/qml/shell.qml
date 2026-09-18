@@ -12,6 +12,7 @@ ShellRoot {
     property bool activityVisible: false
     property bool quickVisible: false
     property bool powerVisible: false
+    property bool installerRequested: false
     property string powerAction: ""
     property string clockText: Qt.formatDateTime(new Date(), "ddd HH:mm")
 
@@ -66,15 +67,15 @@ ShellRoot {
             RowLayout {
                 anchors { fill: parent; leftMargin: 14; rightMargin: 14 }
                 spacing: 12
-                Button { text: "Blossom OS"; onClicked: root.launcherVisible = !root.launcherVisible; Accessible.description: "Open the Blossom OS application launcher." }
+                BlossomButton { text: "Blossom OS"; onClicked: root.launcherVisible = !root.launcherVisible; Accessible.description: "Open the Blossom OS application launcher." }
                 Label { text: BlossomBroker.liveEnvironment ? "Live session" : "Workspace"; color: "#9fb0c7" }
                 Item { Layout.fillWidth: true }
-                Button { text: BlossomBroker.quickStatus.network === "wifi" ? "Wi-Fi" : BlossomBroker.quickStatus.network === "ethernet" ? "Ethernet" : "Network " + BlossomBroker.network.connectivity; onClicked: { root.quickVisible = !root.quickVisible; root.powerVisible = false } Accessible.description: "Open network, sound, Bluetooth and notification controls." }
-                Button { text: BlossomBroker.quickStatus.volume_percent >= 0 ? (BlossomBroker.quickStatus.muted ? "Muted" : "Sound " + BlossomBroker.quickStatus.volume_percent + "%") : "Sound ?"; onClicked: { root.quickVisible = !root.quickVisible; root.powerVisible = false } Accessible.description: "Open sound quick controls." }
-                Button { text: BlossomBroker.quickStatus.bluetooth === "on" ? "Bluetooth On" : BlossomBroker.quickStatus.bluetooth === "off" ? "Bluetooth Off" : "Bluetooth ?"; onClicked: BlossomBroker.openBluetoothSettings(); Accessible.description: "Open Bluetooth device settings." }
-                Button { text: BlossomBroker.battery.status === "present" ? "Battery " + BlossomBroker.battery.percentage + "%" : BlossomBroker.battery.status === "absent" ? "AC" : "Power ?"; onClicked: root.quickVisible = !root.quickVisible; Accessible.description: "Open quick system controls." }
+                BlossomIconButton { symbol: BlossomBroker.quickStatus.network === "ethernet" ? "↔" : "≋"; description: BlossomBroker.quickStatus.network === "wifi" ? "Wi-Fi connected" : BlossomBroker.quickStatus.network === "ethernet" ? "Ethernet connected" : "Network " + BlossomBroker.network.connectivity; selected: root.quickVisible; onClicked: { root.quickVisible = !root.quickVisible; root.powerVisible = false } }
+                BlossomIconButton { symbol: BlossomBroker.quickStatus.muted ? "×" : "♪"; description: BlossomBroker.quickStatus.volume_percent >= 0 ? (BlossomBroker.quickStatus.muted ? "Sound muted" : "Sound " + BlossomBroker.quickStatus.volume_percent + "%") : "Sound unavailable"; selected: root.quickVisible; onClicked: { root.quickVisible = !root.quickVisible; root.powerVisible = false } }
+                BlossomIconButton { symbol: "ᛒ"; description: BlossomBroker.quickStatus.bluetooth === "on" ? "Bluetooth on" : BlossomBroker.quickStatus.bluetooth === "off" ? "Bluetooth off" : "Bluetooth unavailable"; onClicked: BlossomBroker.openBluetoothSettings() }
+                BlossomIconButton { symbol: BlossomBroker.battery.status === "present" ? "▰" : "ϟ"; description: BlossomBroker.battery.status === "present" ? "Battery " + BlossomBroker.battery.percentage + "%" : BlossomBroker.battery.status === "absent" ? "Connected to AC power" : "Power status unavailable"; selected: root.quickVisible; onClicked: root.quickVisible = !root.quickVisible }
                 Label { text: root.clockText; color: "#f4f7fb"; font.bold: true }
-                Button { text: "System"; onClicked: { root.powerVisible = !root.powerVisible; root.quickVisible = false; root.powerAction = "" } }
+                BlossomIconButton { symbol: "⏻"; description: "System menu"; selected: root.powerVisible; onClicked: { root.powerVisible = !root.powerVisible; root.quickVisible = false; root.powerAction = "" } }
             }
 
             PopupWindow {
@@ -90,22 +91,22 @@ ShellRoot {
                     anchors.fill: parent; radius: 18; color: "#f2171d27"; border { color: "#40536d"; width: 1 }
                     ColumnLayout {
                         anchors { fill: parent; margins: 20 } spacing: 12
-                        RowLayout { Layout.fillWidth: true; Label { Layout.fillWidth: true; text: "Quick settings"; color: "#f4f7fb"; font.pixelSize: 22; font.bold: true } Button { text: "Close"; onClicked: root.quickVisible = false } }
+                        RowLayout { Layout.fillWidth: true; Label { Layout.fillWidth: true; text: "Quick settings"; color: "#f4f7fb"; font.pixelSize: 22; font.bold: true } BlossomIconButton { symbol: "×"; description: "Close quick settings"; onClicked: root.quickVisible = false } }
                         Rectangle {
                             Layout.fillWidth: true; implicitHeight: 72; radius: 12; color: "#222b38"
-                            RowLayout { anchors { fill: parent; margins: 10 } Label { Layout.fillWidth: true; text: "Network\n" + BlossomBroker.quickStatus.network + " · " + BlossomBroker.network.connectivity; color: BlossomBroker.network.connectivity === "offline" ? "#ff9b93" : "#dbe5f5" } Button { text: "Wi-Fi & Ethernet"; onClicked: BlossomBroker.openNetworkSettings() } }
+                            RowLayout { anchors { fill: parent; margins: 10 } Label { Layout.fillWidth: true; text: "Network\n" + BlossomBroker.quickStatus.network + " · " + BlossomBroker.network.connectivity; color: BlossomBroker.network.connectivity === "offline" ? "#ff9b93" : "#dbe5f5" } BlossomButton { text: "Wi-Fi & Ethernet"; onClicked: BlossomBroker.openNetworkSettings() } }
                         }
                         Rectangle {
                             Layout.fillWidth: true; implicitHeight: 72; radius: 12; color: "#222b38"
-                            RowLayout { anchors { fill: parent; margins: 10 } Label { Layout.fillWidth: true; text: BlossomBroker.quickStatus.volume_percent >= 0 ? "Sound " + BlossomBroker.quickStatus.volume_percent + "%" : "Sound unavailable"; color: "#dbe5f5" } Button { text: "−"; Accessible.name: "Lower volume"; onClicked: BlossomBroker.lowerVolume() } Button { text: BlossomBroker.quickStatus.muted ? "Unmute" : "Mute"; onClicked: BlossomBroker.toggleAudioMute() } Button { text: "+"; Accessible.name: "Raise volume"; onClicked: BlossomBroker.raiseVolume() } Button { text: "Details"; onClicked: BlossomBroker.openAudioSettings() } }
+                            RowLayout { anchors { fill: parent; margins: 10 } Label { Layout.fillWidth: true; text: BlossomBroker.quickStatus.volume_percent >= 0 ? "Sound " + BlossomBroker.quickStatus.volume_percent + "%" : "Sound unavailable"; color: "#dbe5f5" } BlossomIconButton { symbol: "−"; description: "Lower volume"; onClicked: BlossomBroker.lowerVolume() } BlossomButton { text: BlossomBroker.quickStatus.muted ? "Unmute" : "Mute"; onClicked: BlossomBroker.toggleAudioMute() } BlossomIconButton { symbol: "+"; description: "Raise volume"; onClicked: BlossomBroker.raiseVolume() } BlossomButton { text: "Details"; onClicked: BlossomBroker.openAudioSettings() } }
                         }
                         Rectangle {
                             Layout.fillWidth: true; implicitHeight: 64; radius: 12; color: "#222b38"
-                            RowLayout { anchors { fill: parent; margins: 10 } Label { Layout.fillWidth: true; text: "Bluetooth " + BlossomBroker.quickStatus.bluetooth; color: "#dbe5f5" } Button { text: "Devices"; onClicked: BlossomBroker.openBluetoothSettings() } }
+                            RowLayout { anchors { fill: parent; margins: 10 } Label { Layout.fillWidth: true; text: "Bluetooth " + BlossomBroker.quickStatus.bluetooth; color: "#dbe5f5" } BlossomButton { text: "Devices"; onClicked: BlossomBroker.openBluetoothSettings() } }
                         }
                         Rectangle {
                             Layout.fillWidth: true; implicitHeight: 64; radius: 12; color: "#222b38"
-                            RowLayout { anchors { fill: parent; margins: 10 } Label { Layout.fillWidth: true; text: "Notifications"; color: "#dbe5f5" } Button { text: "Toggle do not disturb"; onClicked: BlossomBroker.toggleDoNotDisturb() } }
+                            RowLayout { anchors { fill: parent; margins: 10 } Label { Layout.fillWidth: true; text: "Notifications"; color: "#dbe5f5" } BlossomButton { text: "Do not disturb"; onClicked: BlossomBroker.toggleDoNotDisturb() } }
                         }
                         Label { Layout.fillWidth: true; text: BlossomBroker.battery.status === "present" ? "Battery " + BlossomBroker.battery.percentage + "% · " + BlossomBroker.battery.state : BlossomBroker.battery.status === "absent" ? "Connected to AC power" : "Battery information unavailable"; color: "#9fb0c7"; wrapMode: Text.WordWrap }
                     }
@@ -125,19 +126,19 @@ ShellRoot {
                     anchors.fill: parent; radius: 18; color: "#f2171d27"; border { color: "#40536d"; width: 1 }
                     ColumnLayout {
                         anchors { fill: parent; margins: 22 } spacing: 12
-                        RowLayout { Layout.fillWidth: true; Label { Layout.fillWidth: true; text: "Applications"; color: "#f4f7fb"; font.pixelSize: 25; font.bold: true } Button { text: "Close"; onClicked: root.launcherVisible = false } }
+                        RowLayout { Layout.fillWidth: true; Label { Layout.fillWidth: true; text: "Applications"; color: "#f4f7fb"; font.pixelSize: 25; font.bold: true } BlossomIconButton { symbol: "×"; description: "Close applications"; onClicked: root.launcherVisible = false } }
                         Label { Layout.fillWidth: true; text: "Work normally or open the local agent when you choose."; color: "#aebbd0"; wrapMode: Text.WordWrap }
                         GridLayout {
                             Layout.fillWidth: true; columns: 2; columnSpacing: 10; rowSpacing: 10
-                            Button { Layout.fillWidth: true; text: "Files"; onClicked: { BlossomBroker.openFiles(); root.launcherVisible = false } }
-                            Button { Layout.fillWidth: true; text: "Web Browser"; onClicked: { BlossomBroker.openBrowser(); root.launcherVisible = false } }
-                            Button { Layout.fillWidth: true; text: "Text Editor"; onClicked: { BlossomBroker.openEditor(); root.launcherVisible = false } }
-                            Button { Layout.fillWidth: true; text: "Terminal"; onClicked: { BlossomBroker.openTerminal(); root.launcherVisible = false } }
-                            Button { Layout.fillWidth: true; text: "Network Settings"; onClicked: { BlossomBroker.openNetworkSettings(); root.launcherVisible = false } }
-                            Button { Layout.fillWidth: true; text: "Audio Settings"; onClicked: { BlossomBroker.openAudioSettings(); root.launcherVisible = false } }
+                            BlossomButton { Layout.fillWidth: true; text: "Files"; onClicked: { BlossomBroker.openFiles(); root.launcherVisible = false } }
+                            BlossomButton { Layout.fillWidth: true; text: "Web Browser"; onClicked: { BlossomBroker.openBrowser(); root.launcherVisible = false } }
+                            BlossomButton { Layout.fillWidth: true; text: "Text Editor"; onClicked: { BlossomBroker.openEditor(); root.launcherVisible = false } }
+                            BlossomButton { Layout.fillWidth: true; text: "Terminal"; onClicked: { BlossomBroker.openTerminal(); root.launcherVisible = false } }
+                            BlossomButton { Layout.fillWidth: true; text: "Network Settings"; onClicked: { BlossomBroker.openNetworkSettings(); root.launcherVisible = false } }
+                            BlossomButton { Layout.fillWidth: true; text: "Audio Settings"; onClicked: { BlossomBroker.openAudioSettings(); root.launcherVisible = false } }
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: "#334155" }
-                        Button { Layout.fillWidth: true; visible: BlossomBroker.liveEnvironment; text: "Install Blossom OS"; onClicked: { BlossomBroker.openInstaller(); root.launcherVisible = false } }
+                        BlossomButton { Layout.fillWidth: true; primary: true; visible: BlossomBroker.liveEnvironment; text: "Install Blossom OS"; onClicked: { root.launcherVisible = false; root.installerRequested = true; BlossomBroker.openInstaller() } }
                         Label { Layout.fillWidth: true; visible: BlossomBroker.desktopMessage.length > 0; text: BlossomBroker.desktopMessage; color: BlossomBroker.desktopMessage.startsWith("Could not") ? "#ff9b93" : "#8dd7c7"; wrapMode: Text.WordWrap; Accessible.role: Accessible.AlertMessage }
                         Item { Layout.fillHeight: true }
                         Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Installation uses verified files from this media and can proceed offline." : "Installed system · files and settings are persistent."; color: "#8190a5"; wrapMode: Text.WordWrap }
@@ -160,9 +161,9 @@ ShellRoot {
                         anchors { fill: parent; margins: 20 } spacing: 12
                         Label { Layout.fillWidth: true; text: "System"; color: "#f4f7fb"; font.pixelSize: 20; font.bold: true }
                         Label { Layout.fillWidth: true; text: "Super+Tab switches windows · Super+Q closes the active window"; color: "#8fa0b7"; wrapMode: Text.WordWrap }
-                        Button { Layout.fillWidth: true; text: "Log Out"; onClicked: { root.powerAction = "logout"; root.powerVisible = false } }
-                        Button { Layout.fillWidth: true; text: "Restart"; onClicked: { root.powerAction = "restart"; root.powerVisible = false } }
-                        Button { Layout.fillWidth: true; text: "Shut Down"; onClicked: { root.powerAction = "shutdown"; root.powerVisible = false } }
+                        BlossomButton { Layout.fillWidth: true; text: "Log Out"; onClicked: { root.powerAction = "logout"; root.powerVisible = false } }
+                        BlossomButton { Layout.fillWidth: true; text: "Restart"; onClicked: { root.powerAction = "restart"; root.powerVisible = false } }
+                        BlossomButton { Layout.fillWidth: true; destructive: true; text: "Shut Down"; onClicked: { root.powerAction = "shutdown"; root.powerVisible = false } }
                     }
                 }
             }
@@ -195,8 +196,8 @@ ShellRoot {
                     Item { Layout.fillHeight: true }
                     RowLayout {
                         Layout.fillWidth: true; spacing: 12
-                        Button { Layout.fillWidth: true; text: "Cancel"; onClicked: root.powerAction = "" }
-                        Button { Layout.fillWidth: true; text: root.powerAction === "logout" ? "Log Out" : root.powerAction === "restart" ? "Restart" : "Shut Down"; onClicked: { if (root.powerAction === "logout") BlossomBroker.logOut(); else if (root.powerAction === "restart") BlossomBroker.restartSystem(); else BlossomBroker.powerOff() } }
+                        BlossomButton { Layout.fillWidth: true; text: "Cancel"; onClicked: root.powerAction = "" }
+                        BlossomButton { Layout.fillWidth: true; destructive: true; text: root.powerAction === "logout" ? "Log Out" : root.powerAction === "restart" ? "Restart" : "Shut Down"; onClicked: { if (root.powerAction === "logout") BlossomBroker.logOut(); else if (root.powerAction === "restart") BlossomBroker.restartSystem(); else BlossomBroker.powerOff() } }
                     }
                 }
             }
@@ -211,8 +212,8 @@ ShellRoot {
             screen: modelData
             anchors { bottom: true }
             margins { bottom: 14 }
-            implicitWidth: 650
-            implicitHeight: 70
+            implicitWidth: 410
+            implicitHeight: 72
             exclusiveZone: 92
             focusable: true
             WlrLayershell.namespace: "blossom-dock"
@@ -221,12 +222,14 @@ ShellRoot {
                 anchors.fill: parent; radius: 22; color: "#e617202c"; border { color: "#40536d"; width: 1 }
                 RowLayout {
                     anchors { fill: parent; margins: 10 } spacing: 8
-                    Button { Layout.fillWidth: true; text: "Applications"; Accessible.ignored: false; onClicked: root.launcherVisible = !root.launcherVisible }
-                    Button { text: "Files"; Accessible.ignored: false; onClicked: BlossomBroker.openFiles() }
-                    Button { text: "Browser"; Accessible.ignored: false; onClicked: BlossomBroker.openBrowser() }
-                    Button { text: "Terminal"; Accessible.ignored: false; onClicked: BlossomBroker.openTerminal() }
-                    Button { text: "Network"; Accessible.ignored: false; onClicked: BlossomBroker.openNetworkSettings() }
-                    Button { text: "Agent"; Accessible.ignored: false; onClicked: root.activityVisible = !root.activityVisible }
+                    Item { Layout.fillWidth: true }
+                    BlossomDockItem { symbol: "⊞"; text: "Applications"; description: "Applications"; selected: root.launcherVisible; onClicked: root.launcherVisible = !root.launcherVisible }
+                    BlossomDockItem { symbol: "▰"; text: "Files"; description: "Files"; onClicked: BlossomBroker.openFiles() }
+                    BlossomDockItem { symbol: "◎"; text: "Browser"; description: "Web Browser"; onClicked: BlossomBroker.openBrowser() }
+                    BlossomDockItem { symbol: ">_"; text: "Terminal"; description: "Terminal"; onClicked: BlossomBroker.openTerminal() }
+                    Rectangle { width: 1; height: 34; color: "#405066" }
+                    BlossomDockItem { symbol: "✦"; text: "Agent"; description: "Blossom Agent"; selected: root.activityVisible; onClicked: root.activityVisible = !root.activityVisible }
+                    Item { Layout.fillWidth: true }
                 }
             }
             PopupWindow {
@@ -241,7 +244,7 @@ ShellRoot {
                     anchors.fill: parent; radius: 18; color: "#f2171d27"; border { color: "#40536d"; width: 1 }
                     ColumnLayout {
                         anchors { fill: parent; margins: 20 } spacing: 10
-                        RowLayout { Layout.fillWidth: true; Label { Layout.fillWidth: true; text: "Agent activity"; color: "#f4f7fb"; font.pixelSize: 22; font.bold: true } Button { text: "System check"; enabled: !["requesting", "waiting", "submitting", "cancelling"].includes(BlossomBroker.state); Accessible.description: "Request the fixed kernel identity diagnostic."; onClicked: BlossomBroker.requestSystemUname() } Button { text: "Close"; onClicked: root.activityVisible = false } }
+                        RowLayout { Layout.fillWidth: true; Label { Layout.fillWidth: true; text: "Agent activity"; color: "#f4f7fb"; font.pixelSize: 22; font.bold: true } BlossomButton { text: "System check"; enabled: !["requesting", "waiting", "submitting", "cancelling"].includes(BlossomBroker.state); Accessible.description: "Request the fixed kernel identity diagnostic."; onClicked: BlossomBroker.requestSystemUname() } BlossomIconButton { symbol: "×"; description: "Close agent activity"; onClicked: root.activityVisible = false } }
                         Label { Layout.fillWidth: true; text: "The desktop works without an active model. Privileged agent actions still require explicit approval."; color: "#aebbd0"; wrapMode: Text.WordWrap }
                         ListView {
                             Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 8; model: BlossomBroker.activity
@@ -262,7 +265,7 @@ ShellRoot {
             aboveWindows: true
             focusable: true
             exclusiveZone: 0
-            visible: root.welcomeVisible && modelData === Quickshell.screens[0]
+            visible: root.welcomeVisible && !root.installerRequested && modelData === Quickshell.screens[0]
             color: "#66070b12"
             WlrLayershell.namespace: "blossom-welcome"
             Rectangle {
@@ -272,7 +275,7 @@ ShellRoot {
                     Label { text: BlossomBroker.liveEnvironment ? "LIVE SESSION" : "BLOSSOM OS"; color: "#8dd7c7"; font.bold: true }
                     Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Try Blossom OS" : "Your desktop is ready"; color: "#f4f7fb"; font.pixelSize: 36; font.bold: true; wrapMode: Text.WordWrap }
                     Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Browse, work with files, connect to a network, or install from the verified offline media when you are ready." : "Use Blossom as a normal computer. Open Agent when you want local assistance."; color: "#c0ccdc"; font.pixelSize: 17; wrapMode: Text.WordWrap }
-                    RowLayout { Button { text: "Continue to desktop"; onClicked: BlossomBroker.dismissOnboarding() } Button { text: "Network"; onClicked: BlossomBroker.openNetworkSettings() } Button { visible: BlossomBroker.liveEnvironment; text: "Install Blossom OS"; onClicked: BlossomBroker.openInstaller() } }
+                    RowLayout { BlossomButton { text: "Continue to desktop"; onClicked: BlossomBroker.dismissOnboarding() } BlossomButton { text: "Network"; onClicked: BlossomBroker.openNetworkSettings() } BlossomButton { primary: true; visible: BlossomBroker.liveEnvironment; text: "Install Blossom OS"; onClicked: { root.installerRequested = true; BlossomBroker.openInstaller() } } }
                     Item { Layout.fillHeight: true }
                     Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Welcome to Blossom OS. Installing is never automatic. External disks are excluded from installation targets, and you can continue offline." : "Applications and files remain available even when the agent is not configured."; color: "#8190a5"; wrapMode: Text.WordWrap }
                     Label { Layout.fillWidth: true; visible: BlossomBroker.desktopMessage.length > 0; text: BlossomBroker.desktopMessage; color: BlossomBroker.desktopMessage.startsWith("Could not") ? "#ff9b93" : "#8dd7c7"; wrapMode: Text.WordWrap; Accessible.role: Accessible.AlertMessage }

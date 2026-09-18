@@ -40,7 +40,7 @@ class DesktopFoundationLayoutTests(unittest.TestCase):
         self.assertIn('text: "Save your work before continuing."', SHELL)
 
     def test_top_bar_exposes_normal_system_controls(self):
-        for label in ("Network ", "Sound", "Bluetooth", "Quick settings", "Wi-Fi & Ethernet", "Toggle do not disturb", "Log Out"):
+        for label in ("Network ", "Sound", "Bluetooth", "Quick settings", "Wi-Fi & Ethernet", "Do not disturb", "Log Out"):
             self.assertIn(label, SHELL)
         for action in ("openNetworkSettings", "openAudioSettings", "openBluetoothSettings", "toggleAudioMute", "lowerVolume", "raiseVolume", "toggleDoNotDisturb", "logOut"):
             self.assertIn(f"BlossomBroker.{action}", SHELL)
@@ -49,6 +49,7 @@ class DesktopFoundationLayoutTests(unittest.TestCase):
         self.assertIn("BlossomBroker.onboardingRequired", SHELL)
         self.assertIn("BlossomBroker.dismissOnboarding()", SHELL)
         self.assertNotIn("root.welcomeVisible = false", SHELL)
+        self.assertIn("!root.installerRequested", SHELL)
 
 
 if __name__ == "__main__":

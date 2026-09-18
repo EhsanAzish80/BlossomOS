@@ -175,6 +175,10 @@ void BlossomBroker::refreshQuickStatus() {
 }
 
 void BlossomBroker::launchDesktop(const QString &action) {
+    m_desktopMessage = action == QStringLiteral("installer")
+        ? QStringLiteral("Opening the Blossom OS installer…")
+        : QStringLiteral("Opening %1…").arg(action);
+    emit desktopMessageChanged();
     auto *watcher = new QDBusPendingCallWatcher(
         desktopInterface().asyncCall(QStringLiteral("Launch1"), action), this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, action] {
