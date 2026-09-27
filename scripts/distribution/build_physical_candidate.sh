@@ -123,9 +123,11 @@ if [[ "$mode" == vm-qualification ]]; then
   # verifier inputs out of release images, but package the reviewed copies in
   # VM-qualification roots so the probe cannot pass against missing or host
   # files.
-  install -d -m 0755 "$rootfs/opt/blossom/.github/workflows"
-  cp -a "$repo/scripts/ci" "$repo/tests" "$repo/distribution" \
-    "$rootfs/opt/blossom/"
+  install -d -m 0755 \
+    "$rootfs/opt/blossom/.github/workflows" \
+    "$rootfs/opt/blossom/scripts"
+  cp -a "$repo/scripts/ci" "$rootfs/opt/blossom/scripts/"
+  cp -a "$repo/tests" "$repo/distribution" "$rootfs/opt/blossom/"
   install -m 0644 "$repo/.github/workflows/phase9-vm-install-evidence.yml" \
     "$rootfs/opt/blossom/.github/workflows/phase9-vm-install-evidence.yml"
   install -Dm0755 "$repo/distribution/evidence/blossom-evidence-boot" \

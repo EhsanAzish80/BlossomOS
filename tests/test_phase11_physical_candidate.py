@@ -161,6 +161,9 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("Blossom OS Recovery Console", builder)
         self.assertIn("vt.global_cursor_default=0", builder)
         self.assertIn("blossom.recovery=1", live_profile)
+        self.assertIn('"$rootfs/opt/blossom/scripts"', builder)
+        self.assertIn('cp -a "$repo/scripts/ci" "$rootfs/opt/blossom/scripts/"', builder)
+        self.assertNotIn('cp -a "$repo/scripts/ci" "$repo/tests" "$repo/distribution"', builder)
         self.assertIn("verify_physical_candidate_image.sh", candidate_workflow)
         for executable in (
             "blossom-shell-service",
