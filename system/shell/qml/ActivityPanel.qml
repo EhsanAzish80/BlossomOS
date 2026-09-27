@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
 import Blossom.Shell
+import "Petal"
 
 Window {
     visible: false
@@ -11,7 +12,7 @@ Window {
     x: Math.max(0, (screen ? screen.width : 800) - width)
     y: 60
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
-    color: "#f2171d27"
+    color: Theme.panelFill
 
     ColumnLayout {
         anchors {
@@ -24,9 +25,9 @@ Window {
         Accessible.ignored: false
 
         Label {
-            color: "#f4f7fb"
-            font.bold: true
-            font.pixelSize: 18
+            color: Theme.text
+            font.weight: Font.DemiBold
+            font.pixelSize: Theme.title
             text: "Authoritative activity"
             Accessible.role: Accessible.Heading
             Accessible.name: text
@@ -44,8 +45,8 @@ Window {
                 required property var modelData
                 width: ListView.view.width
                 height: activityText.implicitHeight + 16
-                radius: 8
-                color: "#222b38"
+                radius: Theme.radiusControl
+                color: Theme.raised
 
                 Label {
                     id: activityText
@@ -53,7 +54,7 @@ Window {
                         fill: parent
                         margins: 8
                     }
-                    color: "#dbe5f5"
+                    color: Theme.text
                     textFormat: Text.PlainText
                     wrapMode: Text.Wrap
                     text: "Audit sequence #" + modelData.sequence + "  " + modelData.kind + "\n" +

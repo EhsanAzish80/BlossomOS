@@ -31,3 +31,18 @@ authority.
 Pinned Quickshell/Hyprland loading has passing installed evidence. Physical
 input, screen-reader behavior, visual integrity, and end-to-end interaction
 remain evidence gates until exercised on the installed surface.
+
+## Petal design tokens
+
+`Petal/Theme.qml` is the single source for shell colors, type, spacing, radii
+and motion; `Petal/icons/` holds the 24-px stroke icon set. Components import
+`"Petal"` and never hardcode hex values. The tokens are presentation-only: the
+singleton holds no functions, broker state, or authority, and
+`scripts/ci/check_shell_qml.py` rejects any other file under `Petal/`.
+
+Color roles are exclusive: blossom (`#f3a6bc`) marks the agent, primary action
+and focus; decision amber (`#f2c265`) appears only while a request waits for
+the user; verified, danger and info mark authoritative outcomes. Security
+fields render evidence (paths, arguments, capabilities, IDs, digests) in IBM
+Plex Mono and keep their exact labels as accessible names with the raw value as
+the accessible description.

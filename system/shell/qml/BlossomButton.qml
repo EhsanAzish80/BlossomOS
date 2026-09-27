@@ -1,37 +1,58 @@
 import QtQuick
 import QtQuick.Controls
+import "Petal"
 
 Button {
     id: control
     property bool primary: false
     property bool destructive: false
+    property bool ghost: false
 
-    implicitHeight: 42
+    implicitHeight: Theme.controlHeight
     leftPadding: 18
     rightPadding: 18
-    topPadding: 10
-    bottomPadding: 10
-    font.pixelSize: 14
-    font.weight: Font.DemiBold
+    topPadding: 0
+    bottomPadding: 0
+    font.family: Theme.sans
+    font.pixelSize: Theme.label
+    font.weight: control.primary ? Font.DemiBold : Font.Medium
 
     contentItem: Text {
         text: control.text
         font: control.font
-        color: control.enabled ? "#f4f7fb" : "#6f7c90"
+        color: !control.enabled ? Theme.textDisabled
+             : control.primary ? Theme.onBlossom
+             : control.destructive ? ((control.hovered || control.down) ? Theme.onDanger : Theme.danger)
+             : control.ghost && !control.hovered ? Theme.textSecondary
+             : Theme.text
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
     }
 
-    background: Rectangle {
-        radius: 12
-        color: !control.enabled ? "#17202c"
-             : control.down ? (control.destructive ? "#8f3434" : control.primary ? "#247c72" : "#344155")
-             : control.hovered ? (control.destructive ? "#713030" : control.primary ? "#2f9488" : "#2b3748")
-             : control.destructive ? "#59292d" : control.primary ? "#267f76" : "#202b3a"
-        border.color: control.activeFocus ? "#8dd7c7" : control.primary ? "#3ba598" : "#3c4a5e"
-        border.width: control.activeFocus ? 2 : 1
-
-        Behavior on color { ColorAnimation { duration: 90 } }
+    background: Item {
+        // Focus is an offset ring so the control never shifts.
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -(Theme.focusRing * 2)
+            radius: Theme.radiusControl + Theme.focusRing * 2
+            color: "transparent"
+            border.color: control.destructive ? Theme.danger : Theme.blossom
+            border.width: Theme.focusRing
+            visible: control.activeFocus
+        }
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.radiusControl
+            color: !control.enabled ? (control.ghost ? "transparent" : Theme.surface)
+                 : control.primary ? (control.down ? Theme.blossomPressed : control.hovered ? Theme.blossomHover : Theme.blossom)
+                 : control.destructive ? (control.down ? Theme.dangerPressed : control.hovered ? Theme.danger : Theme.dangerTint)
+                 : control.down ? Theme.pressed
+                 : control.hovered ? Theme.hover
+                 : control.ghost ? "transparent" : Theme.raised
+            border.width: control.primary || control.ghost || (control.destructive && control.hovered) ? 0 : 1
+            border.color: control.destructive ? Theme.dangerLine : control.enabled ? Theme.lineStrong : Theme.line
+            Behavior on color { ColorAnimation { duration: Theme.stateMs } }
+        }
     }
 }

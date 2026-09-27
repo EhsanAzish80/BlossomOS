@@ -13,9 +13,18 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
-    expected = {"shell.qml", "quickshell.qml", "SecurityHost.qml", "wallpaper.svg", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "BlossomButton.qml", "BlossomIconButton.qml", "BlossomDockItem.qml", "icon-apps.svg", "icon-files.svg", "icon-browser.svg", "icon-terminal.svg", "icon-agent.svg", "README.md"}
+    expected = {"shell.qml", "quickshell.qml", "SecurityHost.qml", "wallpaper.svg", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "BlossomButton.qml", "BlossomIconButton.qml", "BlossomDockItem.qml", "icon-apps.svg", "icon-files.svg", "icon-browser.svg", "icon-terminal.svg", "icon-agent.svg", "README.md", "Petal"}
     require({path.name for path in QML.iterdir()} == expected, "unexpected QML surface")
     qml = "\n".join((QML / name).read_text() for name in expected if name.endswith(".qml"))
+    petal = QML / "Petal"
+    petal_files = {str(path.relative_to(petal)) for path in petal.rglob("*") if path.is_file()}
+    require({"qmldir", "Theme.qml"} <= petal_files, "Petal design tokens are missing")
+    require(all(name in {"qmldir", "Theme.qml"} or (name.startswith("icons/") and name.endswith(".svg"))
+                for name in petal_files), "unexpected Petal design-token surface")
+    theme = (petal / "Theme.qml").read_text()
+    require("pragma Singleton" in theme and "import Blossom.Shell" not in theme and "function " not in theme,
+            "Petal must stay presentation-only tokens")
+    qml += "\n" + theme
     for field in [
         "Operation",
         "Purpose",
