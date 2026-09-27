@@ -7,6 +7,7 @@ import fcntl
 import hashlib
 import json
 import os
+import secrets
 import shutil
 import stat
 import subprocess
@@ -24,6 +25,7 @@ TARGET = {
 BLKGETSIZE64 = 0x80081272
 ROOTFS = Path("/root/blossom-rootfs.tar.zst")
 ROOTFS_DIGEST = Path("/root/blossom-rootfs.tar.zst.sha256")
+ROOTFS_MANIFEST = Path("/root/blossom-rootfs.manifest.json")
 MOUNT = Path("/mnt/blossom-install")
 MOUNT_B = Path("/mnt/blossom-install-b")
 STATE_DIRECTORIES = {
@@ -47,16 +49,15 @@ SLOT_SYNC_PATHS = (
     "usr/lib/locale/locale-archive",
 )
 ROOTFS_REQUIRED_PATHS = (
-    "./etc/machine-id",
-    "./etc/passwd",
-    "./etc/shadow",
-    "./etc/group",
-    "./etc/gshadow",
-    "./boot/vmlinuz-linux-lts",
-    "./boot/initramfs-linux-lts.img",
-    "./boot/intel-ucode.img",
-    "./usr/bin/systemd-machine-id-setup",
-    "./usr/bin/locale-gen",
+    "etc/machine-id",
+    "etc/passwd",
+    "etc/shadow",
+    "etc/group",
+    "etc/gshadow",
+    "boot/vmlinuz-linux-lts",
+    "boot/initramfs-linux-lts.img",
+    "boot/intel-ucode.img",
+    "usr/bin/locale-gen",
 )
 LSBLK_TARGET = (
     "lsblk",
@@ -133,43 +134,87 @@ def _stable_disk_path(device: str) -> str:
 
 def _verify_rootfs() -> None:
     try:
-        expected = ROOTFS_DIGEST.read_text(encoding="ascii").strip()
+        checksum_text = ROOTFS_DIGEST.read_text(encoding="ascii")
     except (OSError, UnicodeError) as error:
         raise BackendError("reviewed root filesystem digest is missing") from error
-    if len(expected) != 64 or any(character not in "0123456789abcdef" for character in expected):
-        raise BackendError("reviewed root filesystem digest is invalid")
-    digest = hashlib.sha256()
-    try:
-        with ROOTFS.open("rb") as source:
-            for chunk in iter(lambda: source.read(1024 * 1024), b""):
-                digest.update(chunk)
-    except OSError as error:
-        raise BackendError("reviewed root filesystem archive cannot be read") from error
-    if digest.hexdigest() != expected:
-        raise BackendError("reviewed root filesystem digest does not match")
+    expected_names = {
+        "blossom-rootfs.tar.zst": ROOTFS,
+        "blossom-rootfs.manifest.json": ROOTFS_MANIFEST,
+    }
+    expected: dict[str, str] = {}
+    for line in checksum_text.splitlines():
+        fields = line.split("  ", 1)
+        if (
+            len(fields) != 2
+            or fields[1] not in expected_names
+            or fields[1] in expected
+            or len(fields[0]) != 64
+            or any(character not in "0123456789abcdef" for character in fields[0])
+        ):
+            raise BackendError("reviewed root filesystem digest manifest is invalid")
+        expected[fields[1]] = fields[0]
+    if set(expected) != set(expected_names):
+        raise BackendError("reviewed root filesystem digest manifest is incomplete")
+    for name, path in expected_names.items():
+        digest = hashlib.sha256()
+        try:
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        except OSError as error:
+            raise BackendError(f"reviewed root filesystem input cannot be read: {name}") from error
+        if digest.hexdigest() != expected[name]:
+            raise BackendError(f"reviewed root filesystem digest does not match: {name}")
 
 
 def _preflight_rootfs(
-    run: Callable[..., subprocess.CompletedProcess[Any]],
     provision: Callable[[Path], None] | None,
 ) -> None:
     """Reject known content failures before the first destructive command."""
     if provision is None:
         raise BackendError("graphical account provisioning is required")
-    if shutil.which("systemd-machine-id-setup") is None:
-        raise BackendError("live machine-id setup tool is unavailable")
-    listing = run(
-        ["tar", "--zstd", "--list", "--file", str(ROOTFS), *ROOTFS_REQUIRED_PATHS],
-        check=True, capture_output=True, timeout=30,
+    try:
+        descriptor = os.open(ROOTFS_MANIFEST, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    except OSError as error:
+        raise BackendError("reviewed root filesystem manifest cannot be opened safely") from error
+    try:
+        status = os.fstat(descriptor)
+        if not stat.S_ISREG(status.st_mode) or not 0 < status.st_size <= 64 * 1024:
+            raise BackendError("reviewed root filesystem manifest is outside the closed bound")
+        encoded = os.read(descriptor, status.st_size + 1)
+    finally:
+        os.close(descriptor)
+    try:
+        manifest = json.loads(encoded)
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise BackendError("reviewed root filesystem manifest is invalid") from error
+    if manifest != {
+        "schema": 1,
+        "required_paths": list(ROOTFS_REQUIRED_PATHS),
+        "machine_id_bytes": 0,
+    }:
+        raise BackendError("reviewed root filesystem manifest does not match the closed contract")
+
+
+def _install_machine_id(root: Path) -> None:
+    destination = root / "etc/machine-id"
+    temporary = destination.with_name(".machine-id.blossom-install")
+    temporary.unlink(missing_ok=True)
+    encoded = f"{secrets.token_hex(16)}\n".encode("ascii")
+    descriptor = os.open(
+        temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW,
+        0o444,
     )
-    if listing.stderr or len(listing.stdout) > 64 * 1024:
-        raise BackendError("reviewed root filesystem inventory is invalid")
-    machine_id = run(
-        ["tar", "--zstd", "--extract", "--to-stdout", "--file", str(ROOTFS), "./etc/machine-id"],
-        check=True, capture_output=True, timeout=30,
-    )
-    if machine_id.stderr or machine_id.stdout:
-        raise BackendError("reviewed root filesystem embeds a machine identity")
+    try:
+        written = 0
+        while written < len(encoded):
+            written += os.write(descriptor, encoded[written:])
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    os.replace(temporary, destination)
+    destination.chmod(0o444)
 
 
 def _recheck_disk_identity(fd: int, disk: str, expected_rdev: int) -> None:
@@ -284,7 +329,7 @@ def install(
     if not ROOTFS.is_file():
         raise BackendError("reviewed root filesystem archive is missing")
     _verify_rootfs()
-    _preflight_rootfs(run, provision)
+    _preflight_rootfs(provision)
     validate_target(target, _inventory())
     disk = _stable_disk_path(TARGET["path"])
     exclusive_fd = os.open(disk, os.O_RDONLY | os.O_EXCL | os.O_CLOEXEC)
@@ -406,10 +451,7 @@ def install(
             )
         if provision is not None:
             provision(MOUNT)
-        run(
-            ["systemd-machine-id-setup", f"--root={MOUNT}"],
-            check=True, timeout=30,
-        )
+        _install_machine_id(MOUNT)
         sync_slot_state(MOUNT, MOUNT_B)
         run(["sync"], check=True, timeout=60)
     finally:

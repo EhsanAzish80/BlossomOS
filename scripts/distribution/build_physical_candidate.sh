@@ -138,18 +138,44 @@ if [[ -s "$rootfs/etc/machine-id" ]]; then
   echo "root filesystem machine-id must be empty" >&2
   exit 1
 fi
+rootfs_manifest="$build/blossom-rootfs.manifest.json"
+python - "$rootfs" "$rootfs_manifest" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+output = Path(sys.argv[2])
+required = [
+    "etc/machine-id",
+    "etc/passwd",
+    "etc/shadow",
+    "etc/group",
+    "etc/gshadow",
+    "boot/vmlinuz-linux-lts",
+    "boot/initramfs-linux-lts.img",
+    "boot/intel-ucode.img",
+    "usr/bin/locale-gen",
+]
+for relative in required:
+    path = root / relative
+    if not (path.is_file() or path.is_symlink()):
+        raise SystemExit(f"root filesystem prerequisite has invalid type: {relative}")
+if (root / "etc/machine-id").stat().st_size != 0:
+    raise SystemExit("root filesystem machine-id must be empty")
+output.write_text(json.dumps({
+    "schema": 1,
+    "required_paths": required,
+    "machine_id_bytes": 0,
+}, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
+PY
 tar --xattrs --numeric-owner -I "$rootfs_compressor" \
   -cf "$build/blossom-rootfs.tar.zst" -C "$rootfs" .
-archived_machine_id="$build/rootfs-machine-id.check"
-tar --zstd --extract --to-stdout --file "$build/blossom-rootfs.tar.zst" \
-  ./etc/machine-id >"$archived_machine_id"
-if [[ -s "$archived_machine_id" ]]; then
-  echo "root filesystem archive contains a machine identity" >&2
-  exit 1
-fi
-rm -f "$archived_machine_id"
-sha256sum "$build/blossom-rootfs.tar.zst" \
-  | awk '{print $1}' > "$build/blossom-rootfs.tar.zst.sha256"
+(
+  cd "$build"
+  sha256sum blossom-rootfs.tar.zst blossom-rootfs.manifest.json \
+    > blossom-rootfs.tar.zst.sha256
+)
 
 cp -a /usr/share/archiso/configs/releng/. "$profile/"
 cp "$repo/distribution/archiso/profiledef.sh" "$profile/profiledef.sh"
@@ -223,6 +249,8 @@ if [[ "$mode" == vm-qualification ]]; then
 fi
 install -Dm0600 "$build/blossom-rootfs.tar.zst" \
   "$profile/airootfs/root/blossom-rootfs.tar.zst"
+install -Dm0600 "$build/blossom-rootfs.manifest.json" \
+  "$profile/airootfs/root/blossom-rootfs.manifest.json"
 install -Dm0600 "$build/blossom-rootfs.tar.zst.sha256" \
   "$profile/airootfs/root/blossom-rootfs.tar.zst.sha256"
 mkarchiso -v -w "$build/archiso-work" -o "$iso" "$profile"

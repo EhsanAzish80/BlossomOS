@@ -24,10 +24,10 @@
   receive a slot-bound UKI and systemd-boot entry.
 - Candidate assembly empties `/etc/machine-id` and rejects a non-empty image
   identity. Before disk mutation, the backend requires graphical provisioning,
-  inventories required account and UKI inputs in the verified archive, proves
-  its machine-ID member is empty, and checks the live setup tool. It generates
-  one fresh installation identity before synchronizing B. Missing paths mirror
-  as missing rather than failing after erase.
+  verifies the signed-together rootfs manifest records the required account and
+  UKI inputs and an empty image identity, and rejects schema drift. It writes a
+  fresh random installation identity before synchronizing B. Missing paths
+  mirror as missing rather than failing after erase.
 - Only the graphical, account-provisioning installer is packaged. The former
   command-line disk-wipe command and unprovisioned libexec backend are removed.
 - The embedded root archive has a separately embedded SHA-256 digest and is

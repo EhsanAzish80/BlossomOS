@@ -47,6 +47,7 @@ required_files=(
   home/blossom/.config/mako/config
   home/blossom/.config/xdg-desktop-portal/hyprland-portals.conf
   root/blossom-rootfs.tar.zst
+  root/blossom-rootfs.manifest.json
   root/blossom-rootfs.tar.zst.sha256
 )
 
@@ -67,8 +68,7 @@ done
 
 (
   cd "$root/root"
-  printf '%s  %s\n' "$(cat blossom-rootfs.tar.zst.sha256)" blossom-rootfs.tar.zst \
-    | sha256sum --check --status
+  sha256sum --check --status blossom-rootfs.tar.zst.sha256
 ) || {
   echo "candidate embedded rootfs digest does not match" >&2
   exit 1

@@ -61,10 +61,13 @@ explicit A/B trade-off for this phase; settings should be changed after trial
 promotion.
 
 The image build forces `/etc/machine-id` to an empty, read-only placeholder and
-rejects a non-empty value. Before the first destructive command, installation
-requires graphical account provisioning, verifies the rootfs archive contains
-the base account files, kernel, initramfs, microcode, empty machine-ID
-placeholder, and setup tool, and verifies the live setup tool exists. The
+rejects a non-empty value. It emits a small closed manifest recording the
+required account and UKI inputs and zero machine-ID bytes; the checksum file
+authenticates that manifest alongside the rootfs archive. Before the first
+destructive command, installation requires graphical account provisioning and
+validates the already-verified manifest without decompressing the archive
+again. The installer writes a fresh 128-bit random machine ID directly, so VM
+firmware identifiers cannot make separate installs share an identity. The
 command-line unprovisioned disk-wipe route is not shipped.
 
 ### Boot artifacts and selection

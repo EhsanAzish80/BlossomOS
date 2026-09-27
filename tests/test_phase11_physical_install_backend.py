@@ -161,6 +161,8 @@ class PhysicalInstallBackendTests(unittest.TestCase):
         builder = (repository / "scripts/distribution/build_physical_candidate.sh").read_text()
         self.assertIn(': > "$rootfs/etc/machine-id"', builder)
         self.assertIn('[[ -s "$rootfs/etc/machine-id" ]]', builder)
+        self.assertIn("blossom-rootfs.manifest.json", builder)
+        self.assertIn('"machine_id_bytes": 0', builder)
         self.assertNotIn("blossom-physical-install", builder)
         self.assertFalse(
             (repository / "distribution/archiso/airootfs/usr/local/bin/blossom-physical-install").exists()
