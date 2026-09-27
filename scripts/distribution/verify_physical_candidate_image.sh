@@ -47,6 +47,7 @@ required_files=(
   home/blossom/.config/mako/config
   home/blossom/.config/xdg-desktop-portal/hyprland-portals.conf
   root/blossom-rootfs.tar.zst
+  root/blossom-rootfs.tar.zst.sha256
 )
 
 unsquashfs -quiet -d "$root" "$squashfs" \
@@ -63,6 +64,15 @@ for path in "${executables[@]}"; do
     exit 1
   }
 done
+
+(
+  cd "$root/root"
+  printf '%s  %s\n' "$(cat blossom-rootfs.tar.zst.sha256)" blossom-rootfs.tar.zst \
+    | sha256sum --check --status
+) || {
+  echo "candidate embedded rootfs digest does not match" >&2
+  exit 1
+}
 
 for path in "${required_files[@]}"; do
   test -f "$root/$path" || {

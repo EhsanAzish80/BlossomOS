@@ -12,7 +12,7 @@ from typing import Any
 
 from scripts.distribution.installation_profile import validate_password, validate_profile
 from scripts.distribution.physical_candidate_install import STATE_ROOT, _observation
-from scripts.distribution.physical_device_observer import observe
+from scripts.distribution.physical_device_observer import observe, observe_ac_power
 from scripts.distribution.physical_install_backend import install
 from scripts.distribution.physical_install_guard import evaluate
 from scripts.distribution.physical_install_harness import run_once
@@ -59,7 +59,7 @@ def execute(request: dict[str, Any]) -> dict[str, Any]:
     initial = json.loads(encoded)
     decision = evaluate(initial, request["confirmation"])
     live, devices = observe()
-    current = _observation(initial["challenge"], live, devices)
+    current = _observation(initial["challenge"], live, devices, observe_ac_power())
     state = STATE_ROOT / f"{decision['target_digest']}.graphical.claim"
 
     def backend(target: dict[str, Any]) -> None:

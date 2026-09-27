@@ -10,7 +10,7 @@ def observation():
         "purpose": "physical_install",
         "host_preflight_result": "eligible_for_qualification",
         "ac_power": True,
-        "recovery_media_ready": True,
+        "live_media_present": True,
         "live_device": "/dev/sdb",
         "challenge": "0123456789abcdef0123456789abcdef",
         "devices": [
@@ -90,7 +90,7 @@ class Phase11InstallGuardTests(unittest.TestCase):
                 evaluate(case)
 
     def test_power_recovery_preflight_and_schema_expansion_fail_closed(self):
-        for field in ("ac_power", "recovery_media_ready"):
+        for field in ("ac_power", "live_media_present"):
             value = observation()
             value[field] = False
             with self.assertRaises(GuardError):

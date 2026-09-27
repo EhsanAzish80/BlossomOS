@@ -19,7 +19,7 @@ TOP_FIELDS = {
     "purpose",
     "host_preflight_result",
     "ac_power",
-    "recovery_media_ready",
+    "live_media_present",
     "live_device",
     "challenge",
     "devices",
@@ -28,7 +28,8 @@ DEVICE_FIELDS = {"path", "model", "size_bytes", "transport", "removable", "mount
 DEVICE_PATH = re.compile(r"/dev/(?:sd[a-z]|nvme[0-9]+n[0-9]+)")
 CHALLENGE = re.compile(r"[0-9a-f]{32}")
 MODEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9 ._+-]{0,63}")
-MIN_BYTES = 32 * 1024**3
+# 1 GiB EFI + two 24 GiB roots + at least 16 GiB persistent state.
+MIN_BYTES = 65 * 1024**3
 MAX_BYTES = 8 * 1024**4
 
 
@@ -63,7 +64,7 @@ def evaluate(observation: dict[str, Any], confirmation: str | None = None) -> di
         raise GuardError("unsupported guard purpose")
     if observation["host_preflight_result"] != "eligible_for_qualification":
         raise GuardError("host preflight is not eligible")
-    for field in ("ac_power", "recovery_media_ready"):
+    for field in ("ac_power", "live_media_present"):
         if type(observation[field]) is not bool:
             raise GuardError(f"{field} must be a boolean")
         if not observation[field]:

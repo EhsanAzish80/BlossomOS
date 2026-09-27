@@ -13,8 +13,6 @@ trap 'rm -f "$current"' EXIT
 python3 scripts/distribution/physical_device_observer.py \
   --purpose disposable_test \
   --host-preflight-result eligible_for_qualification \
-  --ac-power ready \
-  --recovery-media ready \
   --challenge 8a25f735e9890322c41976254aff546e \
   > "$current"
 

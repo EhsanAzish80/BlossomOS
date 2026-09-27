@@ -431,24 +431,28 @@ broader memory classes, and public activation remain outside this boundary.
 
 ## Phase 9: Distribution and updates
 
-Status: complete on 2026-09-08 for the reviewed x86-64 UEFI VM evidence
-target. ADR-0026 defines the boundary and `docs/PHASE_9_EXIT_AUDIT.md` records
-the exit evidence.
+Status: update/rollback gate reopened on 2026-09-27. The historical x86-64 UEFI
+VM evidence proved the lifecycle model but did not connect its file-backed slots
+to independently bootable system roots. Accepted ADR-0029 defines the corrective
+disk and boot architecture.
 
 - [x] Freeze the x86-64 UEFI VM distribution, installer, update, recovery, and
   rollback boundary in ADR-0026.
 - [x] Build closed Arch packages and a Blossom-owned ArchISO without insecure
   legacy defaults or mutable runtime downloads.
 - [x] Add bounded hardware/model selection and resumable first-run state.
-- [x] Add canonical signed offline updates, inactive-slot staging, health
-  confirmation, failed-boot rollback, and installation-media recovery.
-- [x] Prove adversarial lifecycle behavior and repeatable fresh VM installation,
-  rollback, and confirmed update on the trusted x86-64 Linux runner.
-- [x] Publish the independent Phase 9 exit audit.
+- [x] Implement the accepted installer-side disk foundation: two independent
+  ext4 roots, per-slot UKIs, stable observed partition identities, verified
+  rootfs bytes, and a separate persistent state partition.
+- [ ] Wire the physical inactive-slot updater, retained-descriptor streaming,
+  boot-counted trial selection, health promotion, and automatic fallback to
+  that disk foundation. The file-backed Phase 9 lifecycle remains evidence only.
+- [ ] Prove power-loss-safe staging, failed-trial boot fallback, confirmation,
+  and recovery against the real disk/boot layout.
+- [ ] Reissue the independent Phase 9 exit decision after those gates pass.
 
-Exit satisfied: repeatable VM installation, installed-disk boot, rollback,
-confirmation, and recovery evidence exists before device claims. Completion is
-limited to the reviewed x86-64 UEFI VM target.
+Exit not currently satisfied for bootable rollback. Historical installation and
+single-disk boot evidence remains useful but does not prove A/B system rollback.
 
 ## Phase 10: Public beta hardening
 
@@ -503,6 +507,9 @@ until a separate fail-closed disk-safety increment is reviewed and tested.
   action launches, welcome and launcher remain readable at 1280x720, keyboard
   window/workspace controls work, live installation stays explicit, and
   restart/shutdown confirmations behave correctly.
+- [ ] Add a trusted human-presence approval ceremony before admitting sensitive
+  capabilities to the graphical shell; D-Bus connection binding proves process
+  continuity, not human intent.
 - [ ] Prove installation, boot, essential hardware surfaces, update rollback,
   and recovery on the frozen physical target.
 - [ ] Publish an independent Phase 11 exit audit and exact limitations.

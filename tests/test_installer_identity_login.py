@@ -84,6 +84,11 @@ class InstallerIdentityLoginTests(unittest.TestCase):
         self.assertIn('command = "Hyprland --config /etc/greetd/hyprland.conf"', greetd)
         self.assertIn("Exec=/usr/bin/start-hyprland", session)
 
+    def test_installer_qml_does_not_separate_objects_or_anchor_groups_with_semicolons(self):
+        repository = Path(__file__).resolve().parents[1]
+        qml = (repository / "system/installer/qml/Main.qml").read_text()
+        self.assertNotIn("};", qml)
+
 
 if __name__ == "__main__":
     unittest.main()

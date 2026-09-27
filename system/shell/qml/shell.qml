@@ -13,8 +13,15 @@ ShellRoot {
     property bool quickVisible: false
     property bool powerVisible: false
     property bool installerRequested: false
+    property bool installerOpened: false
+    property string installerFeedback: ""
     property string powerAction: ""
     property string clockText: Qt.formatDateTime(new Date(), "ddd HH:mm")
+    // QEMU Cocoa can briefly publish the same virtio scanout twice while
+    // entering macOS fullscreen. Keep one coherent desktop surface set on
+    // the primary output instead of stacking duplicate exclusive-zone bars.
+    readonly property var desktopScreens: Quickshell.screens.length > 0
+        ? [Quickshell.screens[0]] : []
 
     Timer { interval: 30000; running: true; repeat: true; onTriggered: root.clockText = Qt.formatDateTime(new Date(), "ddd HH:mm") }
     Shortcut {
@@ -34,9 +41,21 @@ ShellRoot {
         BlossomBroker.refreshNetwork()
         BlossomBroker.refreshQuickStatus()
     }
+    Connections {
+        target: BlossomBroker
+        function onDesktopMessageChanged() {
+            if (!root.installerRequested)
+                return
+            root.installerFeedback = BlossomBroker.desktopMessage
+            if (BlossomBroker.desktopMessage === "Opened installer.")
+                root.installerOpened = true
+            else if (BlossomBroker.desktopMessage.startsWith("Could not"))
+                root.installerRequested = false
+        }
+    }
 
     Variants {
-        model: Quickshell.screens
+        model: root.desktopScreens
         PanelWindow {
             required property var modelData
             screen: modelData
@@ -44,6 +63,7 @@ ShellRoot {
             aboveWindows: false
             focusable: false
             exclusiveZone: 0
+            exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Background
             WlrLayershell.namespace: "blossom-background"
             color: "#0a111b"
@@ -52,7 +72,7 @@ ShellRoot {
     }
 
     Variants {
-        model: Quickshell.screens
+        model: root.desktopScreens
         PanelWindow {
             id: topBar
             required property var modelData
@@ -138,7 +158,7 @@ ShellRoot {
                             BlossomButton { Layout.fillWidth: true; text: "Audio Settings"; onClicked: { BlossomBroker.openAudioSettings(); root.launcherVisible = false } }
                         }
                         Rectangle { Layout.fillWidth: true; height: 1; color: "#334155" }
-                        BlossomButton { Layout.fillWidth: true; primary: true; visible: BlossomBroker.liveEnvironment; text: "Install Blossom OS"; onClicked: { root.launcherVisible = false; root.installerRequested = true; BlossomBroker.openInstaller() } }
+                        BlossomButton { Layout.fillWidth: true; primary: true; visible: BlossomBroker.liveEnvironment; enabled: !root.installerRequested; text: root.installerRequested ? "Opening installer…" : "Install Blossom OS"; onClicked: { root.installerFeedback = "Opening the Blossom OS installer…"; root.installerRequested = true; BlossomBroker.openInstaller() } }
                         Label { Layout.fillWidth: true; visible: BlossomBroker.desktopMessage.length > 0; text: BlossomBroker.desktopMessage; color: BlossomBroker.desktopMessage.startsWith("Could not") ? "#ff9b93" : "#8dd7c7"; wrapMode: Text.WordWrap; Accessible.role: Accessible.AlertMessage }
                         Item { Layout.fillHeight: true }
                         Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Installation uses verified files from this media and can proceed offline." : "Installed system · files and settings are persistent."; color: "#8190a5"; wrapMode: Text.WordWrap }
@@ -171,7 +191,7 @@ ShellRoot {
     }
 
     Variants {
-        model: Quickshell.screens
+        model: root.desktopScreens
         PanelWindow {
             required property var modelData
             screen: modelData
@@ -205,7 +225,7 @@ ShellRoot {
     }
 
     Variants {
-        model: Quickshell.screens
+        model: root.desktopScreens
         PanelWindow {
             id: dock
             required property var modelData
@@ -257,7 +277,7 @@ ShellRoot {
     }
 
     Variants {
-        model: Quickshell.screens
+        model: root.desktopScreens
         PanelWindow {
             required property var modelData
             screen: modelData
@@ -265,7 +285,7 @@ ShellRoot {
             aboveWindows: true
             focusable: true
             exclusiveZone: 0
-            visible: root.welcomeVisible && !root.installerRequested && modelData === Quickshell.screens[0]
+            visible: root.welcomeVisible && !root.installerOpened && modelData === Quickshell.screens[0]
             color: "#66070b12"
             WlrLayershell.namespace: "blossom-welcome"
             Rectangle {
@@ -275,7 +295,8 @@ ShellRoot {
                     Label { text: BlossomBroker.liveEnvironment ? "LIVE SESSION" : "BLOSSOM OS"; color: "#8dd7c7"; font.bold: true }
                     Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Try Blossom OS" : "Your desktop is ready"; color: "#f4f7fb"; font.pixelSize: 36; font.bold: true; wrapMode: Text.WordWrap }
                     Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Browse, work with files, connect to a network, or install from the verified offline media when you are ready." : "Use Blossom as a normal computer. Open Agent when you want local assistance."; color: "#c0ccdc"; font.pixelSize: 17; wrapMode: Text.WordWrap }
-                    RowLayout { BlossomButton { text: "Continue to desktop"; onClicked: BlossomBroker.dismissOnboarding() } BlossomButton { text: "Network"; onClicked: BlossomBroker.openNetworkSettings() } BlossomButton { primary: true; visible: BlossomBroker.liveEnvironment; text: "Install Blossom OS"; onClicked: { root.installerRequested = true; BlossomBroker.openInstaller() } } }
+                    RowLayout { BlossomButton { text: "Continue to desktop"; onClicked: BlossomBroker.dismissOnboarding() } BlossomButton { text: "Network"; onClicked: BlossomBroker.openNetworkSettings() } BlossomButton { primary: true; visible: BlossomBroker.liveEnvironment; enabled: !root.installerRequested; text: root.installerRequested ? "Opening installer…" : "Install Blossom OS"; onClicked: { root.installerFeedback = "Opening the Blossom OS installer…"; root.installerRequested = true; BlossomBroker.openInstaller() } } }
+                    Label { Layout.fillWidth: true; visible: root.installerFeedback.length > 0; text: root.installerFeedback; color: root.installerFeedback.startsWith("Could not") ? "#ff9b93" : "#8dd7c7"; wrapMode: Text.WordWrap; Accessible.role: Accessible.AlertMessage }
                     Item { Layout.fillHeight: true }
                     Label { Layout.fillWidth: true; text: BlossomBroker.liveEnvironment ? "Welcome to Blossom OS. Installing is never automatic. External disks are excluded from installation targets, and you can continue offline." : "Applications and files remain available even when the agent is not configured."; color: "#8190a5"; wrapMode: Text.WordWrap }
                     Label { Layout.fillWidth: true; visible: BlossomBroker.desktopMessage.length > 0; text: BlossomBroker.desktopMessage; color: BlossomBroker.desktopMessage.startsWith("Could not") ? "#ff9b93" : "#8dd7c7"; wrapMode: Text.WordWrap; Accessible.role: Accessible.AlertMessage }

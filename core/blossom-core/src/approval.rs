@@ -1,6 +1,6 @@
 use crate::request::ToolRequest;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -17,7 +17,10 @@ pub struct ApprovalStore {
     next_token: u64,
     ttl_ms: u64,
     pending: HashMap<ApprovalToken, ApprovalRecord>,
-    consumed: HashSet<ApprovalToken>,
+    // Retain replay tombstones only until the original approval would have
+    // expired. Tokens are monotonic, so an expired tombstone can be discarded
+    // without making a previously issued token usable again.
+    consumed: HashMap<ApprovalToken, u64>,
 }
 
 impl ApprovalStore {
@@ -26,11 +29,19 @@ impl ApprovalStore {
             next_token: 1,
             ttl_ms,
             pending: HashMap::new(),
-            consumed: HashSet::new(),
+            consumed: HashMap::new(),
         }
     }
 
+    fn sweep(&mut self, now_ms: u64) {
+        self.pending
+            .retain(|_, record| now_ms <= record.expires_at_ms);
+        self.consumed
+            .retain(|_, expires_at_ms| now_ms <= *expires_at_ms);
+    }
+
     pub fn issue(&mut self, request: ToolRequest, now_ms: u64) -> ApprovalToken {
+        self.sweep(now_ms);
         let token = ApprovalToken(self.next_token);
         self.next_token = self.next_token.checked_add(1).unwrap_or(1);
         self.pending.insert(
@@ -49,10 +60,10 @@ impl ApprovalStore {
         request: &ToolRequest,
         now_ms: u64,
     ) -> Result<(), ApprovalError> {
-        if self.consumed.contains(&token) {
+        if self.consumed.contains_key(&token) {
             return Err(ApprovalError::Replay);
         }
-        let record = self.pending.get(&token).ok_or(ApprovalError::Unknown)?;
+        let record = self.pending.get(&token).ok_or(ApprovalError::Unknown)?.clone();
         if now_ms > record.expires_at_ms {
             self.pending.remove(&token);
             return Err(ApprovalError::Expired);
@@ -61,7 +72,7 @@ impl ApprovalStore {
             return Err(ApprovalError::BindingMismatch);
         }
         self.pending.remove(&token);
-        self.consumed.insert(token);
+        self.consumed.insert(token, record.expires_at_ms);
         Ok(())
     }
 }

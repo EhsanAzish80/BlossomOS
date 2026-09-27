@@ -1,5 +1,6 @@
 #include <QCoreApplication>
 #include <QDBusConnection>
+#include <QDebug>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -85,13 +86,60 @@ public slots:
         else if (action == QStringLiteral("poweroff")) command = {QStringLiteral("/usr/bin/systemctl"), QStringLiteral("poweroff")};
         else return false;
 
-        const QString program = command.takeFirst();
-        const QFileInfo executable(program);
+        const QString targetProgram = command.takeFirst();
+        const QFileInfo executable(targetProgram);
         if (!executable.isFile() || !executable.isExecutable()) return false;
-        return QProcess::startDetached(program, command);
+        const bool installer = targetProgram == QStringLiteral("/usr/lib/blossom-os/blossom-installer");
+
+        // The D-Bus broker is deliberately sandboxed. Ask the user manager to
+        // create a separate transient service so graphical applications do not
+        // inherit the broker's home, network, or no-new-privileges restrictions.
+        const QString program = QStringLiteral("/usr/bin/systemd-run");
+        const QFileInfo runner(program);
+        if (!runner.isFile() || !runner.isExecutable()) return false;
+        QStringList launchArguments{
+            QStringLiteral("--user"), QStringLiteral("--collect"), QStringLiteral("--quiet")};
+        if (installer) {
+            launchArguments << QStringLiteral("--wait")
+                            << QStringLiteral("--unit=blossom-installer");
+        }
+        launchArguments << QStringLiteral("--") << targetProgram;
+        launchArguments.append(command);
+
+        if (installer) {
+            if (m_installerProcess && m_installerProcess->state() != QProcess::NotRunning)
+                return true;
+            auto *process = new QProcess(this);
+            m_installerProcess = process;
+            process->setProgram(program);
+            process->setArguments(launchArguments);
+            process->setProcessChannelMode(QProcess::MergedChannels);
+            process->start();
+            if (!process->waitForStarted(2000)) {
+                qWarning().noquote() << "Blossom installer failed to start:" << process->errorString();
+                m_installerProcess = nullptr;
+                process->deleteLater();
+                return false;
+            }
+            if (process->waitForFinished(1500)) {
+                qWarning().noquote() << "Blossom installer exited during startup:"
+                                     << process->readAll().left(4096);
+                m_installerProcess = nullptr;
+                process->deleteLater();
+                return false;
+            }
+            connect(process, &QProcess::finished, this, [this, process] {
+                if (m_installerProcess == process) m_installerProcess = nullptr;
+                process->deleteLater();
+            });
+            return true;
+        }
+        return QProcess::startDetached(program, launchArguments);
     }
 
 private:
+    QProcess *m_installerProcess = nullptr;
+
     static QString runBounded(const QString &program, const QStringList &arguments) {
         QProcess process;
         process.setProgram(program);

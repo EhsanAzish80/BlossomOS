@@ -5,7 +5,7 @@ separate physical-install backend is implemented for review, but it is not yet
 included in an install image and no internal-disk write has been authorized.
 
 The guard accepts one closed, purpose-bound observation containing the
-successful host preflight outcome, AC-power and recovery-media readiness, a
+successful host preflight outcome, observed AC power and live-media presence, a
 per-attempt challenge, the live-medium device, and at most eight bounded disk
 summaries.
 
@@ -24,7 +24,7 @@ them.
 
 The manually dispatched `Phase 11 disposable device observation` workflow runs
 the frozen-host preflight, device observer, and non-writing guard on the trusted
-physical runner. It requires explicit AC-power and recovery-media assertions
+physical runner. It requires observed AC power and uniquely identified live media
 and uploads only the minimized preflight, observation, and guard-decision JSON.
 It has no `sudo`, device writer, partitioner, formatter, mount operation, or
 automatic trigger.
@@ -95,17 +95,18 @@ candidate.
 The physical candidate is a separate, manually dispatched build and never
 enables the VM evidence auto-installer. Its live environment exposes one short
 operator command, `blossom-physical-install`, from its automatic live root shell. That entrypoint reruns the
-frozen host preflight, requires exact AC-power and recovery-media assertions,
+frozen host preflight, observes kernel-reported AC power and the uniquely
+identified attached ArchISO recovery medium,
 creates a fresh random challenge, observes the ArchISO live mount and target,
 prints the exact bound erase phrase, then observes the devices again before the
 once-only harness may call the backend.
 
 The installed root contains the Blossom packages and the bounded hardware stack
 needed for this qualification target: the LTS kernel and firmware, Intel
-microcode and graphics, NetworkManager and iwd, PipeWire, Bluetooth, power
-status, Hyprland, QuickShell, and a terminal. The local qualification user is
-locked and automatically starts the reviewed shell on the first console; this
-is a physical qualification surface, not a general release image. The workflow
+microcode and graphics, NetworkManager and wpa_supplicant, PipeWire, Bluetooth, power
+status, Hyprland, QuickShell, and a terminal. The live session uses its bounded
+automatic qualification identity; the installed system instead provisions the
+chosen account and password and starts through greetd/ReGreet. The workflow
 must build and hash the ISO successfully before any flashing or installation
 can be proposed.
 

@@ -29,11 +29,19 @@ ApplicationWindow {
     }
 
     RowLayout {
-        anchors { fill: parent; margins: 28 }; spacing: 28
+        anchors {
+            fill: parent
+            margins: 28
+        }
+        spacing: 28
         Rectangle {
             Layout.preferredWidth: 220; Layout.fillHeight: true; radius: 20; color: "#101a27"
             ColumnLayout {
-                anchors { fill: parent; margins: 22 }; spacing: 12
+                anchors {
+                    fill: parent
+                    margins: 22
+                }
+                spacing: 12
                 Label { text: "Install safely"; color: "white"; font.pixelSize: 20; font.bold: true }
                 Repeater {
                     model: root.steps
@@ -63,7 +71,16 @@ ApplicationWindow {
                     anchors.centerIn: parent; width: Math.min(620, parent.width - 40); spacing: 16
                     Label { text: "Connect or continue offline"; color: "white"; font.pixelSize: 34; font.bold: true }
                     Label { Layout.fillWidth: true; text: "Wi-Fi and Ethernet are optional for the verified base installation. Network access can be configured now or after installation."; color: "#b9c7d8"; wrapMode: Text.WordWrap }
-                    RowLayout { Button { text: "Open network settings"; onClicked: Installer.openNetworkSettings() }; Label { text: "Offline installation is fully supported"; color: "#83ddca" } }
+                    RowLayout {
+                        Button {
+                            text: "Open network settings"
+                            onClicked: Installer.openNetworkSettings()
+                        }
+                        Label {
+                            text: "Offline installation is fully supported"
+                            color: "#83ddca"
+                        }
+                    }
                 }
             }
             Item {
@@ -72,7 +89,22 @@ ApplicationWindow {
                     Label { text: "Choose an installation disk"; color: "white"; font.pixelSize: 34; font.bold: true }
                     Label { Layout.fillWidth: true; text: "Only a qualified, unmounted internal disk can be selected. Live media and removable recovery disks are excluded."; color: "#b9c7d8"; wrapMode: Text.WordWrap }
                     Button { text: "Check this computer"; enabled: !Installer.busy; onClicked: Installer.observeTarget() }
-                    Rectangle { Layout.fillWidth: true; implicitHeight: 72; radius: 12; color: "#111c2a"; border.color: "#40536d"; Label { anchors { fill: parent; margins: 14 }; text: Installer.targetSummary.length ? Installer.targetSummary : "No target selected"; color: "white"; wrapMode: Text.WordWrap } }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 72
+                        radius: 12
+                        color: "#111c2a"
+                        border.color: "#40536d"
+                        Label {
+                            anchors {
+                                fill: parent
+                                margins: 14
+                            }
+                            text: Installer.targetSummary.length ? Installer.targetSummary : "No target selected"
+                            color: "white"
+                            wrapMode: Text.WordWrap
+                        }
+                    }
                 }
             }
             Item {
@@ -122,7 +154,12 @@ ApplicationWindow {
     footer: Rectangle {
         height: 82; color: "#111c2a"
         RowLayout {
-            anchors { fill: parent; leftMargin: 28; rightMargin: 28 }; spacing: 12
+            anchors {
+                fill: parent
+                leftMargin: 28
+                rightMargin: 28
+            }
+            spacing: 12
             Button { text: "Quit"; enabled: !Installer.busy; onClicked: root.close() }
             Item { Layout.fillWidth: true }
             Button { text: "Back"; enabled: !Installer.busy && root.step > 0 && root.step < root.steps.length - 1; onClicked: root.step-- }

@@ -1,7 +1,7 @@
 # Phase 9 distribution and updates baseline
 
-Status: complete on 2026-09-08 for the reviewed x86-64 UEFI VM evidence
-target. See `PHASE_9_EXIT_AUDIT.md`.
+Status: bootable update/rollback checkpoint reopened on 2026-09-27. See the
+correction in `PHASE_9_EXIT_AUDIT.md` and proposed ADR-0029.
 
 Phase 9 begins from the completed Phase 8 security and memory boundaries. Its
 goal is a repeatable Blossom-owned x86-64 VM installation and a signed,
@@ -20,11 +20,11 @@ fail-closed update and rollback lifecycle.
    selection. The default remains no active model. Complete.
 5. Add the resumable first-run state machine and installation marker without
    recording secrets. Complete.
-6. Add canonical Ed25519-signed offline update metadata, strict verification,
-   inactive-slot staging, atomic boot selection, health confirmation, and
-   automatic failed-boot rollback. Complete with installed-disk evidence.
+6. Add canonical Ed25519-signed offline update metadata and strict verification.
+   The file-slot prototype exists; real inactive-root staging, atomic boot
+   selection, health confirmation, and failed-boot fallback remain open.
 7. Add installation-media recovery that rejects unmarked targets and can only
-   restore a previously verified slot. Complete with installed-disk evidence.
+   restore a previously verified bootable root. Open for the ADR-0029 layout.
 8. Prove adversarial package, image, first-run, update, interruption, downgrade,
    signature, recovery, and user-data preservation behavior locally.
 9. Build the ISO and prove fresh UEFI VM install, disk boot, failed-update

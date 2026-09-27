@@ -16,6 +16,7 @@ def host():
         "memory_mib": 8192,
         "drm_present": True,
         "internal_disk_present": True,
+        "wifi_pci_id": "14e4:43a0",
     }
 
 
@@ -47,13 +48,12 @@ class PhysicalCandidateTests(unittest.TestCase):
     @patch("scripts.distribution.physical_candidate_install.os.geteuid", return_value=0)
     def test_exact_prompts_reobserve_and_delegate_once(self, _geteuid):
         with tempfile.TemporaryDirectory() as directory:
-            answers = iter(["AC-READY", "RECOVERY-READY"])
             calls = []
 
             def read(prompt):
                 if prompt.startswith("Type exactly:"):
                     return prompt.split("Type exactly: ", 1)[1].split("\n", 1)[0]
-                return next(answers)
+                raise AssertionError(f"unexpected prompt: {prompt}")
 
             def execute(*args):
                 calls.append(args)
@@ -66,6 +66,7 @@ class PhysicalCandidateTests(unittest.TestCase):
                         read=read,
                         host_observer=host,
                         device_observer=devices,
+                        power_observer=lambda: True,
                         executor=execute,
                         challenge_factory=lambda size: bytes.fromhex("01" * size),
                     )
@@ -108,7 +109,7 @@ class PhysicalCandidateTests(unittest.TestCase):
         session = (repository / "distribution/physical-rootfs/usr/share/wayland-sessions/blossom.desktop").read_text()
         self.assertIn("noto-fonts", builder)
         self.assertIn("noto-fonts-emoji", builder)
-        for package in ("adwaita-cursors", "foot", "noto-fonts", "noto-fonts-emoji"):
+        for package in ("adwaita-cursors", "foot", "iputils", "noto-fonts", "noto-fonts-emoji"):
             self.assertIn(f"\n{package}\n", f"\n{packages}")
         for package in ("blueman", "bluez", "bluez-utils", "firefox", "gvfs", "mousepad",
                         "networkmanager", "network-manager-applet", "nm-connection-editor",
@@ -138,6 +139,10 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertLess(builder.index(graphical_wants), builder.index(greetd_link))
         self.assertIn(
             'cp -a "$repo/distribution/archiso/airootfs/." "$profile/airootfs/"',
+            builder,
+        )
+        self.assertIn(
+            '"$profile/airootfs/etc/systemd/system/multi-user.target.wants/NetworkManager.service"',
             builder,
         )
         self.assertIn(
@@ -212,7 +217,12 @@ class PhysicalCandidateTests(unittest.TestCase):
             self.assertIn(executable, desktop_launcher)
         self.assertIn('/usr/bin/hyprctl', desktop_launcher)
         self.assertIn('/usr/bin/systemctl', desktop_launcher)
+        self.assertIn('/usr/bin/systemd-run', desktop_launcher)
+        self.assertIn('QStringLiteral("--user")', desktop_launcher)
+        self.assertIn('QStringLiteral("--collect")', desktop_launcher)
         self.assertIn("NoNewPrivileges=yes", desktop_unit)
+        self.assertIn("ProtectHome=read-only", desktop_unit)
+        self.assertIn("RestrictAddressFamilies=AF_UNIX", desktop_unit)
         for config in (live_hyprland, installed_hyprland):
             for binding in ("SUPER, Q, killactive", "SUPER, F, fullscreen", "SUPER, E, exec, thunar", "SUPER, 1, workspace, 1"):
                 self.assertIn(binding, config)
@@ -263,13 +273,15 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("preserving diagnostics and Docker state", builder)
 
     @patch("scripts.distribution.physical_candidate_install.os.geteuid", return_value=0)
-    def test_prerequisite_cancellation_never_observes_devices(self, _geteuid):
+    def test_ineligible_host_never_observes_devices(self, _geteuid):
         observed = []
+        ineligible = host()
+        ineligible["wifi_pci_id"] = ""
         with self.assertRaises(candidate.CandidateError):
             candidate.run_interactive(
-                read=lambda _prompt: "no",
-                host_observer=host,
+                host_observer=lambda: ineligible,
                 device_observer=lambda: observed.append(True),
+                power_observer=lambda: True,
             )
         self.assertEqual(observed, [])
 

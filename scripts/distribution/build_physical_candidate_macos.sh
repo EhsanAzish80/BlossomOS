@@ -13,6 +13,18 @@ case "$mode" in
   *) echo "error: BLOSSOM_CANDIDATE_MODE must be physical or vm-qualification" >&2; exit 2 ;;
 esac
 
+extra_inputs=()
+model_root=${BLOSSOM_LLAMA_CPP_RUNTIME_ROOT:-}
+if [[ -z "$model_root" || ! -d "$model_root" || -L "$model_root" ]]; then
+  echo "error: candidate build requires BLOSSOM_LLAMA_CPP_RUNTIME_ROOT" >&2
+  exit 2
+fi
+model_root=$(cd "$model_root" && pwd -P)
+extra_inputs=(
+  --env BLOSSOM_LLAMA_CPP_RUNTIME_ROOT=/closed-input/model-runtime
+  --volume "$model_root:/closed-input/model-runtime:ro"
+)
+
 if [[ $(uname -s) != Darwin ]]; then
   echo "error: this entrypoint is for macOS" >&2
   exit 2
@@ -84,6 +96,7 @@ docker --context "$context" volume create "$volume" >/dev/null
 docker --context "$context" run --detach --name "$container" --platform linux/amd64 --privileged \
   --dns 1.1.1.1 \
   --env "BLOSSOM_CANDIDATE_MODE=$mode" \
+  "${extra_inputs[@]}" \
   --volume "$repo:/workspace:ro" \
   --mount "type=volume,source=$volume,target=/candidate" \
   --workdir /workspace \

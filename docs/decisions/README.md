@@ -54,6 +54,10 @@ compatibility, packaging, or contributor obligations.
 - Phase 11 first physical-device qualification: accepted in ADR-0028 for one
   expected MacBookPro11,1, beginning with a read-only minimized preflight and
   requiring a separate reviewed disk-safety increment before physical writes.
+- Bootable physical A/B layout: ADR-0029 accepts two real ext4 root slots, a
+  separate persistent state partition, per-slot UKIs, and systemd-boot trial
+  selection. It replaces the non-bootable file-backed slot implementation only
+  after explicit acceptance and qualifying evidence.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and

@@ -1,7 +1,7 @@
 # Phase 9 distribution lifecycle core
 
-Status: complete on 2026-09-08 for the reviewed x86-64 UEFI VM evidence
-target.
+Status: lifecycle-model evidence retained; bootable update/rollback claim
+withdrawn on 2026-09-27 pending ADR-0029.
 
 ## Implemented boundary
 
@@ -14,16 +14,18 @@ target.
   coarse memory class, and the required virtualization-device boolean.
 - Model selection is closed to no model or one of the two already reviewed
   packaged CPU profiles. No selection can provide a URL or initiate a download.
-- Installation requires an empty target and creates a fixed marker, two system
-  slots, a separate private user-data directory, an initial active slot, and a
-  resumable non-secret first-run state.
+- The prototype installation state creates a fixed marker, two file-backed
+  payload slots, a private user-data directory, an active-slot marker, and a
+  resumable non-secret first-run state. These are model objects, not separate
+  bootable roots.
 - Update metadata is canonical and closed. OpenSSH Ed25519 verification binds a
   fixed signer identity and namespace before staging. Product, channel,
   architecture, schema, expiry, sequence, target slot, payload size, and SHA-256
   are independently checked.
-- Staging writes the inactive payload and digest durably before atomically
-  selecting it. A failed health result restores the prior slot; a successful
-  result confirms the new slot. Neither path touches user data.
+- Prototype staging writes the inactive payload and digest before changing its
+  active-slot marker. A failed modeled health result restores that marker; it
+  does not change firmware or bootloader selection. Neither path touches the
+  prototype user-data directory.
 - Recovery accepts only an exact marked Blossom installation and a populated
   slot whose payload matches its recorded digest.
 

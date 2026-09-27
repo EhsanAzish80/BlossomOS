@@ -50,21 +50,50 @@ cp "$build/source"/distribution/packages/blossom-core/blossom-core-*.pkg.tar.zst
 cp "$build/source"/distribution/packages/blossom-shell/blossom-shell-*.pkg.tar.zst "$packages/"
 
 pacstrap -K -C "$repo/distribution/archiso/pacman.conf" "$rootfs" \
-  adwaita-cursors base blueman bluez bluez-utils brightnessctl bubblewrap dbus-broker dosfstools foot \
-  firefox gptfdisk greetd grim gvfs hyprland hyprpolkitagent intel-ucode iwd libnotify linux-firmware linux-lts mako mesa mousepad networkmanager \
+  adwaita-cursors base blueman bluez bluez-utils brightnessctl broadcom-wl-dkms bubblewrap dbus-broker dosfstools foot \
+  dkms firefox gptfdisk greetd grim gvfs hyprland hyprpolkitagent intel-ucode iputils libnotify linux-firmware linux-lts linux-lts-headers mako mesa mousepad networkmanager \
   network-manager-applet nm-connection-editor noto-fonts noto-fonts-emoji openssh openssl pavucontrol pipewire pipewire-alsa \
-  pipewire-pulse polkit python quickshell greetd-regreet qt6-base qt6-declarative qt6-wayland slurp sof-firmware sudo systemd thunar \
-  tumbler upower vulkan-intel wireplumber xdg-desktop-portal xdg-desktop-portal-gtk \
+  pipewire-pulse polkit python quickshell greetd-regreet qt6-base qt6-declarative qt6-wayland slurp sof-firmware sudo systemd systemd-ukify thunar \
+  tumbler upower vulkan-intel wireplumber wpa_supplicant xdg-desktop-portal xdg-desktop-portal-gtk \
   xdg-desktop-portal-hyprland xorg-xwayland zstd
 pacman --root "$rootfs" --config /etc/pacman.conf --noconfirm -U "$packages"/*.pkg.tar.zst
 
 cp -a "$repo/distribution/physical-rootfs/." "$rootfs/"
 chmod 0440 "$rootfs/etc/sudoers.d/10-blossom-wheel"
-install -d -m 0755 "$rootfs/opt/blossom" "$rootfs/etc/blossom-os"
-cp -a "$repo/scripts" "$repo/tests" "$repo/distribution" "$rootfs/opt/blossom/"
-install -d -m 0755 "$rootfs/opt/blossom/.github/workflows"
-install -m 0644 "$repo/.github/workflows/phase9-vm-install-evidence.yml" \
-  "$rootfs/opt/blossom/.github/workflows/phase9-vm-install-evidence.yml"
+model_root=${BLOSSOM_LLAMA_CPP_RUNTIME_ROOT:-}
+if [[ -z "$model_root" || ! -d "$model_root" || -L "$model_root" ]]; then
+  echo "candidate requires a closed BLOSSOM_LLAMA_CPP_RUNTIME_ROOT package tree" >&2
+  exit 1
+fi
+model_root=$(realpath "$model_root")
+python "$repo/scripts/package_llama_cpp_runtime.py" \
+  --verify-package-root "$model_root" \
+  --gateway-binary "$rootfs/usr/lib/blossom-os/blossom-model-gateway"
+cp -a "$model_root/." "$rootfs/"
+install -d -m 0755 "$rootfs/etc/systemd/system/multi-user.target.wants"
+ln -sf ../blossom-model-netns.service \
+  "$rootfs/etc/systemd/system/multi-user.target.wants/blossom-model-netns.service"
+ln -sf ../blossom-model-llama-cpp.service \
+  "$rootfs/etc/systemd/system/multi-user.target.wants/blossom-model-llama-cpp.service"
+ln -sf ../blossom-model-gateway.service \
+  "$rootfs/etc/systemd/system/multi-user.target.wants/blossom-model-gateway.service"
+install -d -m 0755 "$rootfs/opt/blossom/scripts/distribution" "$rootfs/etc/blossom-os"
+install -m 0644 "$repo/scripts/__init__.py" "$rootfs/opt/blossom/scripts/__init__.py"
+install -m 0644 "$repo/scripts/distribution/__init__.py" \
+  "$rootfs/opt/blossom/scripts/distribution/__init__.py"
+# Release images contain only the runtime modules used by the installer and
+# lifecycle service. Tests, workflows, build tools, and repository metadata
+# are deliberately excluded.
+runtime_modules=(
+  blossom_lifecycle.py graphical_install_backend.py installation_profile.py
+  physical_candidate_install.py physical_device_observer.py
+  physical_install_backend.py physical_install_guard.py physical_install_harness.py
+  physical_preflight.py provision_installed_identity.py run_physical_install.py
+)
+for module in "${runtime_modules[@]}"; do
+  install -m 0644 "$repo/scripts/distribution/$module" \
+    "$rootfs/opt/blossom/scripts/distribution/$module"
+done
 install -d -m 0755 "$rootfs/usr/share/blossom-os/default-home/.config/hypr"
 install -m 0600 "$rootfs/usr/share/blossom-os/physical-home/hyprland.conf" \
   "$rootfs/usr/share/blossom-os/default-home/.config/hypr/hyprland.conf"
@@ -99,15 +128,21 @@ if [[ "$mode" == vm-qualification ]]; then
   install -Dm0644 "$repo/distribution/evidence/install-marker.json" \
     "$rootfs/etc/blossom-os/install.json"
 fi
-sed -i 's/^#Storage=.*/Storage=volatile/' "$rootfs/etc/systemd/journald.conf"
+sed -i -E 's/^#?Storage=.*/Storage=persistent/' "$rootfs/etc/systemd/journald.conf"
+install -d -m 2755 "$rootfs/var/log/journal"
 tar --xattrs --numeric-owner -I "$rootfs_compressor" \
   -cf "$build/blossom-rootfs.tar.zst" -C "$rootfs" .
+sha256sum "$build/blossom-rootfs.tar.zst" \
+  | awk '{print $1}' > "$build/blossom-rootfs.tar.zst.sha256"
 
 cp -a /usr/share/archiso/configs/releng/. "$profile/"
 cp "$repo/distribution/archiso/profiledef.sh" "$profile/profiledef.sh"
 cp "$repo/distribution/archiso/pacman.conf" "$profile/pacman.conf"
 cp "$repo/distribution/archiso/packages.x86_64" "$profile/packages.x86_64"
 cp -a "$repo/distribution/archiso/airootfs/." "$profile/airootfs/"
+install -d -m 0755 "$profile/airootfs/etc/systemd/system/multi-user.target.wants"
+ln -sf /usr/lib/systemd/system/NetworkManager.service \
+  "$profile/airootfs/etc/systemd/system/multi-user.target.wants/NetworkManager.service"
 # The live environment must contain the same reviewed Blossom packages as the
 # installable rootfs. Package metadata is pacman-only and is not part of the
 # live filesystem image.
@@ -151,8 +186,14 @@ install -Dm0755 "$repo/distribution/archiso/airootfs/usr/local/bin/blossom-physi
   "$profile/airootfs/usr/local/bin/blossom-physical-install"
 install -Dm0755 "$repo/distribution/archiso/airootfs/usr/local/libexec/blossom-physical-install-backend" \
   "$profile/airootfs/usr/local/libexec/blossom-physical-install-backend"
-install -d -m 0755 "$profile/airootfs/opt/blossom"
-cp -a "$repo/scripts" "$profile/airootfs/opt/blossom/"
+install -d -m 0755 "$profile/airootfs/opt/blossom/scripts/distribution"
+install -m 0644 "$repo/scripts/__init__.py" "$profile/airootfs/opt/blossom/scripts/__init__.py"
+install -m 0644 "$repo/scripts/distribution/__init__.py" \
+  "$profile/airootfs/opt/blossom/scripts/distribution/__init__.py"
+for module in "${runtime_modules[@]}"; do
+  install -m 0644 "$repo/scripts/distribution/$module" \
+    "$profile/airootfs/opt/blossom/scripts/distribution/$module"
+done
 if [[ "$mode" == vm-qualification ]]; then
   sed -i 's/iso_application=.*/iso_application="Blossom OS generic VM qualification candidate"/' \
     "$profile/profiledef.sh"
@@ -170,6 +211,8 @@ if [[ "$mode" == vm-qualification ]]; then
 fi
 install -Dm0600 "$build/blossom-rootfs.tar.zst" \
   "$profile/airootfs/root/blossom-rootfs.tar.zst"
+install -Dm0600 "$build/blossom-rootfs.tar.zst.sha256" \
+  "$profile/airootfs/root/blossom-rootfs.tar.zst.sha256"
 mkarchiso -v -w "$build/archiso-work" -o "$iso" "$profile"
 (
   cd "$iso"

@@ -89,18 +89,15 @@ class PhysicalInstallBackendTests(unittest.TestCase):
             with self.subTest(changed=changed), self.assertRaises(BackendError):
                 validate_target(target(), changed)
 
-    def test_command_plan_has_only_fixed_sda_partitioning(self):
+    def test_command_plan_creates_dual_root_and_never_constructs_children(self):
         plan = command_plan()
         rendered = "\n".join(" ".join(command) for command in plan)
         self.assertIn("sgdisk --zap-all /dev/sda", rendered)
-        self.assertIn("mkfs.fat -F 32 -n BLOSSOM_EFI /dev/sda1", rendered)
-        self.assertIn("mkfs.ext4 -F -L BLOSSOM_SYSTEM /dev/sda2", rendered)
-        root_mount = plan.index(["mount", "/dev/sda2", "/mnt/blossom-install"])
-        boot_directory = plan.index(["mkdir", "-p", "/mnt/blossom-install/boot"])
-        boot_mount = plan.index(["mount", "/dev/sda1", "/mnt/blossom-install/boot"])
-        self.assertLess(root_mount, boot_directory)
-        self.assertLess(boot_directory, boot_mount)
-        for forbidden in ("/dev/sdb", "/dev/vda", "sh -c", "bash -c"):
+        self.assertIn("BLOSSOM_EFI", rendered)
+        self.assertIn("BLOSSOM_ROOT_A", rendered)
+        self.assertIn("BLOSSOM_ROOT_B", rendered)
+        self.assertIn("BLOSSOM_STATE", rendered)
+        for forbidden in ("/dev/sda1", "/dev/sda2", "/dev/sdb", "/dev/vda", "sh -c", "bash -c"):
             self.assertNotIn(forbidden, rendered)
         self.assertTrue(all(type(command) is list for command in plan))
 

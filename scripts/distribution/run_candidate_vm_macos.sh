@@ -65,8 +65,9 @@ exec qemu-system-x86_64 \
   -drive "if=pflash,format=raw,file=$firmware_vars" \
   -drive "if=virtio,format=qcow2,file=$disk" \
   -drive "media=cdrom,readonly=on,file=$iso" \
+  -boot order=d,menu=on \
   -device virtio-vga \
   -device qemu-xhci \
   -device usb-tablet \
   -nic user,model=virtio-net-pci \
-  -display cocoa,gl=off
+  -display cocoa,gl=off,zoom-to-fit=off

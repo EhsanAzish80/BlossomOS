@@ -236,6 +236,48 @@ def copy_exact(source: Path, destination: Path, mode: int) -> None:
     destination.chmod(mode)
 
 
+def verify_package_root(lock: dict, root: Path, gateway: Path) -> None:
+    if not root.is_absolute() or root.is_symlink() or not root.is_dir():
+        fail("package root must be an absolute non-symlink directory")
+    expected_profile = registry_bytes(lock)
+    profile = root / str(PROFILE_PATH).lstrip("/")
+    if profile.is_symlink() or not profile.is_file() or profile.read_bytes() != expected_profile:
+        fail("packaged model profile does not match the immutable registry")
+    receipt_path = root / "usr/share/blossom-os/model-runtime-package.json"
+    if receipt_path.is_symlink() or not receipt_path.is_file() or receipt_path.stat().st_size > 4096:
+        fail("package receipt is missing or outside the closed bound")
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        fail(f"invalid package receipt: {error}")
+    if set(receipt) != {
+        "schema_version", "profile_sha256", "gateway_sha256",
+        "source_lock_sha256", "services_enabled",
+    }:
+        fail("package receipt schema drift")
+    lock_digest = digest_file(LOCK_PATH, 1024 * 1024)[0]
+    gateway_digest = digest_file(gateway, MAX_GATEWAY_BYTES)[0]
+    if receipt != {
+        "schema_version": 1,
+        "profile_sha256": digest_bytes(expected_profile),
+        "gateway_sha256": gateway_digest,
+        "source_lock_sha256": lock_digest,
+        "services_enabled": False,
+    }:
+        fail("package receipt does not match the immutable inputs")
+    packaged_gateway = root / "usr/lib/blossom-os/blossom-model-gateway"
+    if digest_file(packaged_gateway, MAX_GATEWAY_BYTES)[0] != gateway_digest:
+        fail("packaged gateway does not match the reviewed binary")
+    manifest = json.loads(expected_profile)
+    for item in manifest["runtime_files"] + manifest["model_files"]:
+        path = root / item["path"].lstrip("/")
+        if digest_file(path, item["bytes"]) != (item["sha256"], item["bytes"]):
+            fail(f"packaged artifact does not match the immutable registry: {item['path']}")
+    provider_unit = root / "usr/lib/systemd/system/blossom-model-llama-cpp.service"
+    if digest_file(provider_unit, 1024 * 1024)[0] != manifest["unit_sha256"]:
+        fail("packaged provider unit does not match the immutable registry")
+
+
 def build(
     lock: dict,
     archive: Path,
@@ -351,13 +393,14 @@ def main() -> None:
     parser.add_argument("--verify-lock", action="store_true")
     parser.add_argument("--emit-registry", action="store_true")
     parser.add_argument("--refresh-registry", action="store_true")
+    parser.add_argument("--verify-package-root", type=Path)
     parser.add_argument("--runtime-archive", type=Path)
     parser.add_argument("--model", type=Path)
     parser.add_argument("--model-license", type=Path)
     parser.add_argument("--gateway-binary", type=Path)
     parser.add_argument("--output", type=Path)
     arguments = parser.parse_args()
-    if sum((arguments.verify_lock, arguments.emit_registry, arguments.refresh_registry)) > 1:
+    if sum((arguments.verify_lock, arguments.emit_registry, arguments.refresh_registry, arguments.verify_package_root is not None)) > 1:
         fail("select exactly one registry operation")
     lock = load_lock()
     if arguments.verify_lock:
@@ -375,6 +418,11 @@ def main() -> None:
         if any([arguments.runtime_archive, arguments.model, arguments.model_license, arguments.gateway_binary, arguments.output]):
             fail("registry refresh accepts no package paths")
         REGISTRY_PATH.write_bytes(registry_bytes(lock) + b"\n")
+        return
+    if arguments.verify_package_root is not None:
+        if any([arguments.runtime_archive, arguments.model, arguments.model_license, arguments.output]) or arguments.gateway_binary is None:
+            fail("package verification requires only --verify-package-root and --gateway-binary")
+        verify_package_root(lock, arguments.verify_package_root, arguments.gateway_binary)
         return
     if None in (
         arguments.runtime_archive,

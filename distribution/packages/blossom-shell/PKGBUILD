@@ -2,7 +2,7 @@ pkgname=blossom-shell
 pkgver=0.9.0
 pkgrel=1
 pkgdesc='Blossom OS narrow desktop shell surface'
-arch=('x86_64')
+arch=('x86_64' 'aarch64')
 license=('Apache-2.0')
 depends=('blossom-core' 'grim' 'hyprland' 'hyprpolkitagent' 'libnotify' 'mako'
          'quickshell' 'qt6-base' 'qt6-declarative' 'qt6-wayland'

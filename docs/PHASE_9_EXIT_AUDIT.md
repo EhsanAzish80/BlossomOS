@@ -1,7 +1,15 @@
 # Phase 9 exit audit
 
-Status: complete on 2026-09-08 for the reviewed x86-64 UEFI VM evidence
-target.
+Status: corrected on 2026-09-27; update/rollback exit reopened.
+
+## 2026-09-27 correction
+
+The historical evidence proved a signed file-slot lifecycle and separately
+proved that one installed root filesystem booted. It did not connect slot
+selection to independently bootable system roots. The prior A/B rollback pass
+therefore overstates the evidence. Installation evidence remains historical
+evidence; bootable update, rollback, and recovery are open pending ADR-0029 and
+new qualification. No physical-device readiness follows from the old result.
 
 ## Accepted boundary
 
@@ -25,8 +33,8 @@ hardware compatibility.
 | Real Blossom packages | `makepkg` builds `blossom-core` and `blossom-shell`; the image workflow installs both artifacts into the root filesystem and inspects them after disk boot | Pass |
 | Blossom-owned installation image | The reviewed ArchISO profile builds without mutable runtime downloads, development credentials, autologin, enabled SSH, or telemetry | Pass |
 | Fresh UEFI installation | [Run 34218749512](https://github.com/EhsanAzish80/BlossomOS/actions/runs/34218749512) boots the ISO, partitions a blank disk, installs the packaged root filesystem, installs systemd-boot, then boots the disk | Pass |
-| Signed lifecycle | [Run 34196824642](https://github.com/EhsanAzish80/BlossomOS/actions/runs/34196824642) verifies canonical Ed25519-signed offline metadata, inactive-slot staging, rollback, confirmation, recovery, and user-data preservation with network denied | Pass |
-| Installed lifecycle | Run 34218749512 rechecks the installed packages and emits rollback, confirmation, recovery, and disk-boot verification markers from the installed disk | Pass |
+| Signed lifecycle model | [Run 34196824642](https://github.com/EhsanAzish80/BlossomOS/actions/runs/34196824642) verifies signed metadata and file-slot state transitions with network denied | Limited: not bootable A/B |
+| Installed lifecycle | Run 34218749512 rechecks installed packages and emits lifecycle and disk-boot markers | Limited: slot selection did not control boot roots |
 | Adversarial behavior | The Python lifecycle suite rejects unsupported hardware, unknown metadata, expiry, downgrade, active-slot replacement, mutation, invalid recovery, and unsafe first-run transitions | Pass |
 | Independent repository gates | Distribution validation, repository policy, unit tests, formatting, linting, dependency review, CodeQL, and secret scanning are protected checks | Pass |
 
@@ -39,7 +47,6 @@ is isolated beneath the runner temporary directory and removed on completion.
 
 ## Exit decision
 
-All Phase 9 gates pass for the accepted evidence target. Distribution and
-updates remain pre-alpha research foundations, not a supported installer or
-release. Public-beta hardening, release signing and publication, SBOM work,
-broader threat review, and supported-hardware claims belong to Phase 10.
+The package, image, and single-root installation evidence remains retained, but
+the Phase 9 bootable update/rollback gate is reopened. Distribution and updates
+remain pre-alpha research foundations, not a supported installer or release.

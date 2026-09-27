@@ -20,8 +20,14 @@ class DesktopFoundationLayoutTests(unittest.TestCase):
                 self.assertLessEqual(dock_width + 48, width)
                 self.assertLess(top + dock_height + 180, height)
 
+    def test_primary_output_does_not_duplicate_desktop_surfaces(self):
+        self.assertIn("readonly property var desktopScreens", SHELL)
+        self.assertIn("? [Quickshell.screens[0]] : []", SHELL)
+        self.assertEqual(SHELL.count("model: root.desktopScreens"), 5)
+
     def test_desktop_and_live_installer_are_distinct(self):
         self.assertIn('WlrLayershell.namespace: "blossom-background"', SHELL)
+        self.assertIn("exclusionMode: ExclusionMode.Ignore", SHELL)
         self.assertIn('WlrLayershell.namespace: "blossom-top-bar"', SHELL)
         self.assertIn('WlrLayershell.namespace: "blossom-dock"', SHELL)
         self.assertIn("visible: BlossomBroker.liveEnvironment", SHELL)
@@ -49,7 +55,9 @@ class DesktopFoundationLayoutTests(unittest.TestCase):
         self.assertIn("BlossomBroker.onboardingRequired", SHELL)
         self.assertIn("BlossomBroker.dismissOnboarding()", SHELL)
         self.assertNotIn("root.welcomeVisible = false", SHELL)
-        self.assertIn("!root.installerRequested", SHELL)
+        self.assertIn("!root.installerOpened", SHELL)
+        self.assertIn('BlossomBroker.desktopMessage === "Opened installer."', SHELL)
+        self.assertIn('BlossomBroker.desktopMessage.startsWith("Could not")', SHELL)
 
 
 if __name__ == "__main__":

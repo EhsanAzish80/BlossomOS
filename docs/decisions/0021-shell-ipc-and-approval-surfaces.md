@@ -58,6 +58,14 @@ shell. Any same-session process may attempt a call. Every operation therefore
 still enters the existing typed policy, approval, execution, verification, and
 audit path. The session service has no direct privileged-helper authority.
 
+Connection binding proves which process submitted a decision; it does not prove
+that a human saw or intended that decision. Accordingly, the Phase 6 surface is
+not a trusted human-presence mechanism. Capabilities that can modify system
+state, disclose private content, spend money, publish externally, or broaden
+privilege must remain unavailable through this protocol until a separately
+reviewed trusted-input ceremony exists. The currently admitted diagnostic
+slice does not imply approval readiness for those capabilities.
+
 The initial interface is intentionally small:
 
 - request the existing fixed `/usr/bin/uname -s` diagnostic;

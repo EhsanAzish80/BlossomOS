@@ -180,11 +180,14 @@ for required in (
     '"transport": "sata"',
     '"purpose": "physical_install"',
     "O_EXCL",
-    "O_NOFOLLOW",
+    "stable /dev/disk/by-id identity",
     "BLKGETSIZE64",
     '["sgdisk", "--zap-all", disk]',
-    '["mkfs.fat", "-F", "32", "-n", "BLOSSOM_EFI", "/dev/sda1"]',
-    '["mkfs.ext4", "-F", "-L", "BLOSSOM_SYSTEM", "/dev/sda2"]',
+    '"BLOSSOM_ROOT_A"',
+    '"BLOSSOM_ROOT_B"',
+    '"BLOSSOM_STATE"',
+    "_verify_rootfs()",
+    '"ukify", "build"',
     "installer backend requires root",
 ):
     if required not in install_backend:
@@ -210,8 +213,8 @@ for forbidden in ("pull_request:", "push:", "sudo", "sgdisk", "mkfs", "wipefs", 
     if forbidden in observation_workflow:
         fail(f"physical device observation workflow gained forbidden authority: {forbidden}")
 for required in (
-    "AC-READY",
-    "RECOVERY-READY",
+    "observe_ac_power",
+    '"live_media_present": any',
     "os.urandom",
     "device_observer()",
     "expected_confirmation",

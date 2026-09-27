@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable
 
-from scripts.distribution.physical_device_observer import observe
+from scripts.distribution.physical_device_observer import observe, observe_ac_power
 from scripts.distribution.physical_install_guard import evaluate
 from scripts.distribution.physical_preflight import classify, observe_host
 from scripts.distribution.run_physical_install import execute
@@ -21,13 +21,18 @@ class CandidateError(RuntimeError):
     """Raised when the physical candidate cannot preserve its closed boundary."""
 
 
-def _observation(challenge: str, live: str, devices: list[dict[str, Any]]) -> dict[str, Any]:
+def _observation(
+    challenge: str,
+    live: str,
+    devices: list[dict[str, Any]],
+    ac_power: bool,
+) -> dict[str, Any]:
     return {
         "schema": 1,
         "purpose": "physical_install",
         "host_preflight_result": "eligible_for_qualification",
-        "ac_power": True,
-        "recovery_media_ready": True,
+        "ac_power": ac_power,
+        "live_media_present": any(device["path"] == live for device in devices),
         "live_device": live,
         "challenge": challenge,
         "devices": devices,
@@ -38,6 +43,7 @@ def run_interactive(
     read: Callable[[str], str] = input,
     host_observer: Callable[[], dict[str, Any]] = observe_host,
     device_observer: Callable[[], tuple[str, list[dict[str, Any]]]] = observe,
+    power_observer: Callable[[], bool] = observe_ac_power,
     executor: Callable[..., dict[str, Any]] = execute,
     challenge_factory: Callable[[int], bytes] = os.urandom,
 ) -> dict[str, Any]:
@@ -49,14 +55,9 @@ def run_interactive(
     preflight = classify(host_observer())
     if preflight["result"] != "eligible_for_qualification":
         raise CandidateError("this is not the frozen qualified host")
-    if read("Type AC-READY after connecting power: ") != "AC-READY":
-        raise CandidateError("AC-power assertion cancelled")
-    if read("Type RECOVERY-READY while this boot media is connected: ") != "RECOVERY-READY":
-        raise CandidateError("recovery-media assertion cancelled")
-
     challenge = challenge_factory(16).hex()
     live, devices = device_observer()
-    initial = _observation(challenge, live, devices)
+    initial = _observation(challenge, live, devices, power_observer())
     decision = evaluate(initial)
     target = decision["target"]
     print("Qualification target policy: the internal system disk is selected; external disks are never installation targets.")
@@ -65,7 +66,7 @@ def run_interactive(
     confirmation = read(f"Type exactly: {decision['expected_confirmation']}\n> ")
 
     current_live, current_devices = device_observer()
-    current = _observation(challenge, current_live, current_devices)
+    current = _observation(challenge, current_live, current_devices, power_observer())
     STATE_ROOT.mkdir(parents=True, exist_ok=True)
     initial_path = STATE_ROOT / f"{decision['target_digest']}.initial.json"
     current_path = STATE_ROOT / f"{decision['target_digest']}.current.json"

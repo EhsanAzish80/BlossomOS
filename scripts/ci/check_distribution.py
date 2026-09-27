@@ -52,7 +52,9 @@ if "$(" in profile or "`" in profile:
 for package in ("blossom-core", "blossom-shell"):
     pkgbuild = DIST / "packages" / package / "PKGBUILD"
     text = pkgbuild.read_text(encoding="utf-8")
-    if f"pkgname={package}" not in text or "arch=('x86_64')" not in text or "license=('Apache-2.0')" not in text:
+    if (f"pkgname={package}" not in text or
+            "arch=('x86_64' 'aarch64')" not in text or
+            "license=('Apache-2.0')" not in text):
         fail(f"invalid package identity: {package}")
     if re.search(r"\b(curl|wget|git clone|sudo|systemctl enable)\b", text):
         fail(f"forbidden package side effect: {package}")
