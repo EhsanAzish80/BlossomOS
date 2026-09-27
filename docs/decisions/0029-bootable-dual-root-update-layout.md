@@ -45,15 +45,27 @@ root.
 Files that system tools replace atomically remain ordinary files in each root.
 The closed synchronization set contains the account databases, hostname,
 machine ID, locale and console settings, timezone link, and generated locale
-archive. Installation provisions slot A and copies that set into slot B. A
+archive. A missing source path removes its inactive-slot counterpart because
+absence is part of the synchronized state. Installation provisions slot A,
+generates a fresh installation-specific machine ID from an empty image
+placeholder, and copies the closed set into slot B. A
 physical updater must copy the same set from the running confirmed root into
-the newly written inactive root before selecting its trial UKI. If state fails
-to mount, either root therefore retains usable local account data for repair.
+the newly written inactive root before selecting its trial UKI, then fsync each
+replaced file and parent directory before changing boot selection. If state
+fails to mount, either root therefore retains usable local account data for
+repair.
 
 Account or machine-setting changes made during a trial boot are not copied back
 to the confirmed root and can be lost if the trial rolls back. This is an
 explicit A/B trade-off for this phase; settings should be changed after trial
 promotion.
+
+The image build forces `/etc/machine-id` to an empty, read-only placeholder and
+rejects a non-empty value. Before the first destructive command, installation
+requires graphical account provisioning, verifies the rootfs archive contains
+the base account files, kernel, initramfs, microcode, empty machine-ID
+placeholder, and setup tool, and verifies the live setup tool exists. The
+command-line unprovisioned disk-wipe route is not shipped.
 
 ### Boot artifacts and selection
 

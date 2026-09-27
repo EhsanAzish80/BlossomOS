@@ -7,8 +7,8 @@ import json
 import os
 from pathlib import Path
 
-from scripts.distribution.physical_candidate_install import _observation
 from scripts.distribution.physical_device_observer import observe, observe_ac_power
+from scripts.distribution.physical_install_context import observation as make_observation
 from scripts.distribution.physical_install_guard import evaluate
 from scripts.distribution.physical_preflight import classify, observe_host
 
@@ -22,7 +22,7 @@ def main() -> None:
         raise RuntimeError("This computer is not in the qualified hardware matrix.")
     challenge = os.urandom(16).hex()
     live, devices = observe()
-    observation = _observation(challenge, live, devices, observe_ac_power())
+    observation = make_observation(challenge, live, devices, observe_ac_power())
     decision = evaluate(observation)
     STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
     STATE.chmod(0o700)

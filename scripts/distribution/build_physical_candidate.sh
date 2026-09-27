@@ -86,9 +86,9 @@ install -m 0644 "$repo/scripts/distribution/__init__.py" \
 # are deliberately excluded.
 runtime_modules=(
   blossom_lifecycle.py graphical_install_backend.py installation_profile.py
-  physical_candidate_install.py physical_device_observer.py
+  physical_device_observer.py physical_install_context.py
   physical_install_backend.py physical_install_guard.py physical_install_harness.py
-  physical_preflight.py provision_installed_identity.py run_physical_install.py
+  physical_preflight.py provision_installed_identity.py
 )
 for module in "${runtime_modules[@]}"; do
   install -m 0644 "$repo/scripts/distribution/$module" \
@@ -130,8 +130,24 @@ if [[ "$mode" == vm-qualification ]]; then
 fi
 sed -i -E 's/^#?Storage=.*/Storage=persistent/' "$rootfs/etc/systemd/journald.conf"
 install -d -m 2755 "$rootfs/var/log/journal"
+# Published rootfs archives must never contain a build-machine identity.
+install -d -m 0755 "$rootfs/etc"
+: > "$rootfs/etc/machine-id"
+chmod 0444 "$rootfs/etc/machine-id"
+if [[ -s "$rootfs/etc/machine-id" ]]; then
+  echo "root filesystem machine-id must be empty" >&2
+  exit 1
+fi
 tar --xattrs --numeric-owner -I "$rootfs_compressor" \
   -cf "$build/blossom-rootfs.tar.zst" -C "$rootfs" .
+archived_machine_id="$build/rootfs-machine-id.check"
+tar --zstd --extract --to-stdout --file "$build/blossom-rootfs.tar.zst" \
+  ./etc/machine-id >"$archived_machine_id"
+if [[ -s "$archived_machine_id" ]]; then
+  echo "root filesystem archive contains a machine identity" >&2
+  exit 1
+fi
+rm -f "$archived_machine_id"
 sha256sum "$build/blossom-rootfs.tar.zst" \
   | awk '{print $1}' > "$build/blossom-rootfs.tar.zst.sha256"
 
@@ -182,10 +198,6 @@ sed -i 's/iso_application=.*/iso_application="Blossom OS physical qualification 
 sed -i 's/iso_version=.*/iso_version="0.11.0-physical-candidate"/' "$profile/profiledef.sh"
 rm -f "$profile/airootfs/etc/systemd/system/multi-user.target.wants/blossom-evidence-install.service"
 rm -f "$profile/airootfs/etc/systemd/system/blossom-evidence-install.service"
-install -Dm0755 "$repo/distribution/archiso/airootfs/usr/local/bin/blossom-physical-install" \
-  "$profile/airootfs/usr/local/bin/blossom-physical-install"
-install -Dm0755 "$repo/distribution/archiso/airootfs/usr/local/libexec/blossom-physical-install-backend" \
-  "$profile/airootfs/usr/local/libexec/blossom-physical-install-backend"
 install -d -m 0755 "$profile/airootfs/opt/blossom/scripts/distribution"
 install -m 0644 "$repo/scripts/__init__.py" "$profile/airootfs/opt/blossom/scripts/__init__.py"
 install -m 0644 "$repo/scripts/distribution/__init__.py" \

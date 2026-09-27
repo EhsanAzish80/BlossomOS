@@ -1,81 +1,8 @@
-import tempfile
 import unittest
-from contextlib import redirect_stdout
-from io import StringIO
 from pathlib import Path
-from unittest.mock import patch
-
-from scripts.distribution import physical_candidate_install as candidate
-
-
-def host():
-    return {
-        "architecture": "x86_64",
-        "firmware": "uefi",
-        "product_name": "MacBookPro11,1",
-        "memory_mib": 8192,
-        "drm_present": True,
-        "internal_disk_present": True,
-        "wifi_pci_id": "14e4:43a0",
-    }
-
-
-def devices():
-    return (
-        "/dev/sdb",
-        [
-            {
-                "path": "/dev/sda",
-                "model": "APPLE SSD SM0128F",
-                "size_bytes": 121332826112,
-                "transport": "sata",
-                "removable": False,
-                "mounted": False,
-            },
-            {
-                "path": "/dev/sdb",
-                "model": "BLOSSOM RECOVERY",
-                "size_bytes": 64000000000,
-                "transport": "usb",
-                "removable": True,
-                "mounted": True,
-            },
-        ],
-    )
 
 
 class PhysicalCandidateTests(unittest.TestCase):
-    @patch("scripts.distribution.physical_candidate_install.os.geteuid", return_value=0)
-    def test_exact_prompts_reobserve_and_delegate_once(self, _geteuid):
-        with tempfile.TemporaryDirectory() as directory:
-            calls = []
-
-            def read(prompt):
-                if prompt.startswith("Type exactly:"):
-                    return prompt.split("Type exactly: ", 1)[1].split("\n", 1)[0]
-                raise AssertionError(f"unexpected prompt: {prompt}")
-
-            def execute(*args):
-                calls.append(args)
-                return {"schema": 1, "result": "physical_install_completed"}
-
-            with patch.object(candidate, "STATE_ROOT", Path(directory)):
-                output = StringIO()
-                with redirect_stdout(output):
-                    result = candidate.run_interactive(
-                        read=read,
-                        host_observer=host,
-                        device_observer=devices,
-                        power_observer=lambda: True,
-                        executor=execute,
-                        challenge_factory=lambda size: bytes.fromhex("01" * size),
-                    )
-            self.assertEqual(result["result"], "physical_install_completed")
-            self.assertEqual(len(calls), 1)
-            self.assertEqual(calls[0][3], "ERASE /dev/sda d3e8f7fa8b5ae4af")
-            self.assertIn("internal system disk is selected", output.getvalue())
-            self.assertIn("external disks are never installation targets", output.getvalue())
-
     def test_desktop_runtime_packages_and_launcher_are_present(self):
         repository = Path(__file__).resolve().parents[1]
         builder = (repository / "scripts/distribution/build_physical_candidate.sh").read_text()
@@ -271,25 +198,6 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn('wait "$container"', builder)
         self.assertIn("failed_or_interrupted", builder)
         self.assertIn("preserving diagnostics and Docker state", builder)
-
-    @patch("scripts.distribution.physical_candidate_install.os.geteuid", return_value=0)
-    def test_ineligible_host_never_observes_devices(self, _geteuid):
-        observed = []
-        ineligible = host()
-        ineligible["wifi_pci_id"] = ""
-        with self.assertRaises(candidate.CandidateError):
-            candidate.run_interactive(
-                host_observer=lambda: ineligible,
-                device_observer=lambda: observed.append(True),
-                power_observer=lambda: True,
-            )
-        self.assertEqual(observed, [])
-
-    @patch("scripts.distribution.physical_candidate_install.os.geteuid", return_value=1000)
-    def test_requires_root(self, _geteuid):
-        with self.assertRaises(candidate.CandidateError):
-            candidate.run_interactive()
-
 
 if __name__ == "__main__":
     unittest.main()

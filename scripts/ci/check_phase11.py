@@ -27,14 +27,10 @@ harness = read("scripts/distribution/physical_write_harness.py")
 probe = read("scripts/distribution/disposable_media_probe.py")
 probe_runner = read("scripts/distribution/run_disposable_media_test.py")
 install_harness = read("scripts/distribution/physical_install_harness.py")
-install_runner = read("scripts/distribution/run_physical_install.py")
 install_backend = read("scripts/distribution/physical_install_backend.py")
-install_backend_entrypoint = read("distribution/archiso/airootfs/usr/local/libexec/blossom-physical-install-backend")
 observer = read("scripts/distribution/physical_device_observer.py")
 observation_workflow = read(".github/workflows/phase11-device-observation.yml")
 disposable_evidence = read("docs/PHASE_11_DISPOSABLE_EVIDENCE.md")
-candidate = read("scripts/distribution/physical_candidate_install.py")
-candidate_entrypoint = read("distribution/archiso/airootfs/usr/local/bin/blossom-physical-install")
 candidate_builder = read("scripts/distribution/build_physical_candidate.sh")
 candidate_image_verifier = read("scripts/distribution/verify_physical_candidate_image.sh")
 macos_candidate_builder = read("scripts/distribution/build_physical_candidate_macos.sh")
@@ -55,6 +51,8 @@ installer_rule = read("distribution/archiso/airootfs/etc/polkit-1/rules.d/49-blo
 installer_qml = read("system/installer/qml/Main.qml")
 graphical_installer = read("system/installer/main.cpp")
 graphical_backend = read("scripts/distribution/graphical_install_backend.py")
+graphical_observer = read("scripts/distribution/graphical_install_observe.py")
+install_context = read("scripts/distribution/physical_install_context.py")
 installed_greetd = read("distribution/physical-rootfs/etc/greetd/config.toml")
 installed_session = read("distribution/physical-rootfs/usr/share/wayland-sessions/blossom.desktop")
 installed_sudoers = read("distribution/physical-rootfs/etc/sudoers.d/10-blossom-wheel")
@@ -162,18 +160,6 @@ for forbidden in ("subprocess", "sgdisk", "mkfs", "wipefs", "parted"):
     if forbidden in install_harness:
         fail(f"physical install harness embeds a writer: {forbidden}")
 for required in (
-    "MAX_INPUT_BYTES",
-    'Path("/usr/local/libexec/blossom-physical-install-backend")',
-    "input=json.dumps(target",
-    "text=True",
-    "timeout=1800",
-):
-    if required not in install_runner:
-        fail(f"physical install runner is incomplete: {required}")
-for forbidden in ("sgdisk", "mkfs", "wipefs", "parted", "shell=True"):
-    if forbidden in install_runner:
-        fail(f"physical install runner gained inline destructive authority: {forbidden}")
-for required in (
     '"path": "/dev/sda"',
     '"model": "APPLE SSD SM0128F"',
     '"size_bytes": 121332826112',
@@ -187,6 +173,9 @@ for required in (
     '"BLOSSOM_ROOT_B"',
     '"BLOSSOM_STATE"',
     "_verify_rootfs()",
+    "_preflight_rootfs(run, provision)",
+    "graphical account provisioning is required",
+    '"systemd-machine-id-setup"',
     '"ukify", "build"',
     "installer backend requires root",
 ):
@@ -195,9 +184,6 @@ for required in (
 for forbidden in ("shell=True", "os.system", '"/dev/sdb"', '"/dev/vda"'):
     if forbidden in install_backend:
         fail(f"physical install backend gained forbidden behavior: {forbidden}")
-for required in ("#!/usr/bin/env bash", "set -euo pipefail", "physical_install_backend import install"):
-    if required not in install_backend_entrypoint:
-        fail(f"physical install backend entrypoint is incomplete: {required}")
 for required in (
     "workflow_dispatch:",
     "runs-on: [self-hosted, linux, x64, blossom-gpu]",
@@ -212,26 +198,15 @@ for required in (
 for forbidden in ("pull_request:", "push:", "sudo", "sgdisk", "mkfs", "wipefs", "parted", "physical_write_harness"):
     if forbidden in observation_workflow:
         fail(f"physical device observation workflow gained forbidden authority: {forbidden}")
-for required in (
-    "observe_ac_power",
-    '"live_media_present": any',
-    "os.urandom",
-    "device_observer()",
-    "expected_confirmation",
-    "target_digest",
-):
-    if required not in candidate:
-        fail(f"physical candidate entrypoint is incomplete: {required}")
+for required in ('"live_media_present": any', '"purpose": "physical_install"', "STATE_ROOT"):
+    if required not in install_context:
+        fail(f"graphical install context is incomplete: {required}")
+for required in ("observe_ac_power", "os.urandom", "make_observation", "expected_confirmation", "target_digest"):
+    if required not in graphical_observer:
+        fail(f"graphical install observer is incomplete: {required}")
 for forbidden in ("sgdisk", "mkfs", "wipefs", "parted", "subprocess", "shell=True"):
-    if forbidden in candidate:
-        fail(f"physical candidate entrypoint gained inline write authority: {forbidden}")
-for required in (
-    "usage: blossom-physical-install (from the live root shell)",
-    "cd /opt/blossom",
-    "physical_candidate_install",
-):
-    if required not in candidate_entrypoint:
-        fail(f"physical candidate command is incomplete: {required}")
+    if forbidden in install_context or forbidden in graphical_observer:
+        fail(f"graphical install observation gained inline write authority: {forbidden}")
 for required in (
     "linux-lts",
     "linux-firmware",
@@ -242,7 +217,9 @@ for required in (
     "noto-fonts",
     "noto-fonts-emoji",
     "blossom-rootfs.tar.zst",
-    "blossom-physical-install",
+    "graphical_install_backend.py",
+    "physical_install_context.py",
+    ': > "$rootfs/etc/machine-id"',
     'rm -f "$profile/airootfs/etc/systemd/system/blossom-evidence-install.service"',
 ):
     if required not in candidate_builder:
@@ -258,8 +235,6 @@ if "Exec=/usr/bin/start-hyprland" not in installed_session:
     fail("installed Blossom session bypasses the supported launcher")
 if installed_sudoers.strip() != "%wheel ALL=(ALL:ALL) ALL":
     fail("installed administrator role is not password-authenticated")
-if "external disks are never installation targets" not in candidate:
-    fail("physical candidate does not explain its internal-disk-only target policy")
 for forbidden in ("systemctl enable",):
     if forbidden in candidate_builder:
         fail(f"physical candidate builder retained VM-only behavior: {forbidden}")
@@ -352,9 +327,7 @@ for required in (
     '["/usr/local/bin/blossom-start-session"]="0:0:755"',
     '["/usr/local/bin/blossom-desktop-probe"]="0:0:755"',
     '["/usr/local/libexec/blossom-provision-live-user"]="0:0:755"',
-    '["/usr/local/bin/blossom-physical-install"]="0:0:755"',
     '["/usr/local/bin/blossom-install-observe"]="0:0:755"',
-    '["/usr/local/libexec/blossom-physical-install-backend"]="0:0:755"',
     '["/usr/local/libexec/blossom-graphical-install-backend"]="0:0:755"',
 ):
     if required not in candidate_profile:

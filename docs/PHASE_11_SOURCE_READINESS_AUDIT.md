@@ -22,6 +22,14 @@
   slot-local files so their system tools can atomically replace them. The
   installer provisions A and synchronizes that closed set into B. Both slots
   receive a slot-bound UKI and systemd-boot entry.
+- Candidate assembly empties `/etc/machine-id` and rejects a non-empty image
+  identity. Before disk mutation, the backend requires graphical provisioning,
+  inventories required account and UKI inputs in the verified archive, proves
+  its machine-ID member is empty, and checks the live setup tool. It generates
+  one fresh installation identity before synchronizing B. Missing paths mirror
+  as missing rather than failing after erase.
+- Only the graphical, account-provisioning installer is packaged. The former
+  command-line disk-wipe command and unprovisioned libexec backend are removed.
 - The embedded root archive has a separately embedded SHA-256 digest and is
   verified before the first destructive command. Because archive and digest
   are carried by the same ISO, this detects accidental corruption only; ISO
@@ -92,8 +100,9 @@
    succeed. Add a synthetic saved NetworkManager profile and Bluetooth pairing
    fixture, stage B, then force rollback to A. Confirm the user, new password,
    hostname, saved network profile, and Bluetooth pairing survive both
-   directions. Also qualify promotion, recovery rejection/repair, persistent
-   logs, and local inference.
+   directions. Confirm A and B report the same non-empty machine ID, and that a
+   second independent install reports a different ID. Also qualify promotion,
+   recovery rejection/repair, persistent logs, and local inference.
 6. Only after the VM gate passes, perform a separately approved physical test
    with fresh disk inventory and a new action-time erase confirmation.
 

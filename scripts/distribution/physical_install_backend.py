@@ -46,6 +46,18 @@ SLOT_SYNC_PATHS = (
     "etc/localtime",
     "usr/lib/locale/locale-archive",
 )
+ROOTFS_REQUIRED_PATHS = (
+    "./etc/machine-id",
+    "./etc/passwd",
+    "./etc/shadow",
+    "./etc/group",
+    "./etc/gshadow",
+    "./boot/vmlinuz-linux-lts",
+    "./boot/initramfs-linux-lts.img",
+    "./boot/intel-ucode.img",
+    "./usr/bin/systemd-machine-id-setup",
+    "./usr/bin/locale-gen",
+)
 LSBLK_TARGET = (
     "lsblk",
     "--json",
@@ -137,6 +149,29 @@ def _verify_rootfs() -> None:
         raise BackendError("reviewed root filesystem digest does not match")
 
 
+def _preflight_rootfs(
+    run: Callable[..., subprocess.CompletedProcess[Any]],
+    provision: Callable[[Path], None] | None,
+) -> None:
+    """Reject known content failures before the first destructive command."""
+    if provision is None:
+        raise BackendError("graphical account provisioning is required")
+    if shutil.which("systemd-machine-id-setup") is None:
+        raise BackendError("live machine-id setup tool is unavailable")
+    listing = run(
+        ["tar", "--zstd", "--list", "--file", str(ROOTFS), *ROOTFS_REQUIRED_PATHS],
+        check=True, capture_output=True, timeout=30,
+    )
+    if listing.stderr or len(listing.stdout) > 64 * 1024:
+        raise BackendError("reviewed root filesystem inventory is invalid")
+    machine_id = run(
+        ["tar", "--zstd", "--extract", "--to-stdout", "--file", str(ROOTFS), "./etc/machine-id"],
+        check=True, capture_output=True, timeout=30,
+    )
+    if machine_id.stderr or machine_id.stdout:
+        raise BackendError("reviewed root filesystem embeds a machine identity")
+
+
 def _recheck_disk_identity(fd: int, disk: str, expected_rdev: int) -> None:
     retained = os.fstat(fd)
     try:
@@ -167,8 +202,17 @@ def sync_slot_state(source_root: Path, destination_root: Path) -> None:
         destination = destination_root / relative
         try:
             source_status = source.lstat()
+        except FileNotFoundError:
+            try:
+                destination_status = destination.lstat()
+            except FileNotFoundError:
+                continue
+            if stat.S_ISDIR(destination_status.st_mode):
+                raise BackendError(f"slot synchronization destination has invalid type: {relative}")
+            destination.unlink()
+            continue
         except OSError as error:
-            raise BackendError(f"slot synchronization source is missing: {relative}") from error
+            raise BackendError(f"slot synchronization source cannot be inspected: {relative}") from error
         destination.parent.mkdir(parents=True, exist_ok=True)
         if stat.S_ISLNK(source_status.st_mode):
             link_target = os.readlink(source)
@@ -240,6 +284,7 @@ def install(
     if not ROOTFS.is_file():
         raise BackendError("reviewed root filesystem archive is missing")
     _verify_rootfs()
+    _preflight_rootfs(run, provision)
     validate_target(target, _inventory())
     disk = _stable_disk_path(TARGET["path"])
     exclusive_fd = os.open(disk, os.O_RDONLY | os.O_EXCL | os.O_CLOEXEC)
@@ -361,6 +406,10 @@ def install(
             )
         if provision is not None:
             provision(MOUNT)
+        run(
+            ["systemd-machine-id-setup", f"--root={MOUNT}"],
+            check=True, timeout=30,
+        )
         sync_slot_state(MOUNT, MOUNT_B)
         run(["sync"], check=True, timeout=60)
     finally:

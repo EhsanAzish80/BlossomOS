@@ -93,13 +93,12 @@ candidate.
 ## Physical candidate boundary
 
 The physical candidate is a separate, manually dispatched build and never
-enables the VM evidence auto-installer. Its live environment exposes one short
-operator command, `blossom-physical-install`, from its automatic live root shell. That entrypoint reruns the
-frozen host preflight, observes kernel-reported AC power and the uniquely
-identified attached ArchISO recovery medium,
-creates a fresh random challenge, observes the ArchISO live mount and target,
-prints the exact bound erase phrase, then observes the devices again before the
-once-only harness may call the backend.
+enables the VM evidence auto-installer. The supported installation route is the
+graphical installer. Its unprivileged UI gathers the account profile and exact
+bound erase confirmation, while its fixed polkit-authorized backend reruns the
+frozen host and device checks before the once-only harness may call the writer.
+There is no separately packaged command-line disk-wipe entrypoint or
+unprovisioned libexec backend.
 
 The installed root contains the Blossom packages and the bounded hardware stack
 needed for this qualification target: the LTS kernel and firmware, Intel

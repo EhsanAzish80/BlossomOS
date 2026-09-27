@@ -137,6 +137,38 @@ class PhysicalInstallBackendTests(unittest.TestCase):
                 Path("/usr/share/zoneinfo/Europe/Istanbul"),
             )
 
+    def test_slot_sync_mirrors_missing_paths(self):
+        with TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source = base / "a"
+            destination = base / "b"
+            source.mkdir()
+            destination.mkdir()
+            for relative in SLOT_SYNC_PATHS:
+                source_path = source / relative
+                source_path.parent.mkdir(parents=True, exist_ok=True)
+                destination_path = destination / relative
+                destination_path.parent.mkdir(parents=True, exist_ok=True)
+                destination_path.write_text("stale\n", encoding="utf-8")
+                if relative != "etc/vconsole.conf":
+                    source_path.write_text("current\n", encoding="utf-8")
+            sync_slot_state(source, destination)
+            self.assertFalse((destination / "etc/vconsole.conf").exists())
+            self.assertEqual((destination / "etc/passwd").read_text(), "current\n")
+
+    def test_candidate_build_forces_an_empty_machine_identity(self):
+        repository = Path(__file__).resolve().parents[1]
+        builder = (repository / "scripts/distribution/build_physical_candidate.sh").read_text()
+        self.assertIn(': > "$rootfs/etc/machine-id"', builder)
+        self.assertIn('[[ -s "$rootfs/etc/machine-id" ]]', builder)
+        self.assertNotIn("blossom-physical-install", builder)
+        self.assertFalse(
+            (repository / "distribution/archiso/airootfs/usr/local/bin/blossom-physical-install").exists()
+        )
+        self.assertFalse(
+            (repository / "distribution/archiso/airootfs/usr/local/libexec/blossom-physical-install-backend").exists()
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
