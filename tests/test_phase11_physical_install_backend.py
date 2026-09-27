@@ -1,10 +1,15 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from scripts.distribution.physical_install_backend import (
     BackendError,
     LSBLK_TARGET,
+    SLOT_SYNC_PATHS,
+    STATE_DIRECTORIES,
     TARGET,
     command_plan,
+    sync_slot_state,
     validate_target,
 )
 
@@ -100,6 +105,37 @@ class PhysicalInstallBackendTests(unittest.TestCase):
         for forbidden in ("/dev/sda1", "/dev/sda2", "/dev/sdb", "/dev/vda", "sh -c", "bash -c"):
             self.assertNotIn(forbidden, rendered)
         self.assertTrue(all(type(command) is list for command in plan))
+
+    def test_only_directories_are_persistent_bind_mounts(self):
+        self.assertEqual(
+            set(STATE_DIRECTORIES),
+            {"home", "var/lib/blossom", "var/log", "etc/NetworkManager/system-connections", "var/lib/bluetooth"},
+        )
+        self.assertTrue({"etc/passwd", "etc/shadow", "etc/group", "etc/gshadow"}.issubset(SLOT_SYNC_PATHS))
+        self.assertTrue({"etc/hostname", "etc/machine-id", "etc/locale.conf", "etc/vconsole.conf"}.issubset(SLOT_SYNC_PATHS))
+
+    def test_slot_sync_preserves_regular_modes_and_timezone_symlink(self):
+        with TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source = base / "a"
+            destination = base / "b"
+            source.mkdir()
+            destination.mkdir()
+            for relative in SLOT_SYNC_PATHS:
+                path = source / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if relative == "etc/localtime":
+                    path.symlink_to("/usr/share/zoneinfo/Europe/Istanbul")
+                else:
+                    path.write_text(f"{relative}\n", encoding="utf-8")
+                    path.chmod(0o400 if relative == "etc/shadow" else 0o644)
+            sync_slot_state(source, destination)
+            self.assertEqual((destination / "etc/shadow").stat().st_mode & 0o777, 0o400)
+            self.assertTrue((destination / "etc/localtime").is_symlink())
+            self.assertEqual(
+                (destination / "etc/localtime").readlink(),
+                Path("/usr/share/zoneinfo/Europe/Istanbul"),
+            )
 
 
 if __name__ == "__main__":

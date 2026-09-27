@@ -16,9 +16,12 @@
 - The destructive disk is opened through an observed `/dev/disk/by-id` alias,
   retained for the operation, and rechecked for block type and exact size.
 - Both roots receive a complete system. `/home`, `/var/lib/blossom`,
-  `/var/log`, account databases, machine identity and hostname, saved network
-  connections, and Bluetooth pairings are placed on the shared state
-  partition. Both slots receive a slot-bound UKI and systemd-boot entry.
+  `/var/log`, saved network connections, and Bluetooth pairings are directory
+  binds from the shared state partition. Account databases, machine identity,
+  hostname, locale, keymap, timezone, and generated locale data remain normal
+  slot-local files so their system tools can atomically replace them. The
+  installer provisions A and synchronizes that closed set into B. Both slots
+  receive a slot-bound UKI and systemd-boot entry.
 - The embedded root archive has a separately embedded SHA-256 digest and is
   verified before the first destructive command. Because archive and digest
   are carried by the same ISO, this detects accidental corruption only; ISO
@@ -59,7 +62,9 @@
 - ADR-0029's physical inactive-slot updater, boot-counted trial promotion,
   automatic rollback, and recovery repair path are not yet wired to the new
   partitions. The Phase 9 file-backed lifecycle remains evidence code only and
-  must not be presented as physical A/B update support.
+  must not be presented as physical A/B update support. The future physical
+  staging path must call the same closed slot-state synchronizer before trial
+  boot selection.
 - The two-slot installer and UKI path have not been built, syntax-checked,
   installed, or booted in this audit.
 - The pinned snapshot's Broadcom package and the closed llama.cpp/model package
@@ -82,9 +87,13 @@
 3. Assemble all offline inputs and record their exact digests.
 4. Build one local candidate once, then inspect its filesystem and package
    inventory before booting it.
-5. Qualify install, independent boots of A and B, trial failure rollback,
-   promotion, recovery rejection/repair, persistent logs, and local inference
-   in a disposable VM.
+5. Qualify install and independent boots of A and B in a disposable VM. After
+   install, run `passwd` and `hostnamectl set-hostname` and observe both
+   succeed. Add a synthetic saved NetworkManager profile and Bluetooth pairing
+   fixture, stage B, then force rollback to A. Confirm the user, new password,
+   hostname, saved network profile, and Bluetooth pairing survive both
+   directions. Also qualify promotion, recovery rejection/repair, persistent
+   logs, and local inference.
 6. Only after the VM gate passes, perform a separately approved physical test
    with fresh disk inventory and a new action-time erase confirmation.
 

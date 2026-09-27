@@ -36,12 +36,24 @@ The installer rejects disks too small to provide both complete root slots plus
 at least 16 GiB of state. It discovers every resulting partition from a fresh
 bounded block inventory; it never constructs `/dev/sdXN` names.
 
-Both root slots are complete independently bootable systems. Persistent user
-and machine state lives only on `BLOSSOM_STATE`, including `/home`, Blossom
-durable state, update state, persistent qualification logs, local account and
-password databases, machine identity and hostname, saved NetworkManager
-connections, and Bluetooth pairings. Those paths are bind-mounted into either
-active root. Root slots do not contain the only copy of user or machine state.
+Both root slots are complete independently bootable systems. Mutable directory
+state lives on `BLOSSOM_STATE`, including `/home`, Blossom durable state,
+update state, persistent qualification logs, saved NetworkManager connections,
+and Bluetooth pairings. Those directories are bind-mounted into either active
+root.
+
+Files that system tools replace atomically remain ordinary files in each root.
+The closed synchronization set contains the account databases, hostname,
+machine ID, locale and console settings, timezone link, and generated locale
+archive. Installation provisions slot A and copies that set into slot B. A
+physical updater must copy the same set from the running confirmed root into
+the newly written inactive root before selecting its trial UKI. If state fails
+to mount, either root therefore retains usable local account data for repair.
+
+Account or machine-setting changes made during a trial boot are not copied back
+to the confirmed root and can be lost if the trial rolls back. This is an
+explicit A/B trade-off for this phase; settings should be changed after trial
+promotion.
 
 ### Boot artifacts and selection
 
@@ -50,7 +62,9 @@ binds its root filesystem by filesystem UUID. The persistent systemd-boot
 default remains the last confirmed slot.
 
 An update writes and verifies the inactive root partition and its inactive UKI
-before changing boot state. It then selects that UKI for a bounded trial boot
+before changing boot state. It copies the closed slot-local identity and locale
+set from the running confirmed root into the inactive root, then verifies the
+result. It then selects that UKI for a bounded trial boot
 using systemd-boot's one-shot and boot-counting facilities. Failure to confirm
 health exhausts the trial entry and returns to the still-confirmed persistent
 default. Successful health confirmation makes the new entry persistent and

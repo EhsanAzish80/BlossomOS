@@ -33,14 +33,19 @@ STATE_DIRECTORIES = {
     "etc/NetworkManager/system-connections": "networkmanager-connections",
     "var/lib/bluetooth": "bluetooth",
 }
-STATE_FILES = {
-    "etc/passwd": "identity/passwd",
-    "etc/shadow": "identity/shadow",
-    "etc/group": "identity/group",
-    "etc/gshadow": "identity/gshadow",
-    "etc/machine-id": "machine/machine-id",
-    "etc/hostname": "machine/hostname",
-}
+SLOT_SYNC_PATHS = (
+    "etc/passwd",
+    "etc/shadow",
+    "etc/group",
+    "etc/gshadow",
+    "etc/hostname",
+    "etc/machine-id",
+    "etc/locale.conf",
+    "etc/locale.gen",
+    "etc/vconsole.conf",
+    "etc/localtime",
+    "usr/lib/locale/locale-archive",
+)
 LSBLK_TARGET = (
     "lsblk",
     "--json",
@@ -145,6 +150,40 @@ def _recheck_disk_identity(fd: int, disk: str, expected_rdev: int) -> None:
         or current.st_rdev != expected_rdev
     ):
         raise BackendError("stable disk identity changed")
+
+
+def sync_slot_state(source_root: Path, destination_root: Path) -> None:
+    """Copy the closed slot-local identity set into an inactive root.
+
+    These paths must remain ordinary files or symlinks. Account and hostname
+    tools atomically replace them, which is incompatible with single-file bind
+    mounts. The physical updater must call this after writing an inactive root
+    and before selecting its trial UKI.
+    """
+    if source_root == destination_root or not source_root.is_dir() or not destination_root.is_dir():
+        raise BackendError("slot synchronization roots are invalid")
+    for relative in SLOT_SYNC_PATHS:
+        source = source_root / relative
+        destination = destination_root / relative
+        try:
+            source_status = source.lstat()
+        except OSError as error:
+            raise BackendError(f"slot synchronization source is missing: {relative}") from error
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if stat.S_ISLNK(source_status.st_mode):
+            link_target = os.readlink(source)
+            destination.unlink(missing_ok=True)
+            destination.symlink_to(link_target)
+        elif stat.S_ISREG(source_status.st_mode):
+            temporary = destination.with_name(f".{destination.name}.blossom-sync")
+            temporary.unlink(missing_ok=True)
+            try:
+                shutil.copy2(source, temporary, follow_symlinks=False)
+                os.replace(temporary, destination)
+            finally:
+                temporary.unlink(missing_ok=True)
+        else:
+            raise BackendError(f"slot synchronization source has invalid type: {relative}")
 
 
 def command_plan(disk: str | None = None) -> list[list[str]]:
@@ -257,15 +296,7 @@ def install(
                 shutil.copytree(source, persistent, symlinks=True)
             else:
                 persistent.mkdir(parents=True, exist_ok=True)
-        for root_relative, state_relative in STATE_FILES.items():
-            source = MOUNT / root_relative
-            persistent = state / state_relative
-            persistent.parent.mkdir(parents=True, exist_ok=True)
-            if not source.is_file():
-                source.parent.mkdir(parents=True, exist_ok=True)
-                source.touch(mode=0o600)
-            shutil.copy2(source, persistent)
-        for root_relative, state_relative in {**STATE_DIRECTORIES, **STATE_FILES}.items():
+        for root_relative, state_relative in STATE_DIRECTORIES.items():
             destination = MOUNT / root_relative
             persistent = state / state_relative
             run(["mount", "--bind", str(persistent), str(destination)], check=True, timeout=60)
@@ -318,23 +349,19 @@ def install(
             (root / "state").mkdir(parents=True, exist_ok=True)
             for root_relative in STATE_DIRECTORIES:
                 (root / root_relative).mkdir(parents=True, exist_ok=True)
-            for root_relative in STATE_FILES:
-                destination = root / root_relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                if not destination.exists():
-                    destination.touch(mode=0o600)
             (root / "etc/fstab").write_text(
                 f"UUID={uuids[slot]} / ext4 rw,relatime 0 1\n"
                 f"UUID={uuids['efi']} /efi vfat umask=0077 0 2\n"
                 f"UUID={uuids['state']} /state ext4 rw,relatime 0 2\n"
                 + "".join(
                     f"/state/{state_relative} /{root_relative} none bind,x-systemd.requires-mounts-for=/state 0 0\n"
-                    for root_relative, state_relative in {**STATE_DIRECTORIES, **STATE_FILES}.items()
+                    for root_relative, state_relative in STATE_DIRECTORIES.items()
                 ),
                 encoding="utf-8",
             )
         if provision is not None:
             provision(MOUNT)
+        sync_slot_state(MOUNT, MOUNT_B)
         run(["sync"], check=True, timeout=60)
     finally:
         for destination in reversed(mounted):
