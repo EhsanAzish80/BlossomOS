@@ -78,9 +78,8 @@ ln -sf ../blossom-model-llama-cpp.service \
 ln -sf ../blossom-model-gateway.service \
   "$rootfs/etc/systemd/system/multi-user.target.wants/blossom-model-gateway.service"
 install -d -m 0755 "$rootfs/opt/blossom/scripts/distribution" "$rootfs/etc/blossom-os"
-install -m 0644 "$repo/scripts/__init__.py" "$rootfs/opt/blossom/scripts/__init__.py"
-install -m 0644 "$repo/scripts/distribution/__init__.py" \
-  "$rootfs/opt/blossom/scripts/distribution/__init__.py"
+install -m 0644 /dev/null "$rootfs/opt/blossom/scripts/__init__.py"
+install -m 0644 /dev/null "$rootfs/opt/blossom/scripts/distribution/__init__.py"
 # Release images contain only the runtime modules used by the installer and
 # lifecycle service. Tests, workflows, build tools, and repository metadata
 # are deliberately excluded.
@@ -235,9 +234,8 @@ sed -i 's/iso_version=.*/iso_version="0.11.0-physical-candidate"/' "$profile/pro
 rm -f "$profile/airootfs/etc/systemd/system/multi-user.target.wants/blossom-evidence-install.service"
 rm -f "$profile/airootfs/etc/systemd/system/blossom-evidence-install.service"
 install -d -m 0755 "$profile/airootfs/opt/blossom/scripts/distribution"
-install -m 0644 "$repo/scripts/__init__.py" "$profile/airootfs/opt/blossom/scripts/__init__.py"
-install -m 0644 "$repo/scripts/distribution/__init__.py" \
-  "$profile/airootfs/opt/blossom/scripts/distribution/__init__.py"
+install -m 0644 /dev/null "$profile/airootfs/opt/blossom/scripts/__init__.py"
+install -m 0644 /dev/null "$profile/airootfs/opt/blossom/scripts/distribution/__init__.py"
 for module in "${runtime_modules[@]}"; do
   install -m 0644 "$repo/scripts/distribution/$module" \
     "$profile/airootfs/opt/blossom/scripts/distribution/$module"
