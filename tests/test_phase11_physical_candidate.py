@@ -162,7 +162,7 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("--autologin root", root_console)
         for config in (live_hyprland, installed_hyprland):
             self.assertIn("XCURSOR_THEME,Adwaita", config)
-            self.assertIn("background_color = rgb(0b111b)", config)
+            self.assertIn("background_color = rgb(121015)", config)
             self.assertIn("/usr/local/bin/blossom-start-session", config)
             self.assertNotIn("quickshell -p", config)
         self.assertIn('client-build/blossom-shell-ui', shell_package)
