@@ -5,7 +5,7 @@ use std::fmt;
 
 pub const WORKSPACE_FILE_MODE: u32 = 0o600;
 pub const MAX_MODEL_WORKSPACE_CONTENT_BYTES: usize = 4096;
-pub const MODEL_WORKSPACE_NAME_PATTERN: &str = "[a-z0-9][a-z0-9._-]{0,63}";
+pub const MODEL_WORKSPACE_NAME_PATTERN: &str = "^[a-z0-9][a-z0-9._-]{0,63}$";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

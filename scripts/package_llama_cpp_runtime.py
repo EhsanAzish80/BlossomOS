@@ -35,7 +35,7 @@ LOGICAL_MODEL = "qwen2.5-0.5b-instruct:q4_k_m"
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 MAX_GATEWAY_BYTES = 64 * 1024 * 1024
 MAX_MODEL_WORKSPACE_CONTENT_BYTES = 4096
-MODEL_WORKSPACE_NAME_PATTERN = "[a-z0-9][a-z0-9._-]{0,63}"
+MODEL_WORKSPACE_NAME_PATTERN = "^[a-z0-9][a-z0-9._-]{0,63}$"
 
 
 def fail(message: str) -> None:

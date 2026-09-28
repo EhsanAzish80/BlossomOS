@@ -59,6 +59,8 @@ def validate_request(request: object) -> tuple[str, str | None, str | None]:
         raise ValueError("sampling is not pinned")
     if request.get("parallel_tool_calls") is not False:
         raise ValueError("parallel tool calls are not disabled")
+    if request.get("tool_choice") != "required":
+        raise ValueError("eligible turn must require exactly one tool choice")
     tools = request.get("tools")
     if not isinstance(tools, list) or len(tools) != 1:
         raise ValueError("eligible turn must contain exactly one tool")

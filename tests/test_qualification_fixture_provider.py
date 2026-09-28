@@ -27,6 +27,7 @@ def request(prompt: str, *, untrusted_data: str | None = None) -> dict:
         "temperature": 0,
         "seed": 0,
         "parallel_tool_calls": False,
+        "tool_choice": "required",
         "tools": [
             {
                 "function": {

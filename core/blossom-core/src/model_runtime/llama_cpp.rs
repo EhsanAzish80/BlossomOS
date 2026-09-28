@@ -338,6 +338,8 @@ struct LlamaRequest<'a> {
     chat_template_kwargs: ChatTemplateKwargs,
     parse_tool_calls: bool,
     parallel_tool_calls: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<&'static str>,
     logprobs: bool,
     tools: Vec<LlamaTool>,
 }
@@ -408,6 +410,7 @@ fn encode_request(request: &InferenceRequest) -> Result<Vec<u8>, LlamaCppAdapter
         },
         parse_tool_calls: !tools.is_empty(),
         parallel_tool_calls: false,
+        tool_choice: (!tools.is_empty()).then_some("required"),
         logprobs: false,
         tools,
     })
@@ -916,6 +919,7 @@ mod tests {
         assert_eq!(outbound["seed"], 0);
         assert_eq!(outbound["max_tokens"], MAX_GENERATED_TOKENS);
         assert_eq!(outbound["parallel_tool_calls"], false);
+        assert_eq!(outbound["tool_choice"], "required");
         assert_eq!(outbound["tools"].as_array().unwrap().len(), 1);
         assert_eq!(
             outbound["tools"][0]["function"]["name"],
