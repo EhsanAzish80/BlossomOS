@@ -372,11 +372,21 @@ fn encode_request(request: &InferenceRequest) -> Result<Vec<u8>, LlamaCppAdapter
         .messages()
         .iter()
         .map(|message| LlamaRequestMessage {
-            role: match message.role() {
-                ConversationRole::System => "system",
-                ConversationRole::User => "user",
-                ConversationRole::Assistant => "assistant",
-                ConversationRole::Tool => "tool",
+            // This is context data read by trusted orchestration, not the
+            // result of an OpenAI-style tool call. Encoding it with the
+            // protocol's `tool` role makes llama.cpp expect a preceding tool
+            // call and can disable constrained tool selection. Preserve the
+            // typed boundary internally and frame the visibly labelled data
+            // as a user message only at the provider adapter.
+            role: if message.is_untrusted_data() {
+                "user"
+            } else {
+                match message.role() {
+                    ConversationRole::System => "system",
+                    ConversationRole::User => "user",
+                    ConversationRole::Assistant => "assistant",
+                    ConversationRole::Tool => "tool",
+                }
             },
             content: message.provider_content(),
         })
@@ -971,7 +981,7 @@ mod tests {
         assert!(request.messages()[1].is_untrusted_data());
         let outbound: serde_json::Value =
             serde_json::from_slice(&encode_request(&request).unwrap()).unwrap();
-        assert_eq!(outbound["messages"][1]["role"], "tool");
+        assert_eq!(outbound["messages"][1]["role"], "user");
         assert_eq!(
             outbound["messages"][1]["content"],
             "UNTRUSTED_FILE_CONTENT:\nplanted instruction"
