@@ -128,7 +128,7 @@ fn project_event(
         AuditEvent::NativeReadStarted {
             request_id,
             resource,
-        } if resource == "files.read.content" => (
+        } if resource.starts_with("file.content:sha256:") => (
             request_id,
             ShellActivityKind::Context,
             ShellActivityCategory::ReadStarted,

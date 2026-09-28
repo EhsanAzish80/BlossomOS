@@ -125,12 +125,22 @@ impl PrivateGatewayClient {
                 .map_err(|_| PrivateGatewayClientError::Protocol)?;
             match event.event {
                 NormalizedStreamKind::Finished { completion } => return Ok(completion),
-                NormalizedStreamKind::Cancelled | NormalizedStreamKind::Failed { .. } => {
+                NormalizedStreamKind::Cancelled => {
                     return Err(PrivateGatewayClientError::InferenceFailed);
+                }
+                NormalizedStreamKind::Failed { category } => {
+                    return Err(map_failure_category(category));
                 }
                 _ => {}
             }
         }
+    }
+}
+
+fn map_failure_category(category: super::ProviderFailureCategory) -> PrivateGatewayClientError {
+    match category {
+        super::ProviderFailureCategory::Malformed => PrivateGatewayClientError::Protocol,
+        _ => PrivateGatewayClientError::InferenceFailed,
     }
 }
 
@@ -187,6 +197,18 @@ mod tests {
         assert_eq!(
             PrivateGatewayClient::connect_at(&path, 1, 1, GatewayProfile::LlamaCppCpuV1).err(),
             Some(PrivateGatewayClientError::ConnectionUnavailable)
+        );
+    }
+
+    #[test]
+    fn malformed_provider_output_is_a_protocol_denial_not_an_inference_outage() {
+        assert_eq!(
+            map_failure_category(crate::ProviderFailureCategory::Malformed),
+            PrivateGatewayClientError::Protocol
+        );
+        assert_eq!(
+            map_failure_category(crate::ProviderFailureCategory::Unavailable),
+            PrivateGatewayClientError::InferenceFailed
         );
     }
 
