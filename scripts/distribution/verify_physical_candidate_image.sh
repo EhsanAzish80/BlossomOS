@@ -44,6 +44,8 @@ required_files=(
   usr/lib/systemd/user/blossom-desktop-shell.service
   usr/lib/systemd/user/blossom-shell-ui.service
   usr/lib/systemd/user/blossom-desktop-launcher.service
+  usr/lib/systemd/system/blossom-shell-broker@.service
+  usr/lib/systemd/system/user@1000.service.wants/blossom-shell-broker@1000.service
   home/blossom/.config/mako/config
   home/blossom/.config/xdg-desktop-portal/hyprland-portals.conf
   root/blossom-rootfs.tar.zst

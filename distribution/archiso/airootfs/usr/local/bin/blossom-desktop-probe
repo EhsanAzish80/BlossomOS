@@ -47,7 +47,7 @@ raise SystemExit(0 if required <= namespaces else 1)
 while ((SECONDS < deadline)); do
   if [[ $(id -u blossom 2>/dev/null || true) == 1000 ]] \
       && user_systemctl is-active --quiet blossom-shell-ui.service \
-      && user_systemctl is-active --quiet blossom-shell-service.service \
+      && systemctl is-active --quiet blossom-shell-broker@1000.service \
       && user_systemctl is-active --quiet blossom-desktop-shell.service \
       && desktop_layers_ready; then
     echo "BLOSSOM_DESKTOP_READY security=active broker=active desktop=active layers=4"
@@ -57,8 +57,9 @@ while ((SECONDS < deadline)); do
   sleep 2
 done
 
-echo "BLOSSOM_DESKTOP_FAILED security=$(user_systemctl is-active blossom-shell-ui.service 2>/dev/null || true) broker=$(user_systemctl is-active blossom-shell-service.service 2>/dev/null || true) desktop=$(user_systemctl is-active blossom-desktop-shell.service 2>/dev/null || true)"
-user_systemctl --no-pager --full status blossom-shell-ui.service blossom-shell-service.service blossom-desktop-shell.service || true
+echo "BLOSSOM_DESKTOP_FAILED security=$(user_systemctl is-active blossom-shell-ui.service 2>/dev/null || true) broker=$(systemctl is-active blossom-shell-broker@1000.service 2>/dev/null || true) desktop=$(user_systemctl is-active blossom-desktop-shell.service 2>/dev/null || true)"
+systemctl --no-pager --full status blossom-shell-broker@1000.service || true
+user_systemctl --no-pager --full status blossom-shell-ui.service blossom-desktop-shell.service || true
 journalctl -b _UID=1000 --no-pager -n 160 || true
 systemctl poweroff
 exit 1

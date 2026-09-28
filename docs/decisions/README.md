@@ -68,6 +68,9 @@ compatibility, packaging, or contributor obligations.
 - Prepared request ownership: ADR-0032 separates untrusted wire requests from
   domain requests and moves retained descriptors through preview, approval and
   execution without cloning, reopening or client resubmission.
+- System-managed session broker: ADR-0033 moves the broker's existing sandbox
+  to a system-manager template that still runs as the desktop user, preserving
+  host UID visibility for exact private-gateway `SO_PEERCRED` checks.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and

@@ -1,7 +1,7 @@
 [Unit]
 Description=Blossom OS compositor desktop surfaces
 PartOf=graphical-session.target
-After=graphical-session.target blossom-shell-service.service
+After=graphical-session.target
 OnFailure=blossom-shell-recovery.service
 StartLimitIntervalSec=30
 StartLimitBurst=3

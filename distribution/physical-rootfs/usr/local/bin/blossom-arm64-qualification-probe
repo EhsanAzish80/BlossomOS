@@ -30,7 +30,7 @@ user_systemctl() {
 desktop_ready() {
   local instance wayland layers
   user_systemctl is-active --quiet blossom-shell-ui.service || return 1
-  user_systemctl is-active --quiet blossom-shell-service.service || return 1
+  systemctl is-active --quiet blossom-shell-broker@1000.service || return 1
   user_systemctl is-active --quiet blossom-desktop-shell.service || return 1
   instance=$(find "$runtime/hypr" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null || true)
   wayland=$(find "$runtime" -maxdepth 1 -type s -name 'wayland-*' -print -quit 2>/dev/null || true)

@@ -37,10 +37,11 @@ package() {
     "$pkgdir/usr/lib/blossom-os/blossom-model-gateway"
   install -Dm0755 "$srcdir/target/release/blossom-privileged-helper" \
     "$pkgdir/usr/lib/blossom-os/blossom-privileged-helper"
-  install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-service.service" \
-    "$pkgdir/usr/lib/systemd/user/blossom-shell-service.service"
-  install -Dm0644 "$repo_root/system/shell/packaging/org.blossomos.Shell1.service" \
-    "$pkgdir/usr/share/dbus-1/services/org.blossomos.Shell1.service"
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-broker@.service" \
+    "$pkgdir/usr/lib/systemd/system/blossom-shell-broker@.service"
+  install -d "$pkgdir/usr/lib/systemd/system/user@1000.service.wants"
+  ln -s ../blossom-shell-broker@.service \
+    "$pkgdir/usr/lib/systemd/system/user@1000.service.wants/blossom-shell-broker@1000.service"
   install -Dm0644 "$repo_root/system/privileged-helper/packaging/blossom-privileged-helper.service" \
     "$pkgdir/usr/lib/systemd/system/blossom-privileged-helper.service"
   install -Dm0644 "$repo_root/system/privileged-helper/packaging/org.blossomos.Privileged1.service" \

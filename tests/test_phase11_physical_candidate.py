@@ -119,7 +119,10 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("systemctl --user import-environment", session_command)
         self.assertIn("WAYLAND_DISPLAY", session_command)
         self.assertIn("systemctl --user start blossom-shell-ui.service", session_command)
-        self.assertIn("systemctl --user start blossom-shell-service.service", session_command)
+        self.assertNotIn("blossom-shell-service.service", session_command)
+        self.assertIn("blossom-shell-broker@.service", core_package)
+        self.assertIn("user@1000.service.wants/blossom-shell-broker@1000.service", core_package)
+        self.assertNotIn("org.blossomos.Shell1.service", core_package)
         self.assertIn("dbus-update-activation-environment --systemd", session_command)
         for service in (
             "hyprpolkitagent.service", "mako.service",
@@ -187,7 +190,7 @@ class PhysicalCandidateTests(unittest.TestCase):
         for namespace in ("blossom-background", "blossom-top-bar", "blossom-dock", "blossom-welcome"):
             self.assertIn(namespace, desktop_probe)
         self.assertIn("blossom-shell-ui.service", desktop_probe)
-        self.assertIn("blossom-shell-service.service", desktop_probe)
+        self.assertIn("blossom-shell-broker@1000.service", desktop_probe)
         self.assertIn("blossom-desktop-shell.service", desktop_probe)
         self.assertIn("ExecCondition=/usr/bin/grep -qw blossom.desktop-probe=1 /proc/cmdline", desktop_probe_unit)
         self.assertTrue(desktop_probe_link.is_symlink())

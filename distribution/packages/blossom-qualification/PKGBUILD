@@ -14,6 +14,8 @@ package() {
     "$pkgdir/usr/lib/blossom-os/qualify-agent-pipeline"
   install -Dm0755 "$repo_root/scripts/qualification_fixture_provider.py" \
     "$pkgdir/usr/lib/blossom-os/qualification-fixture-provider"
+  install -Dm0755 "$repo_root/scripts/check_shell_broker_runtime.py" \
+    "$pkgdir/usr/lib/blossom-os/check-shell-broker-runtime"
   install -Dm0644 "$startdir/blossom-model-fixture.service" \
     "$pkgdir/usr/lib/systemd/system/blossom-model-fixture.service"
   install -Dm0644 "$startdir/qualification-provider.json" \

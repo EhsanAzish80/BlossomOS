@@ -276,7 +276,7 @@ for required in (
         fail(f"physical candidate graphical acceptance is incomplete: {required}")
 for required in (
     "blossom-shell-ui.service",
-    "blossom-shell-service.service",
+    "blossom-shell-broker@1000.service",
     "hyprctl layers -j",
     '"blossom-background"',
     '"blossom-top-bar"',

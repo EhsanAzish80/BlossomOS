@@ -14,16 +14,19 @@ and verify packages through pacman's Arch keyring.
 | Source | Installed path | Owner and mode |
 | --- | --- | --- |
 | release binary | `/usr/lib/blossom-os/blossom-shell-service` | `root:root 0755` |
-| `blossom-shell-service.service` | `/usr/lib/systemd/user/blossom-shell-service.service` | `root:root 0644` |
-| `org.blossomos.Shell1.service` | `/usr/share/dbus-1/services/org.blossomos.Shell1.service` | `root:root 0644` |
+| `blossom-shell-broker@.service` | `/usr/lib/systemd/system/blossom-shell-broker@.service` | `root:root 0644` |
+| broker lifecycle link | `/usr/lib/systemd/system/user@1000.service.wants/blossom-shell-broker@1000.service` | `root:root symlink` |
 | `blossom-shell-ui.service` | `/usr/lib/systemd/user/blossom-shell-ui.service` | `root:root 0644` |
 | `blossom-shell-recovery.service` | `/usr/lib/systemd/user/blossom-shell-recovery.service` | `root:root 0644` |
 | `blossom-shell-recovery` | `/usr/local/bin/blossom-shell-recovery` | `root:root 0755` |
 
-The service runs as the logged-in unprivileged user, owns only the fixed
-session-bus name, and exposes the closed versioned Rust interface. The unit has
-no shell, sudo, helper, network listener, caller-selected executable, generic
-D-Bus target, or enablement target.
+The system manager constructs the sandbox and then runs the service as the
+logged-in unprivileged user. It joins that user's session bus, owns only the
+fixed bus name, and exposes the closed versioned Rust interface. No session
+D-Bus activation file is installed: that would route startup back through the
+unprivileged user manager and make `SO_PEERCRED` identities meaningless inside
+its implicit one-UID namespace. The unit has no shell, sudo, helper, network
+listener, caller-selected executable, or generic D-Bus target.
 
 `RestrictNamespaces=` and a restrictive system-call allowlist are deliberately
 deferred because the fixed Bubblewrap executor must create its code-owned
@@ -36,7 +39,8 @@ socket while constructing its private network namespace. It does not permit
 `RestrictSUIDSGID=` is also deliberately absent: current systemd implements it
 by denying `openat2()`, while Bubblewrap uses `openat2()` for safe source-path
 resolution. The service remains unprivileged, has an empty capability set,
-cannot gain privileges, and sees read-only system and hidden home trees.
+cannot gain privileges, and sees read-only system and hidden home trees except
+for the code-owned workspace publication boundary.
 
 The fixed executor deliberately omits Bubblewrap's `--disable-userns`: that
 option writes `/proc/sys/user/max_user_namespaces`, while
