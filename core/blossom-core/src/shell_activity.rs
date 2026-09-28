@@ -117,6 +117,15 @@ fn project_event(
             ShellActivityKind::Policy,
             ShellActivityCategory::PolicyAllow,
         ),
+        AuditEvent::PolicyEvaluated {
+            request_id,
+            decision: PolicyDecision::Deny,
+            ..
+        } => (
+            request_id,
+            ShellActivityKind::Policy,
+            ShellActivityCategory::PolicyDenied,
+        ),
         AuditEvent::NativeReadStarted {
             request_id,
             resource,

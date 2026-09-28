@@ -134,11 +134,11 @@ impl<E: Executor + Send, B: BatterySummaryProvider + Send> ShellRequestHandler
     }
 
     fn activity(&mut self, after: Option<u64>, limit: u16) -> Result<Vec<u8>, HandlerError> {
-        encode(
-            &self
-                .read_activity(after, limit)
-                .map_err(|_| HandlerError::Rejected)?,
-        )
+        let activity = self.read_activity(after, limit).map_err(|error| {
+            eprintln!("shell activity projection rejected: {error:?}");
+            HandlerError::Rejected
+        })?;
+        encode(&activity)
     }
 
     fn battery(&mut self, now_ms: u64) -> Result<Vec<u8>, HandlerError> {

@@ -449,6 +449,10 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
                 capability: Capability::FilesWriteCreate,
                 decision: PolicyDecision::Ask,
             },
+            PolicyRule {
+                capability: Capability::FilesReadContent,
+                decision: PolicyDecision::Allow,
+            },
         ]);
         Self {
             engine: BlossomEngine::with_battery_summary(
@@ -770,6 +774,31 @@ mod tests {
         )
     }
 
+    #[cfg(target_os = "linux")]
+    fn production_like_service(
+        calls: Rc<Cell<usize>>,
+    ) -> ShellDiagnosticService<CountingExecutor, CountingBattery> {
+        ShellDiagnosticService::with_context_providers(
+            CountingExecutor {
+                calls,
+                result: ExecutionResult {
+                    exit_code: Some(0),
+                    stdout: b"Linux\n".to_vec(),
+                    stderr: vec![],
+                    timed_out: false,
+                    output_truncated: false,
+                },
+            },
+            CountingBattery {
+                calls: Rc::new(Cell::new(0)),
+            },
+            CountingNetwork {
+                calls: Arc::new(AtomicUsize::new(0)),
+            },
+            7,
+        )
+    }
+
     fn peer(value: &str) -> ShellPeerId {
         ShellPeerId::from_bus_unique_name(value).expect("peer")
     }
@@ -849,7 +878,7 @@ mod tests {
         let (workspace, workspace_text) = indirect_workspace(planted);
         let owner = peer(":1.90");
 
-        let mut invalid = service(Rc::new(Cell::new(0)))
+        let mut invalid = production_like_service(Rc::new(Cell::new(0)))
             .with_agent_workspace(workspace_text.clone())
             .with_agent_turn_provider(HostileIndirectProvider {
                 expected_data: planted.into(),
@@ -861,9 +890,11 @@ mod tests {
                 .expect("invalid proposal fails closed"),
             ShellServiceOutcome::Denied
         );
+        crate::project_shell_activity(invalid.audit(), None, crate::MAX_ACTIVITY_BATCH)
+            .unwrap_or_else(|error| panic!("{error:?}: {:?}", invalid.audit().records()));
         assert!(!workspace.join("escaped.txt").exists());
 
-        let mut valid = service(Rc::new(Cell::new(0)))
+        let mut valid = production_like_service(Rc::new(Cell::new(0)))
             .with_agent_workspace(workspace_text)
             .with_agent_turn_provider(HostileIndirectProvider {
                 expected_data: planted.into(),
