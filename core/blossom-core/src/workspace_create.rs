@@ -4,6 +4,78 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 pub const WORKSPACE_FILE_MODE: u32 = 0o600;
+pub const MAX_MODEL_WORKSPACE_CONTENT_BYTES: usize = 4096;
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ModelWorkspaceCreateProposal {
+    pub name: String,
+    pub content: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModelWorkspaceProposalError {
+    InvalidName,
+    InvalidContent,
+    ResolutionFailed,
+}
+
+fn safe_model_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    (1..=64).contains(&bytes.len())
+        && bytes
+            .first()
+            .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        && bytes[1..].iter().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-')
+        })
+}
+
+fn unsafe_display_character(character: char) -> bool {
+    character == '\0'
+        || character == '\u{001b}'
+        || matches!(
+            character,
+            '\u{061c}'
+                | '\u{200b}'..='\u{200f}'
+                | '\u{202a}'..='\u{202e}'
+                | '\u{2060}'..='\u{206f}'
+                | '\u{feff}'
+        )
+}
+
+pub fn validate_model_workspace_proposal(
+    proposal: &ModelWorkspaceCreateProposal,
+) -> Result<(), ModelWorkspaceProposalError> {
+    if !safe_model_name(&proposal.name) {
+        return Err(ModelWorkspaceProposalError::InvalidName);
+    }
+    if proposal.content.len() > MAX_MODEL_WORKSPACE_CONTENT_BYTES
+        || proposal.content.chars().any(unsafe_display_character)
+    {
+        return Err(ModelWorkspaceProposalError::InvalidContent);
+    }
+    Ok(())
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+pub fn resolve_model_workspace_proposal(
+    session_workspace_root: &str,
+    proposal: &ModelWorkspaceCreateProposal,
+) -> Result<AtomicWorkspaceFileCreator, ModelWorkspaceProposalError> {
+    validate_model_workspace_proposal(proposal)?;
+    AtomicWorkspaceFileCreator::select(session_workspace_root, &proposal.name, &proposal.content)
+        .map_err(|_| ModelWorkspaceProposalError::ResolutionFailed)
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+pub fn resolve_model_workspace_proposal(
+    _: &str,
+    proposal: &ModelWorkspaceCreateProposal,
+) -> Result<AtomicWorkspaceFileCreator, ModelWorkspaceProposalError> {
+    validate_model_workspace_proposal(proposal)?;
+    Err(ModelWorkspaceProposalError::ResolutionFailed)
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -442,6 +514,57 @@ mod tests {
                 Err(WorkspaceCreateError::InvalidDestination)
             );
         }
+    }
+
+    #[test]
+    fn model_workspace_proposal_is_one_safe_component_with_visible_content() {
+        let valid = ModelWorkspaceCreateProposal {
+            name: "agent-note_1.txt".into(),
+            content: "bounded printable content\n".into(),
+        };
+        assert_eq!(validate_model_workspace_proposal(&valid), Ok(()));
+        let invalid_names = vec![
+            "".to_string(),
+            "../x".into(),
+            "/x".into(),
+            "a/b".into(),
+            "Ä.txt".into(),
+            "-hidden".into(),
+            "a".repeat(65),
+        ];
+        for name in invalid_names {
+            let proposal = ModelWorkspaceCreateProposal {
+                name,
+                content: "safe".into(),
+            };
+            assert_eq!(
+                validate_model_workspace_proposal(&proposal),
+                Err(ModelWorkspaceProposalError::InvalidName)
+            );
+        }
+        for content in [
+            "nul\0byte",
+            "escape\u{1b}[2J",
+            "bidi\u{202e}txt",
+            "zero\u{200b}width",
+        ] {
+            let proposal = ModelWorkspaceCreateProposal {
+                name: "note.txt".into(),
+                content: content.into(),
+            };
+            assert_eq!(
+                validate_model_workspace_proposal(&proposal),
+                Err(ModelWorkspaceProposalError::InvalidContent)
+            );
+        }
+        let oversized = ModelWorkspaceCreateProposal {
+            name: "note.txt".into(),
+            content: "x".repeat(MAX_MODEL_WORKSPACE_CONTENT_BYTES + 1),
+        };
+        assert_eq!(
+            validate_model_workspace_proposal(&oversized),
+            Err(ModelWorkspaceProposalError::InvalidContent)
+        );
     }
 
     #[cfg(all(target_os = "linux", target_env = "gnu"))]

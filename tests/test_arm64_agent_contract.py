@@ -27,6 +27,20 @@ class Arm64AgentContractTests(unittest.TestCase):
         self.assertIn("ADR-0030", index)
         self.assertIn("architecture-specific llama.cpp runtimes", index)
 
+    def test_adr_0031_closes_model_proposed_write_arguments(self):
+        adr = (ROOT / "docs/decisions/0031-model-proposed-workspace-create.md").read_text()
+        for required in (
+            "`[a-z0-9][a-z0-9._-]{0,63}`",
+            "at most 4096 bytes",
+            "cannot construct `WorkspaceCreateSelection`",
+            "mode `0600`",
+            "returns `ask`",
+            "origin `model_proposed`",
+            "zero executor starts",
+            "explicitly labeled untrusted data",
+        ):
+            self.assertIn(required, adr)
+
 
 if __name__ == "__main__":
     unittest.main()

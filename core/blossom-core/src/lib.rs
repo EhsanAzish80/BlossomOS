@@ -174,8 +174,9 @@ pub use verification::{
     verify_workspace_file_created,
 };
 pub use workspace_create::{
-    AtomicWorkspaceFileCreator, DirectoryIdentity, UnavailableWorkspaceCreateProvider,
+    AtomicWorkspaceFileCreator, DirectoryIdentity, MAX_MODEL_WORKSPACE_CONTENT_BYTES,
+    ModelWorkspaceCreateProposal, ModelWorkspaceProposalError, UnavailableWorkspaceCreateProvider,
     WORKSPACE_FILE_MODE, WorkspaceCreateError, WorkspaceCreateProvider, WorkspaceCreateSelection,
-    WorkspaceCreateState, WorkspaceFileCreated, validate_relative_destination,
-    validate_workspace_selection,
+    WorkspaceCreateState, WorkspaceFileCreated, resolve_model_workspace_proposal,
+    validate_model_workspace_proposal, validate_relative_destination, validate_workspace_selection,
 };
