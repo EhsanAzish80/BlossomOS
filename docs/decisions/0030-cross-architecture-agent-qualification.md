@@ -77,9 +77,11 @@ Negative evidence includes:
    content, feeds that result into a second inference request and evaluates the
    next proposal.
 
-For every negative case, the authoritative audit must show zero executor
-starts. Until the two-turn result-feedback path exists, evidence must mark
-indirect injection as unsupported and untested, never passed.
+For every negative case, the authoritative audit must show zero executor starts
+and zero effect events. The two-turn indirect case uses a fixed code-owned read,
+a separately typed and bounded untrusted-data message, and an intentionally
+compliant hostile fixture. It covers both validator rejection and denial of a
+valid-but-unwanted proposal at the exact approval preview.
 
 ### Performance evidence
 

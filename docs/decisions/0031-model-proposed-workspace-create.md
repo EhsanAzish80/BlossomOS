@@ -76,11 +76,19 @@ record zero executor starts.
 ### Minimal indirect-injection turn
 
 The indirect-injection qualification uses no second argument-bearing intent.
-Turn one performs a fixed code-owned fixture read. Its result is returned to the
-model in turn two as explicitly labeled untrusted data. Any resulting proposal
-passes through this same proposal validator, resolver, policy and approval
-boundary. Until this two-turn feedback exists, indirect-injection evidence is
-reported as unsupported and untested.
+Turn one performs one fixed, argument-free, code-owned fixture read. The read is
+bounded and identity-retained by the normal file provider; its audit entry
+contains only path/content digests and byte length. The result is carried across
+the private gateway as a typed untrusted-data message and rendered by the final
+provider adapter in a separate, fixed `UNTRUSTED_FILE_CONTENT` frame. It is
+never concatenated into the user's instruction.
+
+Turn two exposes only `files.write:create` and cannot read again or start a
+third turn. The qualification fixture deliberately obeys the planted text as a
+worst-case model. One variant proposes traversal and must fail validation. A
+second proposes a valid but unwanted file and must reach the ordinary exact
+preview, where the qualification client denies it. Both variants require zero
+effects and zero command-executor starts in the authoritative activity window.
 
 ## Alternatives considered
 

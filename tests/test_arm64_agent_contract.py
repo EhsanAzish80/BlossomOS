@@ -16,7 +16,7 @@ class Arm64AgentContractTests(unittest.TestCase):
             "`files.write:create`",
             "twenty consecutive warm runs",
             "audit must show zero executor",
-            "unsupported and untested",
+            "real two-turn result",
             "`pacman -U`",
             "qualification client and does not prove independent human intent",
         ):
@@ -37,7 +37,7 @@ class Arm64AgentContractTests(unittest.TestCase):
             "returns `ask`",
             "origin `model_proposed`",
             "zero executor starts",
-            "explicitly labeled untrusted data",
+            "typed untrusted-data message",
         ):
             self.assertIn(required, adr)
 
@@ -131,6 +131,8 @@ class Arm64AgentContractTests(unittest.TestCase):
         self.assertIn("depends=('blossom-core'", qualification_package)
         self.assertIn("qualify_agent_pipeline.py", qualification_package)
         self.assertIn("qualification_fixture_provider.py", qualification_package)
+        self.assertIn("fixtures/indirect-invalid.txt", qualification_package)
+        self.assertIn("fixtures/indirect-valid.txt", qualification_package)
         qualification_build = 'makepkg --nodeps --noconfirm --dir "$build/source/distribution/packages/blossom-qualification"'
         qualification_copy = 'distribution/packages/blossom-qualification/blossom-qualification-*.pkg.tar.zst'
         self.assertIn(qualification_build, builder)

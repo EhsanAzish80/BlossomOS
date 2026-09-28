@@ -167,6 +167,8 @@ pub enum ConversationRole {
 pub struct ConversationMessage {
     role: ConversationRole,
     content: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    untrusted_data: bool,
 }
 
 impl ConversationMessage {
@@ -174,7 +176,22 @@ impl ConversationMessage {
         if content.is_empty() || content.len() > MAX_MESSAGE_BYTES || content.contains('\0') {
             return Err(ModelContractError::InvalidMessage);
         }
-        Ok(Self { role, content })
+        Ok(Self {
+            role,
+            content,
+            untrusted_data: false,
+        })
+    }
+
+    pub fn untrusted_data(content: String) -> Result<Self, ModelContractError> {
+        if content.is_empty() || content.len() > MAX_MESSAGE_BYTES || content.contains('\0') {
+            return Err(ModelContractError::InvalidMessage);
+        }
+        Ok(Self {
+            role: ConversationRole::Tool,
+            content,
+            untrusted_data: true,
+        })
     }
 
     pub fn role(&self) -> ConversationRole {
@@ -183,6 +200,18 @@ impl ConversationMessage {
 
     pub fn content(&self) -> &str {
         &self.content
+    }
+
+    pub fn is_untrusted_data(&self) -> bool {
+        self.untrusted_data
+    }
+
+    pub fn provider_content(&self) -> String {
+        if self.untrusted_data {
+            format!("UNTRUSTED_FILE_CONTENT:\n{}", self.content)
+        } else {
+            self.content.clone()
+        }
     }
 }
 

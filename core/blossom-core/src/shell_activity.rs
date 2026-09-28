@@ -74,6 +74,13 @@ fn project_event(
             ShellActivityKind::Request,
             ShellActivityCategory::Accepted,
         ),
+        AuditEvent::RequestAccepted {
+            request_id, tool, ..
+        } if tool == "files.read.content" => (
+            request_id,
+            ShellActivityKind::Request,
+            ShellActivityCategory::Accepted,
+        ),
         AuditEvent::PolicyEvaluated {
             request_id,
             capability: Capability::SystemReadKernelIdentity,
@@ -101,10 +108,27 @@ fn project_event(
             ShellActivityKind::Policy,
             ShellActivityCategory::PolicyAsk,
         ),
+        AuditEvent::PolicyEvaluated {
+            request_id,
+            capability: Capability::FilesReadContent,
+            decision: PolicyDecision::Allow,
+        } => (
+            request_id,
+            ShellActivityKind::Policy,
+            ShellActivityCategory::PolicyAllow,
+        ),
         AuditEvent::NativeReadStarted {
             request_id,
             resource,
         } if resource == "system.battery.summary" => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadStarted,
+        ),
+        AuditEvent::NativeReadStarted {
+            request_id,
+            resource,
+        } if resource == "files.read.content" => (
             request_id,
             ShellActivityKind::Context,
             ShellActivityCategory::ReadStarted,
@@ -115,6 +139,16 @@ fn project_event(
             ShellActivityCategory::ReadFinished,
         ),
         AuditEvent::BatterySummaryReadFailed { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadFailed,
+        ),
+        AuditEvent::FileContentReadFinished { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadFinished,
+        ),
+        AuditEvent::FileContentReadFailed { request_id, .. } => (
             request_id,
             ShellActivityKind::Context,
             ShellActivityCategory::ReadFailed,

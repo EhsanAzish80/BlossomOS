@@ -20,4 +20,8 @@ package() {
     "$pkgdir/usr/lib/systemd/system/blossom-model-fixture.service"
   install -Dm0644 "$startdir/qualification-provider.json" \
     "$pkgdir/usr/share/blossom-os/qualification-provider.json"
+  install -Dm0644 "$startdir/fixtures/indirect-invalid.txt" \
+    "$pkgdir/home/blossom/Workspace/.blossom-qualification/indirect-invalid.txt"
+  install -Dm0644 "$startdir/fixtures/indirect-valid.txt" \
+    "$pkgdir/home/blossom/Workspace/.blossom-qualification/indirect-valid.txt"
 }

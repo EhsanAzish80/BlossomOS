@@ -428,39 +428,62 @@ impl blossom_core::AgentTurnProvider for InstalledGatewayAgentProvider {
         prompt: &str,
         intents: &TurnIntentCatalogue,
     ) -> Result<NormalizedCompletion, AgentTurnError> {
-        let profiles = [GatewayProfile::LlamaCppCpuV1, GatewayProfile::OllamaCpuV1]
-            .into_iter()
-            .filter(|profile| {
-                production_provider_profile(*profile).is_ok_and(|item| item.is_some())
-            })
-            .collect::<Vec<_>>();
-        if profiles.is_empty() {
-            return Err(AgentTurnError::GatewayUnavailable);
-        }
-        let gateway_user = nix::unistd::User::from_name("blossom-model-gateway")
-            .map_err(|_| AgentTurnError::GatewayUnavailable)?
-            .ok_or(AgentTurnError::GatewayUnavailable)?;
-        let gateway_group = nix::unistd::Group::from_name("blossom-model-gateway")
-            .map_err(|_| AgentTurnError::GatewayUnavailable)?
-            .ok_or(AgentTurnError::GatewayUnavailable)?;
-        if gateway_user.gid != gateway_group.gid {
-            return Err(AgentTurnError::UnexpectedGatewayIdentity);
-        }
-        let client = PrivateGatewayClient::connect_at_profiles(
-            std::path::Path::new(PRIVATE_GATEWAY_SOCKET_PATH),
-            gateway_user.uid.as_raw(),
-            gateway_group.gid.as_raw(),
-            &profiles,
-        )
-        .map_err(map_gateway_client_error)?;
         let messages = [
             ConversationMessage::new(ConversationRole::User, prompt.to_owned())
                 .map_err(|_| AgentTurnError::Protocol)?,
         ];
-        client
-            .infer(request_id, &messages, intents, 30_000)
-            .map_err(map_gateway_client_error)
+        infer_installed_gateway(request_id, &messages, intents)
     }
+
+    fn complete_with_untrusted_data(
+        &mut self,
+        request_id: &InferenceRequestId,
+        prompt: &str,
+        untrusted_data: &str,
+        intents: &TurnIntentCatalogue,
+    ) -> Result<NormalizedCompletion, AgentTurnError> {
+        let messages = [
+            ConversationMessage::new(ConversationRole::User, prompt.to_owned())
+                .map_err(|_| AgentTurnError::Protocol)?,
+            ConversationMessage::untrusted_data(untrusted_data.to_owned())
+                .map_err(|_| AgentTurnError::Protocol)?,
+        ];
+        infer_installed_gateway(request_id, &messages, intents)
+    }
+}
+
+#[cfg(feature = "production-dbus-service")]
+fn infer_installed_gateway(
+    request_id: &InferenceRequestId,
+    messages: &[ConversationMessage],
+    intents: &TurnIntentCatalogue,
+) -> Result<NormalizedCompletion, AgentTurnError> {
+    let profiles = [GatewayProfile::LlamaCppCpuV1, GatewayProfile::OllamaCpuV1]
+        .into_iter()
+        .filter(|profile| production_provider_profile(*profile).is_ok_and(|item| item.is_some()))
+        .collect::<Vec<_>>();
+    if profiles.is_empty() {
+        return Err(AgentTurnError::GatewayUnavailable);
+    }
+    let gateway_user = nix::unistd::User::from_name("blossom-model-gateway")
+        .map_err(|_| AgentTurnError::GatewayUnavailable)?
+        .ok_or(AgentTurnError::GatewayUnavailable)?;
+    let gateway_group = nix::unistd::Group::from_name("blossom-model-gateway")
+        .map_err(|_| AgentTurnError::GatewayUnavailable)?
+        .ok_or(AgentTurnError::GatewayUnavailable)?;
+    if gateway_user.gid != gateway_group.gid {
+        return Err(AgentTurnError::UnexpectedGatewayIdentity);
+    }
+    let client = PrivateGatewayClient::connect_at_profiles(
+        std::path::Path::new(PRIVATE_GATEWAY_SOCKET_PATH),
+        gateway_user.uid.as_raw(),
+        gateway_group.gid.as_raw(),
+        &profiles,
+    )
+    .map_err(map_gateway_client_error)?;
+    client
+        .infer(request_id, &messages, intents, 30_000)
+        .map_err(map_gateway_client_error)
 }
 
 #[cfg(feature = "production-dbus-service")]

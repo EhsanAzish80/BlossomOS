@@ -321,7 +321,7 @@ fn terminalize(
 #[derive(Serialize)]
 struct LlamaRequest<'a> {
     model: &'a str,
-    messages: Vec<LlamaRequestMessage<'a>>,
+    messages: Vec<LlamaRequestMessage>,
     stream: bool,
     stream_options: StreamOptions,
     max_tokens: u32,
@@ -337,9 +337,9 @@ struct LlamaRequest<'a> {
 }
 
 #[derive(Serialize)]
-struct LlamaRequestMessage<'a> {
+struct LlamaRequestMessage {
     role: &'static str,
-    content: &'a str,
+    content: String,
 }
 
 #[derive(Serialize)]
@@ -370,7 +370,7 @@ fn encode_request(request: &InferenceRequest) -> Result<Vec<u8>, LlamaCppAdapter
                 ConversationRole::Assistant => "assistant",
                 ConversationRole::Tool => "tool",
             },
-            content: message.content(),
+            content: message.provider_content(),
         })
         .collect();
     let tools: Vec<_> = if request.output_mode() == InferenceOutputMode::BlossomTurn {
@@ -942,6 +942,31 @@ mod tests {
         .unwrap();
         assert_eq!(empty["tools"], serde_json::json!([]));
         assert_eq!(empty["parse_tool_calls"], false);
+    }
+
+    #[test]
+    fn untrusted_data_stays_typed_until_the_provider_adapter_frames_it() {
+        let request = InferenceRequest::synthetic(
+            InferenceRequestId::parse("llama-untrusted-1".into()).unwrap(),
+            ModelProviderKind::LlamaCpp,
+            ModelProfile::parse("fixture-model:1".into()).unwrap(),
+            vec![
+                ConversationMessage::new(ConversationRole::User, "continue safely".into()).unwrap(),
+                ConversationMessage::untrusted_data("planted instruction".into()).unwrap(),
+            ],
+            TurnIntentCatalogue::from_eligible([ModelIntentKind::FilesWriteCreate]).unwrap(),
+            InferenceOutputMode::BlossomTurn,
+            2_000,
+        )
+        .unwrap();
+        assert!(request.messages()[1].is_untrusted_data());
+        let outbound: serde_json::Value =
+            serde_json::from_slice(&encode_request(&request).unwrap()).unwrap();
+        assert_eq!(outbound["messages"][1]["role"], "tool");
+        assert_eq!(
+            outbound["messages"][1]["content"],
+            "UNTRUSTED_FILE_CONTENT:\nplanted instruction"
+        );
     }
 
     #[test]
