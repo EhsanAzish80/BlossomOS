@@ -14,6 +14,7 @@ use std::sync::{
 };
 
 const MAX_WIRE_REQUEST_BYTES: usize = 512 * 1024;
+const MAX_TOOL_NAME_BYTES: usize = 64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -309,6 +310,15 @@ impl ToolRequestWire {
             serde_json::from_str(input).map_err(|error| RequestError::MalformedJson {
                 message: error.to_string(),
             })?;
+        if envelope.tool.is_empty()
+            || envelope.tool.len() > MAX_TOOL_NAME_BYTES
+            || !envelope
+                .tool
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte == b'.')
+        {
+            return Err(RequestError::InvalidToolName);
+        }
         let request_id = RequestId::parse(envelope.request_id)?;
         let invalid = |error: serde_json::Error| RequestError::InvalidArguments {
             message: error.to_string(),
@@ -554,6 +564,133 @@ mod tests {
                 Err(RequestError::InvalidArguments { .. })
             ));
         }
+    }
+
+    #[test]
+    fn wire_preserves_all_closed_parser_bounds() {
+        for tool in [
+            "system.uname",
+            "system.os.identity",
+            "system.uptime",
+            "system.memory.summary",
+            "system.storage.summary",
+            "system.battery.summary",
+            "system.network.connectivity",
+            "process.self",
+            "process.list",
+        ] {
+            let json = serde_json::json!({"request_id":"fixed-1","tool":tool,"arguments":{}});
+            assert!(matches!(
+                ToolRequestWire::parse_json(&json.to_string()),
+                Ok(ToolRequestWire::Fixed { .. })
+            ));
+        }
+        for tool in ["", "System.uname", "system_uname", &"a".repeat(65)] {
+            let json = serde_json::json!({"request_id":"fixed-1","tool":tool,"arguments":{}});
+            assert_eq!(
+                ToolRequestWire::parse_json(&json.to_string()),
+                Err(RequestError::InvalidToolName)
+            );
+        }
+        let unknown =
+            serde_json::json!({"request_id":"fixed-1","tool":"system.unknown","arguments":{}});
+        assert!(matches!(
+            ToolRequestWire::parse_json(&unknown.to_string()),
+            Err(RequestError::UnknownTool { .. })
+        ));
+        let expanded = serde_json::json!({"request_id":"fixed-1","tool":"system.uname","arguments":{"extra":true}});
+        assert!(matches!(
+            ToolRequestWire::parse_json(&expanded.to_string()),
+            Err(RequestError::InvalidArguments { .. })
+        ));
+        let envelope_expanded =
+            r#"{"request_id":"fixed-1","tool":"system.uname","arguments":{},"extra":true}"#;
+        assert!(matches!(
+            ToolRequestWire::parse_json(envelope_expanded),
+            Err(RequestError::MalformedJson { .. })
+        ));
+        assert_eq!(
+            ToolRequestWire::parse_json(&"x".repeat(MAX_WIRE_REQUEST_BYTES + 1)),
+            Err(RequestError::RequestTooLarge)
+        );
+    }
+
+    #[test]
+    fn thirty_third_reservation_fails_before_resolution_can_open_authority() {
+        let capacity = ApprovalCapacity::new(32).unwrap();
+        let reservations = (0..32)
+            .map(|_| capacity.reserve().unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(capacity.used(), 32);
+        #[cfg(target_os = "linux")]
+        let descriptors_before_rejection = std::fs::read_dir("/proc/self/fd").unwrap().count();
+        assert!(matches!(capacity.reserve(), Err(CapacityError::Exhausted)));
+        #[cfg(target_os = "linux")]
+        assert_eq!(
+            std::fs::read_dir("/proc/self/fd").unwrap().count(),
+            descriptors_before_rejection
+        );
+        drop(reservations);
+        assert_eq!(capacity.used(), 0);
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn descriptor_counts_return_to_baseline_after_deny_cancel_expiry_and_disconnect() {
+        use std::fs;
+
+        fn fd_count() -> usize {
+            fs::read_dir("/proc/self/fd").unwrap().count()
+        }
+        fn prepared(path: &str, capacity: &ApprovalCapacity, id: &str) -> PreparedToolRequest {
+            RequestResolver::resolve(
+                ToolRequestWire::FileRead {
+                    request_id: RequestId::parse(id.into()).unwrap(),
+                    absolute_path: path.into(),
+                },
+                SessionContext {
+                    workspace_root: "/",
+                    origin: RequestOrigin::UserCli,
+                },
+                capacity.reserve().unwrap(),
+            )
+            .unwrap()
+        }
+
+        let root = std::env::temp_dir().join(format!("blossom-prepared-fd-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir(&root).unwrap();
+        let path = root.join("selected.txt");
+        fs::write(&path, "selected").unwrap();
+        let path = path.to_str().unwrap();
+        let baseline = fd_count();
+        let capacity = ApprovalCapacity::new(4).unwrap();
+        let mut store = PreparedApprovalStore::new(10);
+
+        let deny = store.issue(prepared(path, &capacity, "fd-deny"), "p".into(), 0);
+        assert!(fd_count() > baseline);
+        store.remove(deny, "p", 1).unwrap();
+        assert_eq!(fd_count(), baseline);
+
+        let cancel = store.issue(prepared(path, &capacity, "fd-cancel"), "p".into(), 20);
+        assert!(fd_count() > baseline);
+        store.remove(cancel, "p", 21).unwrap();
+        assert_eq!(fd_count(), baseline);
+
+        let expiry = store.issue(prepared(path, &capacity, "fd-expiry"), "p".into(), 40);
+        assert!(fd_count() > baseline);
+        assert!(matches!(
+            store.consume(expiry, "p", 51),
+            Err(ApprovalError::Expired)
+        ));
+        assert_eq!(fd_count(), baseline);
+
+        let disconnect = store.issue(prepared(path, &capacity, "fd-disconnect"), "p".into(), 60);
+        assert!(fd_count() > baseline);
+        drop(store.discard(disconnect, 61).unwrap());
+        assert_eq!(fd_count(), baseline);
+        assert_eq!(capacity.used(), 0);
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]

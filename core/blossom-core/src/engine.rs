@@ -448,8 +448,8 @@ impl<
             tool: request.tool_name().into(),
             origin: prepared.origin(),
         });
-        let capability = PolicyEngine::required_capability(&request);
-        let decision = self.policy.evaluate(&request);
+        let capability = PolicyEngine::required_capability(request);
+        let decision = self.policy.evaluate(request);
         self.audit.append(AuditEvent::PolicyEvaluated {
             request_id: request.request_id().as_str().into(),
             capability,
@@ -1239,6 +1239,84 @@ mod tests {
                 .pop_front()
                 .unwrap_or(Err(ExecutorError::Failed))
         }
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    #[test]
+    fn model_workspace_proposal_resolves_previews_approves_creates_verifies_and_audits() {
+        use crate::prepared_request::RequestOrigin;
+        use crate::verification::VerificationReason;
+        use crate::workspace_create::ModelWorkspaceCreateProposal;
+        use std::fs;
+
+        let workspace =
+            std::env::temp_dir().join(format!("blossom-model-create-e2e-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&workspace);
+        fs::create_dir(&workspace).unwrap();
+        let destination = workspace.join("model-note.txt");
+        let content = "qualification content must never enter the audit";
+        let content_sha256 = crate::audit::digest_bytes(content.as_bytes());
+        let preview = format!(
+            "Create model-note.txt in the configured workspace\nContent: {content}\nSHA-256: {content_sha256}"
+        );
+        let preview_sha256 = crate::audit::digest_bytes(preview.as_bytes());
+        let executor = ScriptedExecutor::successful();
+        let mut engine = BlossomEngine::new(
+            PolicyEngine::new(vec![PolicyRule {
+                capability: Capability::FilesWriteCreate,
+                decision: PolicyDecision::Ask,
+            }]),
+            PreparedApprovalStore::new(30_000),
+            executor,
+        );
+
+        let begin = engine
+            .begin_wire(
+                ToolRequestWire::WorkspaceCreate {
+                    request_id: crate::RequestId::parse("model-create-e2e".into()).unwrap(),
+                    proposal: ModelWorkspaceCreateProposal {
+                        name: "model-note.txt".into(),
+                        content: content.into(),
+                    },
+                },
+                SessionContext {
+                    workspace_root: workspace.to_str().unwrap(),
+                    origin: RequestOrigin::ModelProposed,
+                },
+                Some(preview_sha256.clone()),
+                1,
+            )
+            .unwrap();
+        assert!(!destination.exists());
+        let (token, bound_preview) = match begin {
+            BeginOutcome::ApprovalRequired {
+                token,
+                preview_sha256,
+                ..
+            } => (token, preview_sha256),
+            other => panic!("expected approval, got {other:?}"),
+        };
+        assert_eq!(bound_preview, preview_sha256);
+
+        let completion = engine.approve(token, &bound_preview, 2).unwrap();
+        assert_eq!(
+            completion.verification.reason,
+            VerificationReason::ValidWorkspaceFileCreated
+        );
+        assert!(completion.verification.succeeded);
+        assert_eq!(fs::read_to_string(&destination).unwrap(), content);
+        assert_eq!(
+            crate::audit::digest_bytes(&fs::read(&destination).unwrap()),
+            content_sha256
+        );
+        assert!(engine.executor.calls.is_empty());
+        assert!(engine.audit().verify_chain());
+
+        let audit_json = serde_json::to_string(engine.audit().records()).unwrap();
+        assert!(audit_json.contains("model_proposed"));
+        assert!(audit_json.contains(&content_sha256));
+        assert!(!audit_json.contains(content));
+        let _ = fs::remove_dir_all(workspace);
     }
 
     #[derive(Debug)]
