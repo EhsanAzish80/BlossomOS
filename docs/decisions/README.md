@@ -58,6 +58,10 @@ compatibility, packaging, or contributor obligations.
   separate persistent state partition, per-slot UKIs, and systemd-boot trial
   selection. It replaces the non-bootable file-backed slot implementation only
   after explicit acceptance and qualifying evidence.
+- Cross-architecture local-agent qualification: ADR-0030 accepts one shared
+  model record, architecture-specific llama.cpp runtimes, schema-derived and
+  receipt-bound constrained output, package-path ARM qualification, and honest
+  positive and adversarial evidence gates.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and
