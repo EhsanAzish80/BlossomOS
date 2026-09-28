@@ -137,6 +137,17 @@ class Arm64AgentContractTests(unittest.TestCase):
         self.assertIn(qualification_copy, builder)
         self.assertGreaterEqual(builder.count('if [[ "$mode" == vm-qualification ]]'), 3)
 
+    def test_gateway_accepts_the_closed_profiles_available_on_this_architecture(self):
+        gateway = (ROOT / "system/model-gateway/src/lib.rs").read_text()
+        self.assertIn(".map(production_provider_profile)", gateway)
+        self.assertIn(".flatten()", gateway)
+        self.assertIn("if specifications.is_empty()", gateway)
+        self.assertNotIn(
+            "production_provider_profile(GatewayProfile::OllamaCpuV1)\n"
+            "                .map_err",
+            gateway,
+        )
+
     def test_every_exported_shell_method_requires_a_production_handler(self):
         source = (ROOT / "system/shell-service/src/session_bus.rs").read_text()
         trait = source[source.index("pub trait ShellRequestHandler"):source.index("impl<E: Executor")]

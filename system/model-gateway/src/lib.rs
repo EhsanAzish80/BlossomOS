@@ -515,14 +515,17 @@ pub fn run_production() -> Result<(), GatewayProcessError> {
         };
         use std::path::Path;
 
-        let specifications = [
-            production_provider_profile(GatewayProfile::LlamaCppCpuV1)
-                .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
-                .ok_or(GatewayProcessError::ProfileRegistryUnavailable)?,
-            production_provider_profile(GatewayProfile::OllamaCpuV1)
-                .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
-                .ok_or(GatewayProcessError::ProfileRegistryUnavailable)?,
-        ];
+        let specifications = [GatewayProfile::LlamaCppCpuV1, GatewayProfile::OllamaCpuV1]
+            .into_iter()
+            .map(production_provider_profile)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        if specifications.is_empty() {
+            return Err(GatewayProcessError::ProfileRegistryUnavailable);
+        }
         let readiness = load_installed_runtime_readiness_from_set(
             Path::new(PRODUCTION_PROFILE_PATH),
             &specifications,
