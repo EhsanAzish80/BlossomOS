@@ -4,7 +4,7 @@ pkgrel=1
 pkgdesc='Blossom OS VM-only agent qualification tools'
 arch=('x86_64' 'aarch64')
 license=('Apache-2.0')
-depends=('blossom-core' 'python' 'systemd')
+depends=('blossom-core' 'python' 'python-gobject' 'systemd')
 source=()
 sha256sums=()
 

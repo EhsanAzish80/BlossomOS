@@ -88,6 +88,8 @@ class AgentQualificationDriverTests(unittest.TestCase):
                         output.write(json.dumps(record, separators=(",", ":")) + "\\n")
                     if case in ("positive", "mutation"):
                         emit({"status":"awaiting_approval","preview":{"request_id":request_id,"preview_sha256":"a"*64,"content_sha256":hashlib.sha256(content).hexdigest(),"content_bytes":len(content)}})
+                    elif case == "direct_injection":
+                        emit({"status":"denied"})
                     else:
                         emit({"status":"denied","request_id":request_id})
                 elif method == "SubmitDecision1":

@@ -14,6 +14,12 @@ import sys
 import time
 from pathlib import Path
 
+try:
+    from gi.repository import Gio, GLib
+except (ImportError, ValueError):  # Non-Linux source tests use fake busctl.
+    Gio = None
+    GLib = None
+
 BUS_NAME = "org.blossomos.Shell1"
 OBJECT_PATH = "/org/blossomos/Shell1"
 INTERFACE = "org.blossomos.Shell1"
@@ -116,7 +122,46 @@ def load_identity(
     }
 
 
+_SESSION_CONNECTION = None
+
+
 def busctl(method: str, signature: str, arguments: list[str], deadline: float) -> bytes:
+    global _SESSION_CONNECTION
+    if Gio is not None and GLib is not None:
+        if _SESSION_CONNECTION is None:
+            _SESSION_CONNECTION = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+        if signature == "ay":
+            count = int(arguments[0])
+            payload = bytes(int(value) for value in arguments[1:])
+            if len(payload) != count:
+                raise QualificationError(f"{method} payload length drift")
+            parameters = GLib.Variant("(ay)", (payload,))
+        elif signature == "qbtq":
+            parameters = GLib.Variant(
+                "(qbtq)",
+                (int(arguments[0]), arguments[1] == "true", int(arguments[2]), int(arguments[3])),
+            )
+        else:
+            raise QualificationError(f"unsupported D-Bus signature: {signature}")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise QualificationError(f"{method} timed out")
+        try:
+            response = _SESSION_CONNECTION.call_sync(
+                BUS_NAME,
+                OBJECT_PATH,
+                INTERFACE,
+                method,
+                parameters,
+                GLib.VariantType.new("(ay)"),
+                Gio.DBusCallFlags.NONE,
+                max(1, math.ceil(remaining * 1000)),
+                None,
+            )
+            return bytes(response.unpack()[0])
+        except GLib.Error as error:
+            raise QualificationError(f"{method} failed: {error.message[:240]}") from error
+
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise QualificationError(f"{method} timed out")
@@ -135,7 +180,8 @@ def busctl(method: str, signature: str, arguments: list[str], deadline: float) -
     except subprocess.TimeoutExpired as error:
         raise QualificationError(f"{method} timed out") from error
     if result.returncode != 0:
-        raise QualificationError(f"{method} failed")
+        reason = result.stderr.decode(errors="replace").strip()[:240]
+        raise QualificationError(f"{method} failed: {reason or 'no diagnostic'}")
     try:
         envelope = json.loads(result.stdout)
         values = envelope["data"][0]
@@ -210,20 +256,21 @@ def start_payload(case: str) -> bytes:
     ).encode()
 
 
-def executor_starts(activity: list[dict], request_id: str) -> int:
+def executor_starts(activity: list[dict], request_id: str | None) -> int:
     return sum(
-        item.get("request_id") == request_id
+        (request_id is None or item.get("request_id") == request_id)
         and item.get("kind") == "execution"
         and item.get("category") == "started"
         for item in activity
     )
 
 
-def effects(activity: list[dict], request_id: str) -> list[dict]:
+def effects(activity: list[dict], request_id: str | None) -> list[dict]:
     return [
         item
         for item in activity
-        if item.get("request_id") == request_id and item.get("kind") == "effect"
+        if (request_id is None or item.get("request_id") == request_id)
+        and item.get("kind") == "effect"
     ]
 
 
@@ -232,8 +279,10 @@ def run_case(case: str, activity_cursor: int) -> dict:
     deadline = started + CALL_TIMEOUT_SECONDS
     outcome = call_bytes("StartAgentTurn1", start_payload(case), deadline)
     request_id = outcome.get("request_id") or outcome.get("preview", {}).get("request_id")
-    if not isinstance(request_id, str):
+    if not isinstance(request_id, str) and case != "direct_injection":
         raise QualificationError("shell outcome omitted the request identifier")
+    if not isinstance(request_id, str):
+        request_id = None
     if case == "positive":
         if outcome.get("status") != "awaiting_approval":
             raise QualificationError("positive case did not produce an approval preview")

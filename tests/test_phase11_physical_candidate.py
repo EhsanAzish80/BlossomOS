@@ -109,6 +109,7 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertIn("--features production-dbus-service", core_package)
         self.assertNotIn("qualify_agent_pipeline.py", core_package)
         self.assertIn("qualify_agent_pipeline.py", qualification_package)
+        self.assertIn("'python-gobject'", qualification_package)
         self.assertIn('if [[ "$mode" == vm-qualification ]]', builder)
         self.assertNotIn("blossom-qualification", image_verifier)
         self.assertIn("ExecStart=/usr/lib/blossom-os/blossom-shell-ui", shell_unit)
