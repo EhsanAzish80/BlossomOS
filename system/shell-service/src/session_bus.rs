@@ -1,19 +1,16 @@
 #[cfg(feature = "production-dbus-service")]
 use blossom_core::executor::bubblewrap::BubblewrapExecutor;
-#[cfg(feature = "production-dbus-service")]
-use blossom_core::model_runtime::RuntimeReadinessError;
-#[cfg(feature = "production-dbus-service")]
-use blossom_core::{
-    ACTIVE_MODEL_PROFILE_PATH, ConversationMessage, ConversationRole, GatewayProfile,
-    InferenceRequestId, NetworkManagerConnectivityProvider, NormalizedCompletion,
-    PRIVATE_GATEWAY_SOCKET_PATH, PrivateGatewayClient, PrivateGatewayClientError,
-    TurnIntentCatalogue, UpowerBatterySummaryProvider, load_installed_runtime_readiness_from_set,
-    production_provider_profile,
-};
 use blossom_core::{
     AgentTurnError, BatterySummaryProvider, Executor, SHELL_INTERFACE, SHELL_PROTOCOL_VERSION,
     ShellClientRequest, ShellDiagnosticService, ShellPeerId, decode_shell_agent_turn_request,
     decode_shell_client_request,
+};
+#[cfg(feature = "production-dbus-service")]
+use blossom_core::{
+    ConversationMessage, ConversationRole, GatewayProfile, InferenceRequestId,
+    NetworkManagerConnectivityProvider, NormalizedCompletion, PRIVATE_GATEWAY_SOCKET_PATH,
+    PrivateGatewayClient, PrivateGatewayClientError, TurnIntentCatalogue,
+    UpowerBatterySummaryProvider, production_provider_profile,
 };
 #[cfg(any(feature = "production-dbus-service", test))]
 use blossom_core::{SHELL_BUS_NAME, SHELL_OBJECT_PATH};
@@ -431,20 +428,29 @@ impl blossom_core::AgentTurnProvider for InstalledGatewayAgentProvider {
         prompt: &str,
         intents: &TurnIntentCatalogue,
     ) -> Result<NormalizedCompletion, AgentTurnError> {
-        let specifications = [GatewayProfile::LlamaCppCpuV1, GatewayProfile::OllamaCpuV1]
+        let profiles = [GatewayProfile::LlamaCppCpuV1, GatewayProfile::OllamaCpuV1]
             .into_iter()
-            .filter_map(|profile| production_provider_profile(profile).ok().flatten())
+            .filter(|profile| {
+                production_provider_profile(*profile).is_ok_and(|item| item.is_some())
+            })
             .collect::<Vec<_>>();
-        let readiness = load_installed_runtime_readiness_from_set(
-            std::path::Path::new(ACTIVE_MODEL_PROFILE_PATH),
-            &specifications,
-        )
-        .map_err(map_runtime_readiness_error)?;
-        let client = PrivateGatewayClient::connect_at(
+        if profiles.is_empty() {
+            return Err(AgentTurnError::GatewayUnavailable);
+        }
+        let gateway_user = nix::unistd::User::from_name("blossom-model-gateway")
+            .map_err(|_| AgentTurnError::GatewayUnavailable)?
+            .ok_or(AgentTurnError::GatewayUnavailable)?;
+        let gateway_group = nix::unistd::Group::from_name("blossom-model-gateway")
+            .map_err(|_| AgentTurnError::GatewayUnavailable)?
+            .ok_or(AgentTurnError::GatewayUnavailable)?;
+        if gateway_user.gid != gateway_group.gid {
+            return Err(AgentTurnError::UnexpectedGatewayIdentity);
+        }
+        let client = PrivateGatewayClient::connect_at_profiles(
             std::path::Path::new(PRIVATE_GATEWAY_SOCKET_PATH),
-            readiness.accounts().gateway_uid(),
-            readiness.accounts().gateway_gid(),
-            readiness.profile().manifest().profile(),
+            gateway_user.uid.as_raw(),
+            gateway_group.gid.as_raw(),
+            &profiles,
         )
         .map_err(map_gateway_client_error)?;
         let messages = [
@@ -468,12 +474,6 @@ fn map_gateway_client_error(error: PrivateGatewayClientError) -> AgentTurnError 
         PrivateGatewayClientError::Protocol => AgentTurnError::Protocol,
         PrivateGatewayClientError::InferenceFailed => AgentTurnError::InferenceFailed,
     }
-}
-
-#[cfg(feature = "production-dbus-service")]
-fn map_runtime_readiness_error(error: RuntimeReadinessError) -> AgentTurnError {
-    eprintln!("installed model runtime is not ready: {error:?}");
-    AgentTurnError::GatewayUnavailable
 }
 
 #[cfg(feature = "production-dbus-service")]

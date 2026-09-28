@@ -51,6 +51,25 @@ impl PrivateGatewayClient {
         expected_gateway_gid: u32,
         profile: GatewayProfile,
     ) -> Result<Self, PrivateGatewayClientError> {
+        Self::connect_at_profiles(
+            socket_path,
+            expected_gateway_uid,
+            expected_gateway_gid,
+            &[profile],
+        )
+    }
+
+    /// Authenticate one gateway whose hello names exactly one member of the
+    /// closed, caller-compiled profile set.
+    pub fn connect_at_profiles(
+        socket_path: &Path,
+        expected_gateway_uid: u32,
+        expected_gateway_gid: u32,
+        profiles: &[GatewayProfile],
+    ) -> Result<Self, PrivateGatewayClientError> {
+        if profiles.is_empty() {
+            return Err(PrivateGatewayClientError::Protocol);
+        }
         let stream = UnixStream::connect(socket_path)
             .map_err(|_| PrivateGatewayClientError::ConnectionUnavailable)?;
         stream
@@ -68,7 +87,13 @@ impl PrivateGatewayClient {
             reader: FrameReader::default(),
         };
         let hello = client.reader.read_one(&mut client.stream)?;
-        decode_gateway_hello(&hello, profile).map_err(|_| PrivateGatewayClientError::Protocol)?;
+        if !profiles
+            .iter()
+            .copied()
+            .any(|profile| decode_gateway_hello(&hello, profile).is_ok())
+        {
+            return Err(PrivateGatewayClientError::Protocol);
+        }
         Ok(client)
     }
 

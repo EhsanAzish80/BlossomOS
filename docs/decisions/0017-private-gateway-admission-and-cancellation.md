@@ -157,6 +157,14 @@ authenticates the gateway UID/GID on the connected descriptor before sending
 prompt bytes and fails closed with a distinct unavailable or unexpected-owner
 reason.
 
+The root-run gateway alone validates the root-owned active profile, runtime,
+model, unit and account snapshots before it publishes the socket. The hardened
+unprivileged shell runs in a one-UID systemd user namespace, where host root is
+intentionally unmapped, so it must not duplicate that ownership check. It
+resolves the fixed gateway user and group names from the read-only system
+account database, authenticates `SO_PEERCRED` before sending prompt bytes, and
+accepts only a hello naming a release-compiled profile for this architecture.
+
 ## Migration and rollback
 
 Implement the private frame and membership parser under tests first. Then add a
