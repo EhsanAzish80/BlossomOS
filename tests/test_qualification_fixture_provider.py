@@ -18,7 +18,7 @@ def request(prompt: str, *, untrusted_data: str | None = None) -> dict:
     if untrusted_data is not None:
         messages.append(
             {
-                "role": "tool",
+                "role": "user",
                 "content": "UNTRUSTED_FILE_CONTENT:\n" + untrusted_data,
             }
         )

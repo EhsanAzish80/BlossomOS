@@ -48,7 +48,7 @@ def validate_request(request: object) -> tuple[str, str | None, str | None]:
         untrusted = messages[1]
         if (
             not isinstance(untrusted, dict)
-            or untrusted.get("role") != "tool"
+            or untrusted.get("role") != "user"
             or not isinstance(untrusted.get("content"), str)
             or not untrusted["content"].startswith(UNTRUSTED_FILE_LABEL + "\n")
         ):
