@@ -70,6 +70,7 @@ pub struct ProviderProfileResources {
 pub struct ProviderProfileManifest {
     profile_version: u16,
     profile: GatewayProfile,
+    architecture: String,
     provider: ModelProviderKind,
     logical_model: String,
     gateway_protocol_version: u16,
@@ -169,20 +170,28 @@ pub fn production_provider_profile(
     const LLAMA_CPP_X86_64: &[u8] = include_bytes!(
         "../../../../system/model-runtime/registry/llama-cpp-cpu-x86_64.profile.json"
     );
+    const LLAMA_CPP_AARCH64: &[u8] = include_bytes!(
+        "../../../../system/model-runtime/registry/llama-cpp-cpu-aarch64.profile.json"
+    );
     const OLLAMA_X86_64: &[u8] =
         include_bytes!("../../../../system/model-runtime/registry/ollama-cpu-x86_64.profile.json");
     match profile {
-        GatewayProfile::LlamaCppCpuV1 | GatewayProfile::OllamaCpuV1
-            if cfg!(target_arch = "x86_64") =>
-        {
-            let embedded = match profile {
-                GatewayProfile::LlamaCppCpuV1 => LLAMA_CPP_X86_64,
-                GatewayProfile::OllamaCpuV1 => OLLAMA_X86_64,
+        GatewayProfile::LlamaCppCpuV1 => {
+            let embedded = if cfg!(target_arch = "x86_64") {
+                LLAMA_CPP_X86_64
+            } else if cfg!(target_arch = "aarch64") {
+                LLAMA_CPP_AARCH64
+            } else {
+                return Ok(None);
             };
             let bytes = embedded.strip_suffix(b"\n").unwrap_or(embedded);
             ProviderProfileSpec::from_embedded(bytes).map(Some)
         }
-        GatewayProfile::LlamaCppCpuV1 | GatewayProfile::OllamaCpuV1 => Ok(None),
+        GatewayProfile::OllamaCpuV1 if cfg!(target_arch = "x86_64") => {
+            let bytes = OLLAMA_X86_64.strip_suffix(b"\n").unwrap_or(OLLAMA_X86_64);
+            ProviderProfileSpec::from_embedded(bytes).map(Some)
+        }
+        GatewayProfile::OllamaCpuV1 => Ok(None),
     }
 }
 
@@ -283,6 +292,7 @@ pub fn fixed_synthetic_provider_package(
     let mut manifest = ProviderProfileManifest {
         profile_version: PROVIDER_PROFILE_VERSION,
         profile,
+        architecture: std::env::consts::ARCH.into(),
         provider: profile.provider(),
         logical_model: "fixture-model:1".into(),
         gateway_protocol_version: GATEWAY_PROTOCOL_VERSION,
@@ -610,6 +620,7 @@ fn validate_manifest(manifest: &ProviderProfileManifest) -> Result<(), ProviderP
         || manifest.gateway_protocol_version != GATEWAY_PROTOCOL_VERSION
         || manifest.model_protocol_version != MODEL_PROTOCOL_VERSION
         || manifest.provider != manifest.profile.provider()
+        || manifest.architecture != std::env::consts::ARCH
     {
         return Err(ProviderProfileError::InvalidManifest);
     }
@@ -1012,6 +1023,7 @@ mod tests {
         let mut manifest = ProviderProfileManifest {
             profile_version: PROVIDER_PROFILE_VERSION,
             profile: GatewayProfile::LlamaCppCpuV1,
+            architecture: std::env::consts::ARCH.into(),
             provider: ModelProviderKind::LlamaCpp,
             logical_model: "fixture-model:1".into(),
             gateway_protocol_version: GATEWAY_PROTOCOL_VERSION,
@@ -1354,8 +1366,13 @@ mod tests {
 
     #[test]
     fn embedded_production_registry_is_canonical_and_closed() {
+        #[cfg(target_arch = "x86_64")]
         const EMBEDDED: &[u8] = include_bytes!(
             "../../../../system/model-runtime/registry/llama-cpp-cpu-x86_64.profile.json"
+        );
+        #[cfg(target_arch = "aarch64")]
+        const EMBEDDED: &[u8] = include_bytes!(
+            "../../../../system/model-runtime/registry/llama-cpp-cpu-aarch64.profile.json"
         );
         let bytes = EMBEDDED.strip_suffix(b"\n").unwrap_or(EMBEDDED);
         let profile = ProviderProfileSpec::from_embedded(bytes).unwrap();
@@ -1391,14 +1408,24 @@ mod tests {
 
     #[test]
     fn production_registry_has_no_fallback_profile() {
+        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
+        assert!(
+            production_provider_profile(GatewayProfile::LlamaCppCpuV1)
+                .unwrap()
+                .is_some()
+        );
         #[cfg(target_arch = "x86_64")]
-        for profile in [GatewayProfile::LlamaCppCpuV1, GatewayProfile::OllamaCpuV1] {
-            assert!(production_provider_profile(profile).unwrap().is_some());
-        }
+        assert!(
+            production_provider_profile(GatewayProfile::OllamaCpuV1)
+                .unwrap()
+                .is_some()
+        );
         #[cfg(not(target_arch = "x86_64"))]
-        for profile in [GatewayProfile::LlamaCppCpuV1, GatewayProfile::OllamaCpuV1] {
-            assert!(production_provider_profile(profile).unwrap().is_none());
-        }
+        assert!(
+            production_provider_profile(GatewayProfile::OllamaCpuV1)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]

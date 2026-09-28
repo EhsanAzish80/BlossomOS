@@ -10,7 +10,7 @@ source=()
 sha256sums=()
 
 build() {
-  local repo_root="$startdir/../../.."
+  local repo_root="${BLOSSOM_REPO_ROOT:-$startdir/../../..}"
   CARGO_TARGET_DIR="$srcdir/target" \
     cargo build --locked --offline --release --manifest-path "$repo_root/Cargo.toml"
   # The workspace default intentionally builds the shell broker inert. Release
@@ -23,7 +23,7 @@ build() {
 }
 
 package() {
-  local repo_root="$startdir/../../.."
+  local repo_root="${BLOSSOM_REPO_ROOT:-$startdir/../../..}"
   install -Dm0755 "$srcdir/target/release/blossom-shell-service" \
     "$pkgdir/usr/lib/blossom-os/blossom-shell-service"
   install -Dm0755 "$srcdir/target/release/blossom-model-gateway" \

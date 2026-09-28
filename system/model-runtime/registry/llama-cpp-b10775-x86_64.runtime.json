@@ -2,7 +2,6 @@
   "schema_version": 1,
   "profile": "llama_cpp_cpu_v1",
   "architecture": "x86_64",
-  "runtime": {
     "project": "ggml-org/llama.cpp",
     "version": "b10775",
     "archive": "llama-b10775-bin-ubuntu-x64.tar.gz",
@@ -33,14 +32,4 @@
       {"source":"libmtmd.so.0.3.0","installs":["libmtmd.so","libmtmd.so.0","libmtmd.so.0.3.0"],"sha256":"5cb787e6c1c674970b167bd6ee59c9a9085cd1aa9ee62a1e3bf4529f0c506fee","bytes":1877920},
       {"source":"llama-server","installs":["llama-server"],"sha256":"7603f4f6e2fb42e20adbea3402d1ff70c64813434d81ca79319a6520dfcd97f9","bytes":17896}
     ]
-  },
-  "model": {
-    "project": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
-    "revision": "9217f5db79a29953eb74d5343926648285ec7e67",
-    "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
-    "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/9217f5db79a29953eb74d5343926648285ec7e67/qwen2.5-0.5b-instruct-q4_k_m.gguf",
-    "sha256": "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
-    "bytes": 491400032,
-    "license": {"file":"LICENSE","url":"https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/9217f5db79a29953eb74d5343926648285ec7e67/LICENSE","sha256":"832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e","bytes":11343,"spdx":"Apache-2.0"}
-  }
 }
