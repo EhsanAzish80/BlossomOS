@@ -128,7 +128,11 @@ _SESSION_CONNECTION = None
 
 def busctl(method: str, signature: str, arguments: list[str], deadline: float) -> bytes:
     global _SESSION_CONNECTION
-    if Gio is not None and GLib is not None:
+    if (
+        Gio is not None
+        and GLib is not None
+        and os.environ.get("BLOSSOM_QUALIFICATION_FORCE_BUSCTL") != "1"
+    ):
         if _SESSION_CONNECTION is None:
             _SESSION_CONNECTION = Gio.bus_get_sync(Gio.BusType.SESSION, None)
         if signature == "ay":
@@ -285,7 +289,14 @@ def completed_context_reads(activity: list[dict]) -> int:
 def run_case(case: str, activity_cursor: int) -> dict:
     started = time.monotonic()
     deadline = started + CALL_TIMEOUT_SECONDS
-    outcome = call_bytes("StartAgentTurn1", start_payload(case), deadline)
+    rejected_before_request = False
+    try:
+        outcome = call_bytes("StartAgentTurn1", start_payload(case), deadline)
+    except QualificationError as error:
+        if case != "indirect_invalid" or "AccessDenied: shell request rejected" not in str(error):
+            raise
+        outcome = {"status": "denied"}
+        rejected_before_request = True
     request_id = outcome.get("request_id") or outcome.get("preview", {}).get("request_id")
     if not isinstance(request_id, str) and case not in ("direct_injection", "indirect_invalid"):
         raise QualificationError("shell outcome omitted the request identifier")
@@ -355,6 +366,7 @@ def run_case(case: str, activity_cursor: int) -> dict:
         "executor_starts": starts,
         "effects": len(observed_effects),
         "context_reads": context_reads,
+        "rejected_before_request": rejected_before_request,
         "activity_last_sequence": max((item.get("sequence", 0) for item in activity), default=0),
         "next_activity_cursor": activity_cursor,
     }

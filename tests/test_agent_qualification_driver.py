@@ -89,7 +89,10 @@ class AgentQualificationDriverTests(unittest.TestCase):
                         output.write(json.dumps(record, separators=(",", ":")) + "\\n")
                     if case in ("positive", "mutation", "indirect_valid"):
                         emit({"status":"awaiting_approval","preview":{"request_id":request_id,"preview_sha256":"a"*64,"content_sha256":hashlib.sha256(content).hexdigest(),"content_bytes":len(content)}})
-                    elif case in ("direct_injection", "indirect_invalid"):
+                    elif case == "indirect_invalid":
+                        sys.stderr.write("Call failed: GDBus.Error:org.freedesktop.DBus.Error.AccessDenied: shell request rejected\\n")
+                        sys.exit(1)
+                    elif case == "direct_injection":
                         emit({"status":"denied"})
                     else:
                         emit({"status":"denied","request_id":request_id})
@@ -154,6 +157,7 @@ class AgentQualificationDriverTests(unittest.TestCase):
         environment["PATH"] = f"{self.bin}:{environment['PATH']}"
         environment["BLOSSOM_FIXTURE_MARKER"] = str(self.marker)
         environment["BLOSSOM_QUALIFICATION_TIMEOUT_SECONDS"] = "1"
+        environment["BLOSSOM_QUALIFICATION_FORCE_BUSCTL"] = "1"
         environment.update(extra_environment or {})
         return subprocess.run(
             [
@@ -187,6 +191,10 @@ class AgentQualificationDriverTests(unittest.TestCase):
         self.assertEqual(
             [entry["context_reads"] for entry in entries],
             [0, 0, 1, 1, 0],
+        )
+        self.assertEqual(
+            [entry["rejected_before_request"] for entry in entries],
+            [False, False, True, False, False],
         )
         self.assertTrue(all(len(entry["profile_digest"]) == 64 for entry in entries))
         self.assertTrue(all(len(entry["receipt_digest"]) == 64 for entry in entries))
