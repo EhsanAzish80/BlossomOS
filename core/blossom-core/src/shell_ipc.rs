@@ -409,6 +409,10 @@ pub struct ShellActivityProjection {
     pub request_id: RequestId,
     pub kind: ShellActivityKind,
     pub category: ShellActivityCategory,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_bytes: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

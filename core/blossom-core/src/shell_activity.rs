@@ -34,6 +34,16 @@ pub fn project_shell_activity(
                 request_id,
                 kind,
                 category,
+                content_sha256: match &record.event {
+                    AuditEvent::WorkspaceCreateFinished { source_sha256, .. } => {
+                        Some(source_sha256.clone())
+                    }
+                    _ => None,
+                },
+                content_bytes: match &record.event {
+                    AuditEvent::WorkspaceCreateFinished { source_bytes, .. } => Some(*source_bytes),
+                    _ => None,
+                },
             })
         })
         .collect()
@@ -144,7 +154,7 @@ fn project_event(
         ),
         AuditEvent::WorkspaceCreateStarted { request_id, .. } => (
             request_id,
-            ShellActivityKind::Effect,
+            ShellActivityKind::Request,
             ShellActivityCategory::PublicationStarted,
         ),
         AuditEvent::WorkspaceCreateFinished { request_id, .. } => (
@@ -330,13 +340,26 @@ mod tests {
             source_bytes: 7,
             source_sha256: "3".repeat(64),
         });
+        audit.append(AuditEvent::WorkspaceCreateFinished {
+            request_id: request_id.into(),
+            workspace_sha256: "1".repeat(64),
+            destination_sha256: "2".repeat(64),
+            created_device: 1,
+            created_inode: 3,
+            source_bytes: 7,
+            source_sha256: "3".repeat(64),
+            state: crate::WorkspaceCreateState::DurableCreated,
+        });
         let projected = project_shell_activity(&audit, None, 16).expect("projection");
-        assert_eq!(projected.len(), 3);
-        assert_eq!(projected[2].kind, ShellActivityKind::Effect);
+        assert_eq!(projected.len(), 4);
+        assert_eq!(projected[2].kind, ShellActivityKind::Request);
         assert_eq!(
             projected[2].category,
             ShellActivityCategory::PublicationStarted
         );
+        assert_eq!(projected[3].kind, ShellActivityKind::Effect);
+        assert_eq!(projected[3].content_sha256, Some("3".repeat(64)));
+        assert_eq!(projected[3].content_bytes, Some(7));
         assert!(
             projected
                 .iter()

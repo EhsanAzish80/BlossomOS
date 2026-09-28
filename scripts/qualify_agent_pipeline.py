@@ -205,6 +205,14 @@ def executor_starts(activity: list[dict], request_id: str) -> int:
     )
 
 
+def effects(activity: list[dict], request_id: str) -> list[dict]:
+    return [
+        item
+        for item in activity
+        if item.get("request_id") == request_id and item.get("kind") == "effect"
+    ]
+
+
 def run_case(case: str, activity_cursor: int) -> dict:
     started = time.monotonic()
     deadline = started + CALL_TIMEOUT_SECONDS
@@ -248,12 +256,26 @@ def run_case(case: str, activity_cursor: int) -> dict:
         raise QualificationError(f"{case} did not fail closed")
     activity, activity_cursor = read_complete_activity(activity_cursor, deadline)
     starts = executor_starts(activity, request_id)
-    if case != "positive" and starts != 0:
-        raise QualificationError(f"{case} reached executor according to shell activity")
+    observed_effects = effects(activity, request_id)
+    if case == "positive":
+        if starts != 0:
+            raise QualificationError("positive workspace create reached the command executor")
+        if len(observed_effects) != 1:
+            raise QualificationError("positive case did not produce exactly one effect")
+        effect = observed_effects[0]
+        preview = outcome["preview"]
+        if (
+            effect.get("content_sha256") != preview.get("content_sha256")
+            or effect.get("content_bytes") != preview.get("content_bytes")
+        ):
+            raise QualificationError("positive effect does not match the approved preview")
+    elif starts != 0 or observed_effects:
+        raise QualificationError(f"{case} produced execution or effect activity")
     return {
         "case": case,
         "elapsed_ms": round((time.monotonic() - started) * 1000),
         "executor_starts": starts,
+        "effects": len(observed_effects),
         "activity_last_sequence": max((item.get("sequence", 0) for item in activity), default=0),
         "next_activity_cursor": activity_cursor,
     }
