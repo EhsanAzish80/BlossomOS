@@ -38,6 +38,10 @@ desktop session continues to start only the presentation units.  Session D-Bus
 activation for the broker is not installed, because it would recreate the
 user-manager namespace path.
 
+The template rejects every instance other than 1000. Its home and runtime
+environment are explicit rather than derived from the system manager's `%h`
+specifier, which denotes root's home while the manager constructs this unit.
+
 The broker still runs as the desktop user, never as root or as the gateway
 account.  Its D-Bus name, methods, session-bus peer authentication, approval
 boundary, and public shell interface are unchanged.

@@ -7,9 +7,12 @@ RequiresMountsFor=/run/user/%i
 
 [Service]
 Type=simple
+ExecCondition=/usr/bin/test %i = 1000
 User=%i
 Group=%i
 SupplementaryGroups=blossom-ai
+Environment=HOME=/home/blossom
+Environment=XDG_RUNTIME_DIR=/run/user/%i
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%i/bus
 ExecStart=/usr/lib/blossom-os/blossom-shell-service
 Restart=no
@@ -23,7 +26,7 @@ PrivateDevices=yes
 ProtectSystem=strict
 ProtectHome=tmpfs
 BindReadOnlyPaths=/run/user/%i/bus
-BindPaths=%h/Workspace
+BindPaths=/home/blossom/Workspace
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
