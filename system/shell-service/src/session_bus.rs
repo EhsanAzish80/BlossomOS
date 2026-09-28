@@ -5,8 +5,8 @@ use blossom_core::{
     ACTIVE_MODEL_PROFILE_PATH, ConversationMessage, ConversationRole, GatewayProfile,
     InferenceRequestId, NetworkManagerConnectivityProvider, NormalizedCompletion,
     PRIVATE_GATEWAY_SOCKET_PATH, PrivateGatewayClient, PrivateGatewayClientError,
-    TurnIntentCatalogue, UpowerBatterySummaryProvider, load_installed_runtime_readiness_from_set,
-    production_provider_profile,
+    RuntimeReadinessError, TurnIntentCatalogue, UpowerBatterySummaryProvider,
+    load_installed_runtime_readiness_from_set, production_provider_profile,
 };
 use blossom_core::{
     AgentTurnError, BatterySummaryProvider, Executor, SHELL_INTERFACE, SHELL_PROTOCOL_VERSION,
@@ -437,7 +437,7 @@ impl blossom_core::AgentTurnProvider for InstalledGatewayAgentProvider {
             std::path::Path::new(ACTIVE_MODEL_PROFILE_PATH),
             &specifications,
         )
-        .map_err(|_| AgentTurnError::GatewayUnavailable)?;
+        .map_err(map_runtime_readiness_error)?;
         let client = PrivateGatewayClient::connect_at(
             std::path::Path::new(PRIVATE_GATEWAY_SOCKET_PATH),
             readiness.accounts().gateway_uid(),
@@ -457,6 +457,7 @@ impl blossom_core::AgentTurnProvider for InstalledGatewayAgentProvider {
 
 #[cfg(feature = "production-dbus-service")]
 fn map_gateway_client_error(error: PrivateGatewayClientError) -> AgentTurnError {
+    eprintln!("model gateway client rejected request: {error}");
     match error {
         PrivateGatewayClientError::ConnectionUnavailable => AgentTurnError::GatewayUnavailable,
         PrivateGatewayClientError::UnexpectedGatewayIdentity => {
@@ -465,6 +466,12 @@ fn map_gateway_client_error(error: PrivateGatewayClientError) -> AgentTurnError 
         PrivateGatewayClientError::Protocol => AgentTurnError::Protocol,
         PrivateGatewayClientError::InferenceFailed => AgentTurnError::InferenceFailed,
     }
+}
+
+#[cfg(feature = "production-dbus-service")]
+fn map_runtime_readiness_error(error: RuntimeReadinessError) -> AgentTurnError {
+    eprintln!("installed model runtime is not ready: {error:?}");
+    AgentTurnError::GatewayUnavailable
 }
 
 #[cfg(feature = "production-dbus-service")]
