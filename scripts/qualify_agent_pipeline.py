@@ -368,9 +368,19 @@ def run_case(case: str, activity_cursor: int) -> dict:
             separators=(",", ":"),
             sort_keys=True,
         ).encode()
+        preview_semantics = json.dumps(
+            {
+                key: value
+                for key, value in preview.items()
+                if key not in {"request_id", "expires_at_ms", "preview_sha256"}
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode()
         evidence_digests = {
             "parsed_proposal_digest": digest(proposal_evidence),
-            "preview_digest": preview["preview_sha256"],
+            "preview_semantic_digest": digest(preview_semantics),
+            "approval_binding_digest": preview["preview_sha256"],
             "created_file_digest": effect["content_sha256"],
             "created_file_bytes": effect["content_bytes"],
         }
