@@ -1,11 +1,18 @@
 #[cfg(feature = "production-dbus-service")]
 use blossom_core::executor::bubblewrap::BubblewrapExecutor;
-use blossom_core::{
-    BatterySummaryProvider, Executor, SHELL_INTERFACE, SHELL_PROTOCOL_VERSION, ShellClientRequest,
-    ShellDiagnosticService, ShellPeerId, decode_shell_client_request,
-};
 #[cfg(feature = "production-dbus-service")]
-use blossom_core::{NetworkManagerConnectivityProvider, UpowerBatterySummaryProvider};
+use blossom_core::{
+    ACTIVE_MODEL_PROFILE_PATH, ConversationMessage, ConversationRole, GatewayProfile,
+    InferenceRequestId, NetworkManagerConnectivityProvider, NormalizedCompletion,
+    PRIVATE_GATEWAY_SOCKET_PATH, PrivateGatewayClient, PrivateGatewayClientError,
+    TurnIntentCatalogue, UpowerBatterySummaryProvider, load_installed_runtime_readiness_from_set,
+    production_provider_profile,
+};
+use blossom_core::{
+    AgentTurnError, AgentTurnProvider, BatterySummaryProvider, Executor, SHELL_INTERFACE,
+    SHELL_PROTOCOL_VERSION, ShellClientRequest, ShellDiagnosticService, ShellPeerId,
+    decode_shell_agent_turn_request, decode_shell_client_request,
+};
 #[cfg(any(feature = "production-dbus-service", test))]
 use blossom_core::{SHELL_BUS_NAME, SHELL_OBJECT_PATH};
 use std::sync::{Arc, Mutex};
@@ -22,18 +29,34 @@ const DBUS_INTERFACE: &str = "org.freedesktop.DBus";
 const MAX_WIRE_RESULT_BYTES: usize = 32 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct HandlerError;
+pub enum HandlerError {
+    Rejected,
+    GatewayUnavailable,
+    UnexpectedGatewayIdentity,
+}
+
+impl From<blossom_core::ShellServiceError> for HandlerError {
+    fn from(error: blossom_core::ShellServiceError) -> Self {
+        match error {
+            blossom_core::ShellServiceError::Agent(AgentTurnError::GatewayUnavailable) => {
+                Self::GatewayUnavailable
+            }
+            blossom_core::ShellServiceError::Agent(AgentTurnError::UnexpectedGatewayIdentity) => {
+                Self::UnexpectedGatewayIdentity
+            }
+            _ => Self::Rejected,
+        }
+    }
+}
 
 pub trait ShellRequestHandler: Send {
     fn start(&mut self, peer: ShellPeerId, now_ms: u64) -> Result<Vec<u8>, HandlerError>;
     fn start_agent(
         &mut self,
-        _peer: ShellPeerId,
-        _input: &[u8],
-        _now_ms: u64,
-    ) -> Result<Vec<u8>, HandlerError> {
-        Err(HandlerError)
-    }
+        peer: ShellPeerId,
+        input: &[u8],
+        now_ms: u64,
+    ) -> Result<Vec<u8>, HandlerError>;
     fn decide(
         &mut self,
         peer: &ShellPeerId,
@@ -47,12 +70,8 @@ pub trait ShellRequestHandler: Send {
         now_ms: u64,
     ) -> Result<Vec<u8>, HandlerError>;
     fn activity(&mut self, after: Option<u64>, limit: u16) -> Result<Vec<u8>, HandlerError>;
-    fn battery(&mut self, _now_ms: u64) -> Result<Vec<u8>, HandlerError> {
-        Err(HandlerError)
-    }
-    fn network(&mut self, _now_ms: u64) -> Result<Vec<u8>, HandlerError> {
-        Err(HandlerError)
-    }
+    fn battery(&mut self, now_ms: u64) -> Result<Vec<u8>, HandlerError>;
+    fn network(&mut self, now_ms: u64) -> Result<Vec<u8>, HandlerError>;
     fn disconnect(&mut self, peer: &ShellPeerId, now_ms: u64) -> Result<(), HandlerError>;
 }
 
@@ -63,7 +82,21 @@ impl<E: Executor + Send, B: BatterySummaryProvider + Send> ShellRequestHandler
         encode(
             &self
                 .begin_system_uname(peer, now_ms)
-                .map_err(|_| HandlerError)?,
+                .map_err(HandlerError::from)?,
+        )
+    }
+
+    fn start_agent(
+        &mut self,
+        peer: ShellPeerId,
+        input: &[u8],
+        now_ms: u64,
+    ) -> Result<Vec<u8>, HandlerError> {
+        let request = decode_shell_agent_turn_request(input).map_err(|_| HandlerError::Rejected)?;
+        encode(
+            &self
+                .begin_agent_turn(peer, &request.prompt, now_ms)
+                .map_err(HandlerError::from)?,
         )
     }
 
@@ -73,14 +106,14 @@ impl<E: Executor + Send, B: BatterySummaryProvider + Send> ShellRequestHandler
         input: &[u8],
         now_ms: u64,
     ) -> Result<Vec<u8>, HandlerError> {
-        let request = decode_shell_client_request(input).map_err(|_| HandlerError)?;
+        let request = decode_shell_client_request(input).map_err(|_| HandlerError::Rejected)?;
         if !matches!(request, ShellClientRequest::SubmitDecision { .. }) {
-            return Err(HandlerError);
+            return Err(HandlerError::Rejected);
         }
         encode(
             &self
                 .handle_client_request(peer, request, now_ms)
-                .map_err(|_| HandlerError)?,
+                .map_err(HandlerError::from)?,
         )
     }
 
@@ -90,40 +123,44 @@ impl<E: Executor + Send, B: BatterySummaryProvider + Send> ShellRequestHandler
         input: &[u8],
         now_ms: u64,
     ) -> Result<Vec<u8>, HandlerError> {
-        let request = decode_shell_client_request(input).map_err(|_| HandlerError)?;
+        let request = decode_shell_client_request(input).map_err(|_| HandlerError::Rejected)?;
         if !matches!(request, ShellClientRequest::CancelPending { .. }) {
-            return Err(HandlerError);
+            return Err(HandlerError::Rejected);
         }
         encode(
             &self
                 .handle_client_request(peer, request, now_ms)
-                .map_err(|_| HandlerError)?,
+                .map_err(HandlerError::from)?,
         )
     }
 
     fn activity(&mut self, after: Option<u64>, limit: u16) -> Result<Vec<u8>, HandlerError> {
-        encode(&self.read_activity(after, limit).map_err(|_| HandlerError)?)
+        encode(
+            &self
+                .read_activity(after, limit)
+                .map_err(HandlerError::from)?,
+        )
     }
 
     fn battery(&mut self, now_ms: u64) -> Result<Vec<u8>, HandlerError> {
-        encode(&self.read_battery(now_ms).map_err(|_| HandlerError)?)
+        encode(&self.read_battery(now_ms).map_err(HandlerError::from)?)
     }
 
     fn network(&mut self, now_ms: u64) -> Result<Vec<u8>, HandlerError> {
-        encode(&self.read_network(now_ms).map_err(|_| HandlerError)?)
+        encode(&self.read_network(now_ms).map_err(HandlerError::from)?)
     }
 
     fn disconnect(&mut self, peer: &ShellPeerId, now_ms: u64) -> Result<(), HandlerError> {
         self.disconnect(peer, now_ms)
             .map(|_| ())
-            .map_err(|_| HandlerError)
+            .map_err(HandlerError::from)
     }
 }
 
 fn encode(value: &impl serde::Serialize) -> Result<Vec<u8>, HandlerError> {
-    let bytes = serde_json::to_vec(value).map_err(|_| HandlerError)?;
+    let bytes = serde_json::to_vec(value).map_err(|_| HandlerError::Rejected)?;
     if bytes.len() > MAX_WIRE_RESULT_BYTES {
-        return Err(HandlerError);
+        return Err(HandlerError::Rejected);
     }
     Ok(bytes)
 }
@@ -162,7 +199,7 @@ impl ShellBusService {
             .lock()
             .map_err(|_| failed())?
             .start_agent(peer, &input, now_ms())
-            .map_err(|_| denied())
+            .map_err(handler_error)
     }
 
     #[zbus(name = "StartSystemUname1")]
@@ -318,6 +355,17 @@ fn now_ms() -> u64 {
 fn denied() -> zbus::fdo::Error {
     zbus::fdo::Error::AccessDenied("shell request rejected".into())
 }
+fn handler_error(error: HandlerError) -> zbus::fdo::Error {
+    match error {
+        HandlerError::Rejected => denied(),
+        HandlerError::GatewayUnavailable => {
+            zbus::fdo::Error::Failed("model gateway is unavailable".into())
+        }
+        HandlerError::UnexpectedGatewayIdentity => {
+            zbus::fdo::Error::Failed("model gateway identity is unexpected".into())
+        }
+    }
+}
 fn failed() -> zbus::fdo::Error {
     zbus::fdo::Error::Failed("shell service unavailable".into())
 }
@@ -371,15 +419,75 @@ fn monitor_disconnects(
 }
 
 #[cfg(feature = "production-dbus-service")]
+struct InstalledGatewayAgentProvider;
+
+#[cfg(feature = "production-dbus-service")]
+impl AgentTurnProvider for InstalledGatewayAgentProvider {
+    fn complete(
+        &mut self,
+        request_id: &InferenceRequestId,
+        prompt: &str,
+        intents: &TurnIntentCatalogue,
+    ) -> Result<NormalizedCompletion, AgentTurnError> {
+        let specifications = [GatewayProfile::LlamaCppCpuV1, GatewayProfile::OllamaCpuV1]
+            .into_iter()
+            .filter_map(|profile| production_provider_profile(profile).ok().flatten())
+            .collect::<Vec<_>>();
+        let readiness = load_installed_runtime_readiness_from_set(
+            std::path::Path::new(ACTIVE_MODEL_PROFILE_PATH),
+            &specifications,
+        )
+        .map_err(|_| AgentTurnError::GatewayUnavailable)?;
+        let client = PrivateGatewayClient::connect_at(
+            std::path::Path::new(PRIVATE_GATEWAY_SOCKET_PATH),
+            readiness.accounts().gateway_uid(),
+            readiness.accounts().gateway_gid(),
+            readiness.profile().manifest().profile(),
+        )
+        .map_err(map_gateway_client_error)?;
+        let messages = [
+            ConversationMessage::new(ConversationRole::User, prompt.to_owned())
+                .map_err(|_| AgentTurnError::Protocol)?,
+        ];
+        client
+            .infer(request_id, &messages, intents, 30_000)
+            .map_err(map_gateway_client_error)
+    }
+}
+
+#[cfg(feature = "production-dbus-service")]
+fn map_gateway_client_error(error: PrivateGatewayClientError) -> AgentTurnError {
+    match error {
+        PrivateGatewayClientError::ConnectionUnavailable => AgentTurnError::GatewayUnavailable,
+        PrivateGatewayClientError::UnexpectedGatewayIdentity => {
+            AgentTurnError::UnexpectedGatewayIdentity
+        }
+        PrivateGatewayClientError::Protocol => AgentTurnError::Protocol,
+        PrivateGatewayClientError::InferenceFailed => AgentTurnError::InferenceFailed,
+    }
+}
+
+#[cfg(feature = "production-dbus-service")]
 pub fn run_production() -> Result<(), ShellProcessError> {
     let mut nonce = [0_u8; 8];
     getrandom::fill(&mut nonce).map_err(|_| ShellProcessError::RandomnessUnavailable)?;
+    let account = nix::unistd::User::from_uid(nix::unistd::geteuid())
+        .map_err(|_| ShellProcessError::AccountUnavailable)?
+        .ok_or(ShellProcessError::AccountUnavailable)?;
+    let workspace = account
+        .dir
+        .join("Workspace")
+        .into_os_string()
+        .into_string()
+        .map_err(|_| ShellProcessError::AccountUnavailable)?;
     let service = ShellDiagnosticService::with_context_providers(
         BubblewrapExecutor::phase1_default(),
         UpowerBatterySummaryProvider,
         NetworkManagerConnectivityProvider,
         u64::from_ne_bytes(nonce),
-    );
+    )
+    .with_agent_turn_provider(InstalledGatewayAgentProvider)
+    .with_agent_workspace(workspace);
     let connection = zbus::blocking::connection::Builder::session()
         .map_err(|_| ShellProcessError::SessionBusUnavailable)?
         .build()
@@ -477,13 +585,13 @@ mod tests {
             Ok(br#"{"status":"denied","request_id":"fixture-agent"}"#.to_vec())
         }
         fn decide(&mut self, _: &ShellPeerId, _: &[u8], _: u64) -> Result<Vec<u8>, HandlerError> {
-            Err(HandlerError)
+            Err(HandlerError::Rejected)
         }
         fn cancel(&mut self, _: &ShellPeerId, _: &[u8], _: u64) -> Result<Vec<u8>, HandlerError> {
-            Err(HandlerError)
+            Err(HandlerError::Rejected)
         }
         fn activity(&mut self, _: Option<u64>, _: u16) -> Result<Vec<u8>, HandlerError> {
-            Err(HandlerError)
+            Err(HandlerError::Rejected)
         }
         fn battery(&mut self, _: u64) -> Result<Vec<u8>, HandlerError> {
             Ok(br#"{"version":1,"status":"present","percentage":50,"state":"charging","expires_at_ms":5000}"#.to_vec())

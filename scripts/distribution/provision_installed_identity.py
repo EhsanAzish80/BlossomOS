@@ -32,7 +32,7 @@ def provision(
     zone = root / "usr/share/zoneinfo" / profile.timezone
     if not zone.is_file():
         raise ProvisionError("selected time zone is not installed")
-    groups = "audio,input,video"
+    groups = "audio,input,video,blossom-ai"
     if profile.administrator:
         groups += ",wheel"
     run(

@@ -113,7 +113,7 @@ class Arm64AgentContractTests(unittest.TestCase):
         ).read_text()
         builder = (ROOT / "scripts/distribution/build_physical_candidate.sh").read_text()
         self.assertNotIn('add_argument("--mode"', driver)
-        self.assertIn('profile.get("logical_model") == "fixture-model:1"', driver)
+        self.assertIn('"transport": "production_gateway"', driver)
         for method in ("StartAgentTurn1", "SubmitDecision1", "ReadActivity1"):
             self.assertIn(f'"{method}"', driver)
         for trace in (
@@ -129,11 +129,45 @@ class Arm64AgentContractTests(unittest.TestCase):
         self.assertNotIn("qualify_agent_pipeline.py", core_package)
         self.assertIn("depends=('blossom-core'", qualification_package)
         self.assertIn("qualify_agent_pipeline.py", qualification_package)
+        self.assertIn("qualification_fixture_provider.py", qualification_package)
         qualification_build = 'makepkg --nodeps --noconfirm --dir "$build/source/distribution/packages/blossom-qualification"'
         qualification_copy = 'distribution/packages/blossom-qualification/blossom-qualification-*.pkg.tar.zst'
         self.assertIn(qualification_build, builder)
         self.assertIn(qualification_copy, builder)
         self.assertGreaterEqual(builder.count('if [[ "$mode" == vm-qualification ]]'), 3)
+
+    def test_every_exported_shell_method_requires_a_production_handler(self):
+        source = (ROOT / "system/shell-service/src/session_bus.rs").read_text()
+        trait = source[source.index("pub trait ShellRequestHandler"):source.index("impl<E: Executor")]
+        for handler in (
+            "start",
+            "start_agent",
+            "decide",
+            "cancel",
+            "activity",
+            "battery",
+            "network",
+            "disconnect",
+        ):
+            declaration = trait[trait.index(f"fn {handler}("):]
+            declaration = declaration[:declaration.index(";") + 1]
+            self.assertNotIn("{", declaration, handler)
+        self.assertNotIn("fn start_agent", trait.split(";")[-1])
+
+    def test_desktop_accounts_are_deliberately_gateway_eligible(self):
+        sysusers = (
+            ROOT / "system/model-runtime/packaging/blossom-model-runtime.sysusers"
+        ).read_text()
+        provision = (
+            ROOT / "scripts/distribution/provision_installed_identity.py"
+        ).read_text()
+        adr = (
+            ROOT / "docs/decisions/0017-private-gateway-admission-and-cancellation.md"
+        ).read_text()
+        self.assertIn("m blossom blossom-ai", sysusers)
+        self.assertIn('groups = "audio,input,video,blossom-ai"', provision)
+        self.assertIn("every process running under that same desktop UID", adr)
+        self.assertIn("unexpected-owner", adr)
 
 
 if __name__ == "__main__":

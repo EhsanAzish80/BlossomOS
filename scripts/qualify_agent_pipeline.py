@@ -59,7 +59,9 @@ def architecture() -> str:
     return {"arm64": "aarch64", "amd64": "x86_64"}.get(value, value)
 
 
-def load_identity(profile_path: Path, receipt_path: Path, commit: str) -> dict:
+def load_identity(
+    profile_path: Path, receipt_path: Path, qualification_path: Path, commit: str
+) -> dict:
     profile_bytes = bounded_bytes(profile_path).rstrip(b"\n")
     receipt_bytes = bounded_bytes(receipt_path)
     try:
@@ -92,7 +94,19 @@ def load_identity(profile_path: Path, receipt_path: Path, commit: str) -> dict:
         raise QualificationError("installed profile does not match the package receipt")
     if not commit or len(commit) < 7 or any(character not in "0123456789abcdef" for character in commit):
         raise QualificationError("source commit must be a lowercase hexadecimal revision")
-    mode = "fixture" if profile.get("logical_model") == "fixture-model:1" else "real"
+    mode = "real"
+    if qualification_path.exists():
+        try:
+            qualification = json.loads(bounded_bytes(qualification_path))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise QualificationError(f"invalid qualification provider receipt: {error}") from error
+        if qualification != {
+            "schema_version": 1,
+            "mode": "fixture",
+            "transport": "production_gateway",
+        }:
+            raise QualificationError("qualification provider receipt is not closed")
+        mode = "fixture"
     return {
         "commit": commit,
         "profile_digest": profile_digest,
@@ -293,10 +307,20 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", type=Path, default=Path("/etc/blossom-os/model-profiles/active.json"))
     parser.add_argument("--receipt", type=Path, default=Path("/usr/share/blossom-os/model-runtime-package.json"))
+    parser.add_argument(
+        "--qualification-provider",
+        type=Path,
+        default=Path("/usr/share/blossom-os/qualification-provider.json"),
+    )
     parser.add_argument("--ledger", type=Path, required=True)
     parser.add_argument("--commit", required=True)
     arguments = parser.parse_args()
-    identity = load_identity(arguments.profile, arguments.receipt, arguments.commit)
+    identity = load_identity(
+        arguments.profile,
+        arguments.receipt,
+        arguments.qualification_provider,
+        arguments.commit,
+    )
     _, activity_cursor = read_complete_activity(0, time.monotonic() + CALL_TIMEOUT_SECONDS)
     sequence = 1
     if arguments.ledger.exists():

@@ -147,6 +147,16 @@ gateway restart because admission uses its retained snapshot. The service is
 not socket-activated and refuses stale socket paths; systemd runtime-directory
 cleanup owns recovery after a clean stop.
 
+The desktop session account is deliberately a member of `blossom-ai` so the
+production shell service can reach the gateway through the fixed Unix socket.
+This means every process running under that same desktop UID can also request
+local inference directly. That is an accepted same-user boundary: model output
+is untrusted, and gateway membership grants no broker, approval, tool, audit,
+shell, D-Bus, sudo or privileged-helper authority. `StartAgentTurn1` still
+authenticates the gateway UID/GID on the connected descriptor before sending
+prompt bytes and fails closed with a distinct unavailable or unexpected-owner
+reason.
+
 ## Migration and rollback
 
 Implement the private frame and membership parser under tests first. Then add a

@@ -12,4 +12,10 @@ package() {
   local repo_root="${BLOSSOM_REPO_ROOT:-$startdir/../../..}"
   install -Dm0755 "$repo_root/scripts/qualify_agent_pipeline.py" \
     "$pkgdir/usr/lib/blossom-os/qualify-agent-pipeline"
+  install -Dm0755 "$repo_root/scripts/qualification_fixture_provider.py" \
+    "$pkgdir/usr/lib/blossom-os/qualification-fixture-provider"
+  install -Dm0644 "$startdir/blossom-model-fixture.service" \
+    "$pkgdir/usr/lib/systemd/system/blossom-model-fixture.service"
+  install -Dm0644 "$startdir/qualification-provider.json" \
+    "$pkgdir/usr/share/blossom-os/qualification-provider.json"
 }

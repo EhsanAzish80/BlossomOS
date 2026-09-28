@@ -20,6 +20,8 @@ use std::sync::{
 
 mod gateway;
 #[cfg(unix)]
+mod gateway_client;
+#[cfg(unix)]
 mod gateway_fixture;
 mod llama_cpp;
 mod ollama;
@@ -64,6 +66,8 @@ pub use gateway::{
     encode_gateway_event, encode_gateway_hello, encode_gateway_private_request,
     encode_gateway_synthetic_request, validate_gateway_peer,
 };
+#[cfg(unix)]
+pub use gateway_client::{PrivateGatewayClient, PrivateGatewayClientError};
 #[cfg(all(unix, debug_assertions))]
 pub use gateway_fixture::serve_synthetic_gateway_via_adapter_once;
 #[cfg(unix)]
@@ -88,6 +92,8 @@ pub use runtime_readiness::{
 };
 
 pub const MODEL_PROTOCOL_VERSION: u16 = 1;
+pub const PRIVATE_GATEWAY_SOCKET_PATH: &str = "/run/blossom-model-gateway/inference.sock";
+pub const ACTIVE_MODEL_PROFILE_PATH: &str = "/etc/blossom-os/model-profiles/active.json";
 pub const MAX_INFERENCE_REQUEST_BYTES: usize = 256 * 1024;
 pub const MAX_MESSAGES: usize = 64;
 pub const MAX_MESSAGE_BYTES: usize = 32 * 1024;

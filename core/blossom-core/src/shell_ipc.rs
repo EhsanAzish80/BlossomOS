@@ -16,6 +16,7 @@ pub const SHELL_OBJECT_PATH: &str = "/org/blossomos/Shell1";
 pub const SHELL_INTERFACE: &str = "org.blossomos.Shell1";
 pub const MAX_SHELL_MESSAGE_BYTES: usize = 4_096;
 pub const MAX_ACTIVITY_BATCH: u16 = 64;
+pub const MAX_AGENT_PROMPT_BYTES: usize = 4_096;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -303,6 +304,12 @@ pub struct ShellApprovalPreview {
     pub approval: &'static str,
     pub expires_at_ms: u64,
     pub preview_sha256: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub destination: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content_bytes: Option<usize>,
 }
 
 impl ShellApprovalPreview {
@@ -323,6 +330,39 @@ impl ShellApprovalPreview {
             approval: "once only",
             expires_at_ms,
             preview_sha256: String::new(),
+            destination: None,
+            content_sha256: None,
+            content_bytes: None,
+        };
+        preview.preview_sha256 = preview.compute_digest();
+        preview
+    }
+
+    pub fn workspace_create(
+        request_id: &RequestId,
+        expires_at_ms: u64,
+        destination: String,
+        content: &str,
+    ) -> Self {
+        let mut preview = Self {
+            version: SHELL_PROTOCOL_VERSION,
+            request_id: request_id.as_str().into(),
+            operation: "files.write:create",
+            purpose: "create one model-proposed workspace file",
+            executable: "none",
+            arguments: ["none"],
+            capability: "files.write:create",
+            resource_scope: "configured workspace only",
+            filesystem: "create-only publication; overwrite denied",
+            network: "denied during tool execution",
+            privilege: "unprivileged user",
+            expected_side_effects: "exactly one new file",
+            approval: "once only",
+            expires_at_ms,
+            preview_sha256: String::new(),
+            destination: Some(destination),
+            content_sha256: Some(crate::audit::digest_bytes(content.as_bytes())),
+            content_bytes: Some(content.len()),
         };
         preview.preview_sha256 = preview.compute_digest();
         preview
@@ -349,6 +389,11 @@ impl ShellApprovalPreview {
             self.expected_side_effects.into(),
             self.approval.into(),
             self.expires_at_ms.to_string(),
+            self.destination.clone().unwrap_or_default(),
+            self.content_sha256.clone().unwrap_or_default(),
+            self.content_bytes
+                .map(|value| value.to_string())
+                .unwrap_or_default(),
         ] {
             hasher.update((field.len() as u64).to_be_bytes());
             hasher.update(field.as_bytes());
@@ -360,6 +405,40 @@ impl ShellApprovalPreview {
         }
         encoded
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShellAgentTurnRequest {
+    pub prompt: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ShellAgentTurnWire {
+    version: u16,
+    prompt: String,
+}
+
+pub fn decode_shell_agent_turn_request(
+    input: &[u8],
+) -> Result<ShellAgentTurnRequest, ShellProtocolError> {
+    if input.len() > MAX_SHELL_MESSAGE_BYTES {
+        return Err(ShellProtocolError::MessageTooLarge);
+    }
+    let wire: ShellAgentTurnWire =
+        serde_json::from_slice(input).map_err(|_| ShellProtocolError::MalformedMessage)?;
+    if wire.version != SHELL_PROTOCOL_VERSION {
+        return Err(ShellProtocolError::UnsupportedVersion);
+    }
+    if wire.prompt.is_empty()
+        || wire.prompt.len() > MAX_AGENT_PROMPT_BYTES
+        || wire.prompt.contains('\0')
+    {
+        return Err(ShellProtocolError::MalformedMessage);
+    }
+    Ok(ShellAgentTurnRequest {
+        prompt: wire.prompt,
+    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]

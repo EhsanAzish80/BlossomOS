@@ -14,9 +14,9 @@ mod audit;
 #[cfg(all(target_os = "linux", feature = "production-private-inference"))]
 const PRODUCTION_AUDIT_PATH: &str = "/run/blossom-model-gateway/audit";
 
-pub const PRODUCTION_SOCKET_PATH: &str = "/run/blossom-model-gateway/inference.sock";
+pub const PRODUCTION_SOCKET_PATH: &str = blossom_core::PRIVATE_GATEWAY_SOCKET_PATH;
 #[cfg(all(target_os = "linux", feature = "production-private-inference"))]
-const PRODUCTION_PROFILE_PATH: &str = "/etc/blossom-os/model-profiles/active.json";
+const PRODUCTION_PROFILE_PATH: &str = blossom_core::ACTIVE_MODEL_PROFILE_PATH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GatewayProcessError {

@@ -48,6 +48,10 @@ class AgentQualificationDriverTests(unittest.TestCase):
                 separators=(",", ":"),
             )
         )
+        self.qualification = self.root / "qualification-provider.json"
+        self.qualification.write_text(
+            '{"schema_version":1,"mode":"fixture","transport":"production_gateway"}'
+        )
         self.ledger = self.root / "attempts.jsonl"
         self.marker = self.root / "fixture-observations.jsonl"
         self.bin = self.root / "bin"
@@ -143,6 +147,7 @@ class AgentQualificationDriverTests(unittest.TestCase):
                 str(DRIVER),
                 "--profile", str(self.profile),
                 "--receipt", str(self.receipt),
+                "--qualification-provider", str(self.qualification),
                 "--ledger", str(self.ledger),
                 "--commit", "8fff60e",
             ],

@@ -122,7 +122,8 @@ chmod 0440 "$work/root/etc/sudoers.d/10-blossom-wheel"
 rm -rf "$work/root/home/alarm"
 chroot "$work/root" userdel alarm 2>/dev/null || true
 chroot "$work/root" userdel --remove builder
-chroot "$work/root" useradd --uid 1000 --create-home --groups audio,input,video,wheel --shell /bin/bash blossom
+chroot "$work/root" groupadd --force blossom-ai
+chroot "$work/root" useradd --uid 1000 --create-home --groups audio,input,video,wheel,blossom-ai --shell /bin/bash blossom
 cp -a "$repo/distribution/archiso/airootfs/home/blossom/." "$work/root/home/blossom/"
 chroot "$work/root" chown -R blossom:blossom /home/blossom
 chmod 0700 "$work/root/home/blossom"

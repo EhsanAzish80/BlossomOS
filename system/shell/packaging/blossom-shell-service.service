@@ -20,6 +20,9 @@ ProtectSystem=strict
 # Empty read-only home/runtime trees, with only the session bus socket visible.
 ProtectHome=tmpfs
 BindReadOnlyPaths=%t/bus
+# The model can propose only a single create-only filename and bounded content;
+# the resolver retains this exact workspace directory before approval.
+BindPaths=%h/Workspace
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes

@@ -5,11 +5,54 @@ use crate::{
     ShellSessionError, ToolRequestWire,
 };
 use crate::{Capability, CompletionOutcome, ShellBatteryProjection, ToolOutput};
+use crate::{InferenceRequestId, ModelIntentKind, NormalizedCompletion, TurnIntentCatalogue};
 use crate::{NetworkConnectivityProvider, ShellNetworkProjection};
 use serde::Serialize;
 use std::fmt;
 
 pub const SHELL_APPROVAL_TTL_MS: u64 = 30_000;
+pub const DEFAULT_AGENT_WORKSPACE: &str = "/home/blossom/Workspace";
+
+pub trait AgentTurnProvider: Send {
+    fn complete(
+        &mut self,
+        request_id: &InferenceRequestId,
+        prompt: &str,
+        intents: &TurnIntentCatalogue,
+    ) -> Result<NormalizedCompletion, AgentTurnError>;
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AgentTurnError {
+    GatewayUnavailable,
+    UnexpectedGatewayIdentity,
+    Protocol,
+    InferenceFailed,
+}
+
+impl fmt::Display for AgentTurnError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::GatewayUnavailable => "model gateway is unavailable",
+            Self::UnexpectedGatewayIdentity => "model gateway identity is unexpected",
+            Self::Protocol => "model gateway protocol failed closed",
+            Self::InferenceFailed => "model inference did not complete",
+        })
+    }
+}
+
+pub struct UnavailableAgentTurnProvider;
+
+impl AgentTurnProvider for UnavailableAgentTurnProvider {
+    fn complete(
+        &mut self,
+        _: &InferenceRequestId,
+        _: &str,
+        _: &TurnIntentCatalogue,
+    ) -> Result<NormalizedCompletion, AgentTurnError> {
+        Err(AgentTurnError::GatewayUnavailable)
+    }
+}
 
 type ShellEngine<E, B> = BlossomEngine<
     E,
@@ -32,14 +75,22 @@ pub struct ShellDiagnosticService<E: Executor, B = crate::UnavailableBatterySumm
     cached_battery: Option<ShellBatteryProjection>,
     last_network_read_ms: Option<u64>,
     cached_network: Option<ShellNetworkProjection>,
+    agent_turn: Box<dyn AgentTurnProvider>,
+    agent_workspace: String,
 }
 
 impl<E: Executor> ShellDiagnosticService<E> {
     pub fn new(executor: E, instance_nonce: u64) -> Self {
-        let policy = PolicyEngine::new(vec![PolicyRule {
-            capability: Capability::SystemReadKernelIdentity,
-            decision: PolicyDecision::Ask,
-        }]);
+        let policy = PolicyEngine::new(vec![
+            PolicyRule {
+                capability: Capability::SystemReadKernelIdentity,
+                decision: PolicyDecision::Ask,
+            },
+            PolicyRule {
+                capability: Capability::FilesWriteCreate,
+                decision: PolicyDecision::Ask,
+            },
+        ]);
         Self {
             engine: BlossomEngine::new(
                 policy,
@@ -53,11 +104,84 @@ impl<E: Executor> ShellDiagnosticService<E> {
             cached_battery: None,
             last_network_read_ms: None,
             cached_network: None,
+            agent_turn: Box::new(UnavailableAgentTurnProvider),
+            agent_workspace: DEFAULT_AGENT_WORKSPACE.into(),
         }
     }
 }
 
 impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
+    pub fn with_agent_turn_provider(mut self, provider: impl AgentTurnProvider + 'static) -> Self {
+        self.agent_turn = Box::new(provider);
+        self
+    }
+
+    pub fn with_agent_workspace(mut self, workspace: String) -> Self {
+        self.agent_workspace = workspace;
+        self
+    }
+
+    pub fn begin_agent_turn(
+        &mut self,
+        peer: ShellPeerId,
+        prompt: &str,
+        now_ms: u64,
+    ) -> Result<ShellServiceOutcome, ShellServiceError> {
+        if self.sessions.has_pending(&peer) {
+            return Err(ShellSessionError::ApprovalAlreadyPending.into());
+        }
+        let request_id = self.next_request_id()?;
+        let inference_id = InferenceRequestId::parse(request_id.as_str().into())
+            .map_err(|_| ShellServiceError::Agent(AgentTurnError::Protocol))?;
+        let catalogue =
+            TurnIntentCatalogue::from_code_owned_eligible([ModelIntentKind::FilesWriteCreate])
+                .map_err(|_| ShellServiceError::Agent(AgentTurnError::Protocol))?;
+        let completion = self
+            .agent_turn
+            .complete(&inference_id, prompt, &catalogue)
+            .map_err(ShellServiceError::Agent)?;
+        let NormalizedCompletion::ToolIntents { intents } = completion else {
+            return Ok(ShellServiceOutcome::Denied);
+        };
+        if intents.len() != 1 {
+            return Ok(ShellServiceOutcome::Denied);
+        }
+        let intent = &intents[0];
+        let proposal = intent
+            .workspace_create()
+            .ok_or(ShellServiceError::Agent(AgentTurnError::Protocol))?;
+        let expires_at_ms = now_ms.saturating_add(SHELL_APPROVAL_TTL_MS);
+        let destination = std::path::Path::new(&self.agent_workspace)
+            .join(&proposal.name)
+            .to_string_lossy()
+            .into_owned();
+        let preview = ShellApprovalPreview::workspace_create(
+            &request_id,
+            expires_at_ms,
+            destination,
+            &proposal.content,
+        );
+        match self.engine.begin_wire(
+            ToolRequestWire::from_model_intent(request_id.clone(), intent)
+                .map_err(|_| ShellServiceError::Agent(AgentTurnError::Protocol))?,
+            SessionContext {
+                workspace_root: &self.agent_workspace,
+                origin: RequestOrigin::ModelProposed,
+            },
+            Some(preview.preview_sha256.clone()),
+            now_ms,
+        )? {
+            BeginOutcome::ApprovalRequired { token, .. } => {
+                let preview =
+                    self.sessions
+                        .register(peer, request_id, expires_at_ms, preview, token)?;
+                Ok(ShellServiceOutcome::AwaitingApproval(Box::new(preview)))
+            }
+            BeginOutcome::Denied => Ok(ShellServiceOutcome::Denied),
+            BeginOutcome::Completed(_) => Err(ShellServiceError::Agent(AgentTurnError::Protocol)),
+        }
+    }
+
     pub fn begin_system_uname(
         &mut self,
         peer: ShellPeerId,
@@ -228,6 +352,8 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
             cached_battery: None,
             last_network_read_ms: None,
             cached_network: None,
+            agent_turn: Box::new(UnavailableAgentTurnProvider),
+            agent_workspace: DEFAULT_AGENT_WORKSPACE.into(),
         }
     }
 
@@ -250,6 +376,10 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
                 capability: Capability::SystemReadNetworkConnectivity,
                 decision: PolicyDecision::Allow,
             },
+            PolicyRule {
+                capability: Capability::FilesWriteCreate,
+                decision: PolicyDecision::Ask,
+            },
         ]);
         Self {
             engine: BlossomEngine::with_battery_summary(
@@ -266,6 +396,8 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
             cached_battery: None,
             last_network_read_ms: None,
             cached_network: None,
+            agent_turn: Box::new(UnavailableAgentTurnProvider),
+            agent_workspace: DEFAULT_AGENT_WORKSPACE.into(),
         }
     }
 
@@ -382,6 +514,7 @@ pub enum ShellServiceError {
     RequestIdExhausted,
     BatteryVerificationFailed,
     NetworkVerificationFailed,
+    Agent(AgentTurnError),
 }
 
 impl From<ShellSessionError> for ShellServiceError {
@@ -405,6 +538,7 @@ impl fmt::Display for ShellServiceError {
             Self::RequestIdExhausted => "shell request identifier space was exhausted",
             Self::BatteryVerificationFailed => "battery observation verification failed",
             Self::NetworkVerificationFailed => "network observation verification failed",
+            Self::Agent(error) => return error.fmt(formatter),
         })
     }
 }

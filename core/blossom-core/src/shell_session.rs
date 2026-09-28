@@ -59,13 +59,30 @@ impl<S> ShellSessionApprovals<S> {
         expires_at_ms: u64,
         secret: S,
     ) -> Result<ShellApprovalPreview, ShellSessionError> {
+        let preview = ShellApprovalPreview::system_uname(&request_id, expires_at_ms);
+        self.register(peer, request_id, expires_at_ms, preview, secret)
+    }
+
+    pub fn register(
+        &mut self,
+        peer: ShellPeerId,
+        request_id: RequestId,
+        expires_at_ms: u64,
+        preview: ShellApprovalPreview,
+        secret: S,
+    ) -> Result<ShellApprovalPreview, ShellSessionError> {
         if self.pending.contains_key(&peer) {
             return Err(ShellSessionError::ApprovalAlreadyPending);
         }
         if self.pending.len() >= MAX_PENDING_SHELL_APPROVALS {
             return Err(ShellSessionError::ApprovalCapacityReached);
         }
-        let preview = ShellApprovalPreview::system_uname(&request_id, expires_at_ms);
+        if preview.request_id != request_id.as_str()
+            || preview.expires_at_ms != expires_at_ms
+            || !preview.verify_digest()
+        {
+            return Err(ShellSessionError::BindingMismatch);
+        }
         self.pending.insert(
             peer,
             PendingApproval {
