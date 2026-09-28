@@ -4,7 +4,7 @@ pkgrel=1
 pkgdesc='Blossom OS reviewed service boundaries'
 arch=('x86_64' 'aarch64')
 license=('Apache-2.0')
-depends=('bubblewrap' 'dbus-broker' 'systemd')
+depends=('bubblewrap' 'dbus-broker' 'python' 'systemd')
 options=('!strip')
 source=()
 sha256sums=()
@@ -30,6 +30,8 @@ package() {
     "$pkgdir/usr/lib/blossom-os/blossom-model-gateway"
   install -Dm0755 "$srcdir/target/release/blossom-privileged-helper" \
     "$pkgdir/usr/lib/blossom-os/blossom-privileged-helper"
+  install -Dm0755 "$repo_root/scripts/qualify_agent_pipeline.py" \
+    "$pkgdir/usr/lib/blossom-os/qualify-agent-pipeline"
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-service.service" \
     "$pkgdir/usr/lib/systemd/user/blossom-shell-service.service"
   install -Dm0644 "$repo_root/system/shell/packaging/org.blossomos.Shell1.service" \

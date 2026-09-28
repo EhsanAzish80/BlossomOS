@@ -26,6 +26,14 @@ pub struct HandlerError;
 
 pub trait ShellRequestHandler: Send {
     fn start(&mut self, peer: ShellPeerId, now_ms: u64) -> Result<Vec<u8>, HandlerError>;
+    fn start_agent(
+        &mut self,
+        _peer: ShellPeerId,
+        _input: &[u8],
+        _now_ms: u64,
+    ) -> Result<Vec<u8>, HandlerError> {
+        Err(HandlerError)
+    }
     fn decide(
         &mut self,
         peer: &ShellPeerId,
@@ -139,6 +147,24 @@ impl ShellBusService {
 
 #[zbus::interface(name = "org.blossomos.Shell1")]
 impl ShellBusService {
+    #[zbus(name = "StartAgentTurn1")]
+    async fn start_agent_turn1(
+        &self,
+        input: Vec<u8>,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> zbus::fdo::Result<Vec<u8>> {
+        if input.len() > blossom_core::MAX_SHELL_MESSAGE_BYTES {
+            return Err(denied());
+        }
+        let peer = authenticated_peer(&header, connection).await?;
+        self.handler
+            .lock()
+            .map_err(|_| failed())?
+            .start_agent(peer, &input, now_ms())
+            .map_err(|_| denied())
+    }
+
     #[zbus(name = "StartSystemUname1")]
     async fn start_system_uname1(
         &self,
@@ -428,6 +454,7 @@ mod tests {
 
     struct Handler {
         calls: Arc<AtomicUsize>,
+        agent_calls: Arc<AtomicUsize>,
         disconnects: Arc<AtomicUsize>,
         expected_peer: String,
     }
@@ -437,6 +464,17 @@ mod tests {
             assert_eq!(peer.as_str(), self.expected_peer);
             self.calls.fetch_add(1, Ordering::SeqCst);
             Ok(br#"{"status":"awaiting_approval"}"#.to_vec())
+        }
+        fn start_agent(
+            &mut self,
+            peer: ShellPeerId,
+            input: &[u8],
+            _: u64,
+        ) -> Result<Vec<u8>, HandlerError> {
+            assert_eq!(peer.as_str(), self.expected_peer);
+            assert_eq!(input, br#"{"version":1,"prompt":"fixture qualification"}"#);
+            self.agent_calls.fetch_add(1, Ordering::SeqCst);
+            Ok(br#"{"status":"denied","request_id":"fixture-agent"}"#.to_vec())
         }
         fn decide(&mut self, _: &ShellPeerId, _: &[u8], _: u64) -> Result<Vec<u8>, HandlerError> {
             Err(HandlerError)
@@ -487,6 +525,7 @@ mod tests {
             .expect("unique name")
             .to_string();
         let calls = Arc::new(AtomicUsize::new(0));
+        let agent_calls = Arc::new(AtomicUsize::new(0));
         let _service = zbus::blocking::connection::Builder::address(address.as_str())
             .expect("service address")
             .name(SHELL_BUS_NAME)
@@ -495,6 +534,7 @@ mod tests {
                 SHELL_OBJECT_PATH,
                 ShellBusService::new(Handler {
                     calls: calls.clone(),
+                    agent_calls: Arc::clone(&agent_calls),
                     disconnects: Arc::new(AtomicUsize::new(0)),
                     expected_peer: sender,
                 }),
@@ -510,6 +550,24 @@ mod tests {
             .expect("fixed call");
         assert_eq!(bytes, br#"{"status":"awaiting_approval"}"#);
         assert_eq!(calls.load(Ordering::SeqCst), 1);
+        let agent: Vec<u8> = proxy
+            .call(
+                "StartAgentTurn1",
+                &(br#"{"version":1,"prompt":"fixture qualification"}"#.to_vec(),),
+            )
+            .expect("agent fixture call");
+        assert_eq!(
+            agent,
+            br#"{"status":"denied","request_id":"fixture-agent"}"#
+        );
+        assert_eq!(agent_calls.load(Ordering::SeqCst), 1);
+
+        let oversized: Result<Vec<u8>, _> = proxy.call(
+            "StartAgentTurn1",
+            &(vec![0_u8; blossom_core::MAX_SHELL_MESSAGE_BYTES + 1],),
+        );
+        assert!(oversized.is_err());
+        assert_eq!(agent_calls.load(Ordering::SeqCst), 1);
 
         let wrong_version: Result<Vec<u8>, _> = proxy.call("StartSystemUname1", &(2_u16,));
         assert!(wrong_version.is_err());
@@ -573,6 +631,7 @@ mod tests {
         let disconnects = Arc::new(AtomicUsize::new(0));
         let interface = ShellBusService::new(Handler {
             calls: Arc::new(AtomicUsize::new(0)),
+            agent_calls: Arc::new(AtomicUsize::new(0)),
             disconnects: Arc::clone(&disconnects),
             expected_peer: sender,
         });

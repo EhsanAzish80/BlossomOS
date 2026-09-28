@@ -105,6 +105,24 @@ class Arm64AgentContractTests(unittest.TestCase):
         self.assertIn("RequestResolver::resolve", fuzz)
         self.assertIn("capacity.reserve()", fuzz)
 
+    def test_qualification_driver_uses_one_public_shell_path(self):
+        driver = (ROOT / "scripts/qualify_agent_pipeline.py").read_text()
+        package = (ROOT / "distribution/packages/blossom-core/PKGBUILD").read_text()
+        self.assertNotIn('add_argument("--mode"', driver)
+        self.assertIn('profile.get("logical_model") == "fixture-model:1"', driver)
+        for method in ("StartAgentTurn1", "SubmitDecision1", "ReadActivity1"):
+            self.assertIn(f'"{method}"', driver)
+        for trace in (
+            '"commit"',
+            '"profile_digest"',
+            '"receipt_digest"',
+            '"architecture"',
+            '"mode"',
+        ):
+            self.assertIn(trace, driver)
+        self.assertIn("subprocess.TimeoutExpired", driver)
+        self.assertIn("qualify-agent-pipeline", package)
+
 
 if __name__ == "__main__":
     unittest.main()
