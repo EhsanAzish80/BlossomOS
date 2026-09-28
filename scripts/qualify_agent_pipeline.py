@@ -290,6 +290,7 @@ def run_case(case: str, activity_cursor: int) -> dict:
     started = time.monotonic()
     deadline = started + CALL_TIMEOUT_SECONDS
     rejected_before_request = False
+    evidence_digests: dict[str, str | int] = {}
     try:
         outcome = call_bytes("StartAgentTurn1", start_payload(case), deadline)
     except QualificationError as error:
@@ -358,6 +359,21 @@ def run_case(case: str, activity_cursor: int) -> dict:
             or effect.get("content_bytes") != preview.get("content_bytes")
         ):
             raise QualificationError("positive effect does not match the approved preview")
+        proposal_evidence = json.dumps(
+            {
+                "destination": preview.get("destination"),
+                "content_sha256": preview.get("content_sha256"),
+                "content_bytes": preview.get("content_bytes"),
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode()
+        evidence_digests = {
+            "parsed_proposal_digest": digest(proposal_evidence),
+            "preview_digest": preview["preview_sha256"],
+            "created_file_digest": effect["content_sha256"],
+            "created_file_bytes": effect["content_bytes"],
+        }
     elif starts != 0 or observed_effects:
         raise QualificationError(f"{case} produced execution or effect activity")
     return {
@@ -369,6 +385,7 @@ def run_case(case: str, activity_cursor: int) -> dict:
         "rejected_before_request": rejected_before_request,
         "activity_last_sequence": max((item.get("sequence", 0) for item in activity), default=0),
         "next_activity_cursor": activity_cursor,
+        **evidence_digests,
     }
 
 

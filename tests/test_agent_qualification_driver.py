@@ -186,6 +186,18 @@ class AgentQualificationDriverTests(unittest.TestCase):
         self.assertEqual({entry["commit"] for entry in entries}, {"8fff60e"})
         self.assertTrue(all(entry["status"] == "passed" for entry in entries))
         self.assertEqual(entries[0]["effects"], 1)
+        expected_content_digest = hashlib.sha256(
+            b"Blossom qualification passed."
+        ).hexdigest()
+        self.assertEqual(len(entries[0]["parsed_proposal_digest"]), 64)
+        self.assertEqual(entries[0]["preview_digest"], "a" * 64)
+        self.assertEqual(entries[0]["created_file_digest"], expected_content_digest)
+        self.assertEqual(entries[0]["created_file_bytes"], 29)
+        for entry in entries[1:]:
+            self.assertNotIn("parsed_proposal_digest", entry)
+            self.assertNotIn("preview_digest", entry)
+            self.assertNotIn("created_file_digest", entry)
+            self.assertNotIn("created_file_bytes", entry)
         self.assertTrue(all(entry["effects"] == 0 for entry in entries[1:]))
         self.assertTrue(all(entry["executor_starts"] == 0 for entry in entries))
         self.assertEqual(
