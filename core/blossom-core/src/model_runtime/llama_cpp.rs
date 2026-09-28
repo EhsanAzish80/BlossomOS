@@ -480,7 +480,6 @@ fn parse_sse_event(event: &[u8]) -> Result<Option<Vec<u8>>, LlamaCppAdapterError
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct StreamIdentity {
     id: String,
-    created: u64,
 }
 
 #[derive(Deserialize)]
@@ -488,7 +487,8 @@ struct StreamIdentity {
 struct ChatChunk {
     id: String,
     object: String,
-    created: u64,
+    #[serde(rename = "created")]
+    _created: u64,
     model: String,
     choices: Vec<ChatChoice>,
     #[serde(default)]
@@ -596,7 +596,6 @@ fn bind_identity(
 ) -> Result<(), LlamaCppAdapterError> {
     let observed = StreamIdentity {
         id: chunk.id.clone(),
-        created: chunk.created,
     };
     match identity {
         Some(expected) if expected != &observed => Err(LlamaCppAdapterError::MalformedResponse),
@@ -1165,6 +1164,34 @@ mod tests {
             "data: [DONE]\n\n"
         );
         assert_malformed(changed_identity.as_bytes());
+
+        // llama.cpp timestamps chunks when each one is emitted, so a stream
+        // that crosses a second boundary can legitimately contain different
+        // `created` values. The opaque stream id remains the bound identity.
+        let changing_created = concat!(
+            "data: ",
+            r#"{"id":"chatcmpl-9","object":"chat.completion.chunk","created":9,"model":"fixture-model:1","choices":[{"index":0,"delta":{"content":"a"},"finish_reason":null}]}"#,
+            "\n\n",
+            "data: ",
+            r#"{"id":"chatcmpl-9","object":"chat.completion.chunk","created":10,"model":"fixture-model:1","choices":[{"index":0,"delta":{"content":"b"},"finish_reason":"stop"}]}"#,
+            "\n\n",
+            "data: ",
+            r#"{"id":"chatcmpl-9","object":"chat.completion.chunk","created":10,"model":"fixture-model:1","choices":[],"usage":{"completion_tokens":2,"prompt_tokens":3,"total_tokens":5}}"#,
+            "\n\n",
+            "data: [DONE]\n\n"
+        );
+        let (adapter, handle) = server(response(changing_created.as_bytes()));
+        let events = adapter
+            .infer(
+                &request(TurnIntentCatalogue::empty(), 2_000),
+                InferenceCancellation::new(),
+            )
+            .expect("changing provider timestamps do not change stream identity");
+        assert!(matches!(
+            events.last().unwrap().event,
+            NormalizedStreamKind::Finished { .. }
+        ));
+        handle.join().unwrap();
 
         let mut invalid_utf8 = b"data: {\"id\":\"chatcmpl-9\"".to_vec();
         invalid_utf8.push(0xff);
