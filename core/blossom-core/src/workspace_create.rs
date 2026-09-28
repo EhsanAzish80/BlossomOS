@@ -103,8 +103,7 @@ pub fn resolve_model_workspace_proposal(
     Err(ModelWorkspaceProposalError::ResolutionFailed)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct DirectoryIdentity {
     pub device: u64,
     pub inode: u64,
@@ -116,8 +115,7 @@ impl DirectoryIdentity {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct WorkspaceCreateSelection {
     pub workspace_root: String,
     pub root_identity: DirectoryIdentity,

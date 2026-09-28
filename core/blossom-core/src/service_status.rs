@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::fmt;
 
 pub const SYSTEMD_DESTINATION: &str = "org.freedesktop.systemd1";
@@ -9,8 +9,7 @@ pub const SYSTEM_BUS_ADDRESS: &str = "unix:path=/run/dbus/system_bus_socket";
 pub const MAX_SERVICE_UNIT_BYTES: usize = 256;
 pub const MAX_SERVICE_STATE_BYTES: usize = 64;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct ServiceSelection {
     pub unit: String,
 }

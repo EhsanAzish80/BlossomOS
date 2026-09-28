@@ -1,7 +1,8 @@
 use crate::{
-    ApprovalStore, BatterySummaryProvider, BeginOutcome, BlossomEngine, EngineError, Executor,
-    PolicyDecision, PolicyEngine, PolicyRule, RequestId, ShellApprovalPreview, ShellClientRequest,
-    ShellDecision, ShellPeerId, ShellSessionApprovals, ShellSessionError, ToolRequest,
+    BatterySummaryProvider, BeginOutcome, BlossomEngine, EngineError, Executor, PolicyDecision,
+    PolicyEngine, PolicyRule, PreparedApprovalStore, RequestId, RequestOrigin, SessionContext,
+    ShellApprovalPreview, ShellClientRequest, ShellDecision, ShellPeerId, ShellSessionApprovals,
+    ShellSessionError, ToolRequestWire,
 };
 use crate::{Capability, CompletionOutcome, ShellBatteryProjection, ToolOutput};
 use crate::{NetworkConnectivityProvider, ShellNetworkProjection};
@@ -18,8 +19,6 @@ type ShellEngine<E, B> = BlossomEngine<
     crate::UnavailableStorageSummaryProvider,
     crate::UnavailableProcessSelfProvider,
     crate::UnavailableProcessListProvider,
-    crate::UnavailableFileContentProvider,
-    crate::UnavailableWorkspaceCreateProvider,
     crate::UnavailableServiceStatusProvider,
     B,
 >;
@@ -42,7 +41,11 @@ impl<E: Executor> ShellDiagnosticService<E> {
             decision: PolicyDecision::Ask,
         }]);
         Self {
-            engine: BlossomEngine::new(policy, ApprovalStore::new(SHELL_APPROVAL_TTL_MS), executor),
+            engine: BlossomEngine::new(
+                policy,
+                PreparedApprovalStore::new(SHELL_APPROVAL_TTL_MS),
+                executor,
+            ),
             sessions: ShellSessionApprovals::default(),
             instance_nonce,
             next_request: 1,
@@ -64,17 +67,24 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
             return Err(ShellSessionError::ApprovalAlreadyPending.into());
         }
         let request_id = self.next_request_id()?;
-        let request = ToolRequest::SystemUname {
-            request_id: request_id.clone(),
-        };
-        match self.engine.begin_request(request, now_ms)? {
+        let expires_at_ms = now_ms.saturating_add(SHELL_APPROVAL_TTL_MS);
+        let preview = ShellApprovalPreview::system_uname(&request_id, expires_at_ms);
+        match self.engine.begin_wire(
+            ToolRequestWire::Fixed {
+                request_id: request_id.clone(),
+                tool: "system.uname".into(),
+            },
+            SessionContext {
+                workspace_root: "/",
+                origin: RequestOrigin::InternalFixed,
+            },
+            Some(preview.preview_sha256.clone()),
+            now_ms,
+        )? {
             BeginOutcome::ApprovalRequired { token, .. } => {
-                let preview = self.sessions.register_system_uname(
-                    peer,
-                    request_id,
-                    now_ms.saturating_add(SHELL_APPROVAL_TTL_MS),
-                    token,
-                )?;
+                let preview =
+                    self.sessions
+                        .register_system_uname(peer, request_id, expires_at_ms, token)?;
                 Ok(ShellServiceOutcome::AwaitingApproval(Box::new(preview)))
             }
             BeginOutcome::Denied => Ok(ShellServiceOutcome::Denied),
@@ -108,14 +118,15 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
                     }
                     Err(error) => return Err(error.into()),
                 };
-                let request = ToolRequest::SystemUname { request_id };
                 let token = resolved.into_secret();
                 match decision {
-                    ShellDecision::ApproveOnce => Ok(completion_outcome(
-                        self.engine.approve(token, request, now_ms)?,
-                    )),
+                    ShellDecision::ApproveOnce => Ok(completion_outcome(self.engine.approve(
+                        token,
+                        &preview_sha256,
+                        now_ms,
+                    )?)),
                     ShellDecision::Deny => {
-                        self.engine.deny_approval(token, request, now_ms)?;
+                        self.engine.deny_approval(token, &preview_sha256, now_ms)?;
                         Ok(ShellServiceOutcome::Denied)
                     }
                 }
@@ -137,11 +148,8 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
                         Err(error) => return Err(error.into()),
                     };
                 let token = cancelled.into_secret();
-                self.engine.cancel_approval(
-                    token,
-                    ToolRequest::SystemUname { request_id },
-                    now_ms,
-                )?;
+                self.engine
+                    .cancel_approval(token, &preview_sha256, now_ms)?;
                 Ok(ShellServiceOutcome::Cancelled)
             }
             ShellClientRequest::StartSystemUname | ShellClientRequest::ReadActivity { .. } => {
@@ -158,12 +166,8 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
         let Some(cancelled) = self.sessions.disconnect(peer) else {
             return Ok(false);
         };
-        let request_id = cancelled.request_id.clone();
-        self.engine.cancel_approval(
-            cancelled.into_secret(),
-            ToolRequest::SystemUname { request_id },
-            now_ms,
-        )?;
+        self.engine
+            .cancel_pending(cancelled.into_secret(), now_ms)?;
         Ok(true)
     }
 
@@ -183,12 +187,7 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
         let Some(expired) = self.sessions.expire(peer, now_ms) else {
             return Err(ShellSessionError::NoPendingApproval.into());
         };
-        let request_id = expired.request_id.clone();
-        self.engine.cancel_approval(
-            expired.into_secret(),
-            ToolRequest::SystemUname { request_id },
-            now_ms,
-        )?;
+        self.engine.cancel_pending(expired.into_secret(), now_ms)?;
         Ok(())
     }
 
@@ -218,7 +217,7 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
         Self {
             engine: BlossomEngine::with_battery_summary(
                 policy,
-                ApprovalStore::new(SHELL_APPROVAL_TTL_MS),
+                PreparedApprovalStore::new(SHELL_APPROVAL_TTL_MS),
                 executor,
                 battery_summary,
             ),
@@ -255,7 +254,7 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
         Self {
             engine: BlossomEngine::with_battery_summary(
                 policy,
-                ApprovalStore::new(SHELL_APPROVAL_TTL_MS),
+                PreparedApprovalStore::new(SHELL_APPROVAL_TTL_MS),
                 executor,
                 battery_summary,
             )
@@ -286,12 +285,21 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
             .next_request
             .checked_add(1)
             .ok_or(ShellServiceError::RequestIdExhausted)?;
-        let request = ToolRequest::SystemBatterySummary {
-            request_id: RequestId::parse(format!("shell-{:016x}-{sequence}", self.instance_nonce))
-                .map_err(|_| ShellServiceError::RequestIdExhausted)?,
-        };
-        let BeginOutcome::Completed(completion) = self.engine.begin_request(request, now_ms)?
-        else {
+        let request_id = RequestId::parse(format!("shell-{:016x}-{sequence}", self.instance_nonce))
+            .map_err(|_| ShellServiceError::RequestIdExhausted)?;
+        let outcome = self.engine.begin_wire(
+            ToolRequestWire::Fixed {
+                request_id,
+                tool: "system.battery.summary".into(),
+            },
+            SessionContext {
+                workspace_root: "/",
+                origin: RequestOrigin::InternalFixed,
+            },
+            None,
+            now_ms,
+        )?;
+        let BeginOutcome::Completed(completion) = outcome else {
             return Err(ShellServiceError::WrongMethod);
         };
         if !completion.verification.succeeded {
@@ -317,11 +325,20 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
         {
             return Ok(cached.clone());
         }
-        let request = ToolRequest::SystemNetworkConnectivity {
-            request_id: self.next_request_id()?,
-        };
-        let BeginOutcome::Completed(completion) = self.engine.begin_request(request, now_ms)?
-        else {
+        let request_id = self.next_request_id()?;
+        let outcome = self.engine.begin_wire(
+            ToolRequestWire::Fixed {
+                request_id,
+                tool: "system.network.connectivity".into(),
+            },
+            SessionContext {
+                workspace_root: "/",
+                origin: RequestOrigin::InternalFixed,
+            },
+            None,
+            now_ms,
+        )?;
+        let BeginOutcome::Completed(completion) = outcome else {
             return Err(ShellServiceError::WrongMethod);
         };
         if !completion.verification.succeeded {

@@ -8,17 +8,40 @@ use blossom_core::privileged::{
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 use blossom_core::privileged::{PRIVILEGED_BUS_NAME, PRIVILEGED_INTERFACE, PRIVILEGED_OBJECT_PATH};
 use blossom_core::{
-    ApprovalError, ApprovalStore, AuditEvent, AuditLog, BeginOutcome, BlossomEngine, Capability,
-    EngineError, Executor, FileContent, FileContentProvider, MemorySummary, MemorySummaryProvider,
-    OsIdentity, OsIdentityProvider, PolicyDecision, PolicyEngine, PolicyRule, ProcessList,
-    ProcessListProvider, ProcessSelf, ProcessSelfProvider, RequestId, ServiceStatus,
-    ServiceStatusProvider, StorageSummary, StorageSummaryProvider, SystemUptime, ToolOutput,
-    ToolRequest, UptimeProvider, WorkspaceCreateProvider, WorkspaceCreateState,
-    WorkspaceFileCreated, command_for,
+    ApprovalError, AuditEvent, AuditLog, BatterySummaryProvider, BeginOutcome, BlossomEngine,
+    Capability, EngineError, Executor, FileContent, MemorySummary, MemorySummaryProvider,
+    OsIdentity, OsIdentityProvider, PolicyDecision, PolicyEngine, PolicyRule,
+    PreparedApprovalStore, ProcessList, ProcessListProvider, ProcessSelf, ProcessSelfProvider,
+    RequestId, RequestOrigin, ServiceStatus, ServiceStatusProvider, SessionContext, StorageSummary,
+    StorageSummaryProvider, SystemUptime, ToolOutput, ToolRequest, ToolRequestWire, UptimeProvider,
+    WorkspaceCreateState, WorkspaceFileCreated, command_for,
 };
 use std::fmt::Write as _;
 
 pub const APPROVAL_TTL_MS: u64 = 30_000;
+
+macro_rules! prepare_cli_json {
+    ($engine:expr, $json:expr, $workspace:expr) => {{
+        ToolRequestWire::parse_json(&$json)
+            .map_err(EngineError::InvalidRequest)
+            .and_then(|wire| {
+                $engine.prepare_wire(
+                    wire,
+                    SessionContext {
+                        workspace_root: $workspace,
+                        origin: RequestOrigin::UserCli,
+                    },
+                )
+            })
+    }};
+}
+
+macro_rules! begin_cli_json {
+    ($engine:expr, $json:expr, $workspace:expr, $now:expr) => {{
+        prepare_cli_json!($engine, $json, $workspace)
+            .and_then(|prepared| $engine.begin_prepared(prepared, $now))
+    }};
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ApprovalChoice {
@@ -229,22 +252,32 @@ where
         capability: Capability::SystemReadKernelIdentity,
         decision: PolicyDecision::Ask,
     }]);
-    let mut engine = BlossomEngine::new(policy, ApprovalStore::new(APPROVAL_TTL_MS), executor);
+    let mut engine = BlossomEngine::new(
+        policy,
+        PreparedApprovalStore::new(APPROVAL_TTL_MS),
+        executor,
+    );
     let request = ToolRequest::SystemUname { request_id };
     let request_json = format!(
         r#"{{"request_id":"{}","tool":"system.uname","arguments":{{}}}}"#,
         request.request_id().as_str()
     );
 
+    let prepared = match prepare_cli_json!(engine, request_json, "/") {
+        Ok(prepared) => prepared,
+        Err(_) => return outcome(1, &engine),
+    };
+    let preview = exact_preview(prepared.request());
+    let preview_sha256 = blossom_core::audit::digest_bytes(preview.as_bytes());
     let begun_at = clock.now_ms();
-    let (request, token) = match engine.begin(&request_json, begun_at) {
-        Ok(BeginOutcome::ApprovalRequired { request, token }) => (request, token),
+    let token = match engine.begin_prepared_with_preview(prepared, preview_sha256.clone(), begun_at)
+    {
+        Ok(BeginOutcome::ApprovalRequired { token, .. }) => token,
         Ok(BeginOutcome::Denied) => return outcome(2, &engine),
         Ok(BeginOutcome::Completed(_)) => return outcome(0, &engine),
         Err(_) => return outcome(1, &engine),
     };
 
-    let preview = exact_preview(&request);
     let choice = if interaction.is_interactive() {
         interaction.choose(&preview)
     } else {
@@ -252,10 +285,14 @@ where
     };
     let decided_at = clock.now_ms();
     let result = match choice {
-        ApprovalChoice::ApproveOnce => engine.approve(token, request, decided_at).map(|_| 0),
-        ApprovalChoice::Deny => engine.deny_approval(token, request, decided_at).map(|()| 2),
+        ApprovalChoice::ApproveOnce => engine
+            .approve(token, &preview_sha256, decided_at)
+            .map(|_| 0),
+        ApprovalChoice::Deny => engine
+            .deny_approval(token, &preview_sha256, decided_at)
+            .map(|()| 2),
         ApprovalChoice::Cancel => engine
-            .cancel_approval(token, request, decided_at)
+            .cancel_approval(token, &preview_sha256, decided_at)
             .map(|()| 2),
     };
     match result {
@@ -282,7 +319,7 @@ where
     }]);
     let mut engine = BlossomEngine::with_os_identity(
         policy,
-        ApprovalStore::new(APPROVAL_TTL_MS),
+        PreparedApprovalStore::new(APPROVAL_TTL_MS),
         executor,
         os_identity,
     );
@@ -290,7 +327,7 @@ where
         r#"{{"request_id":"{}","tool":"system.os.identity","arguments":{{}}}}"#,
         request_id.as_str()
     );
-    let result = match engine.begin(&request_json, clock.now_ms()) {
+    let result = match begin_cli_json!(engine, request_json, "/", clock.now_ms()) {
         Ok(BeginOutcome::Completed(completed)) => match completed.output {
             ToolOutput::OsIdentity(identity) if completed.verification.succeeded => {
                 Some(render_os_identity(&identity))
@@ -319,7 +356,7 @@ where
     }]);
     let mut engine = BlossomEngine::with_uptime(
         policy,
-        ApprovalStore::new(APPROVAL_TTL_MS),
+        PreparedApprovalStore::new(APPROVAL_TTL_MS),
         executor,
         uptime,
     );
@@ -327,7 +364,7 @@ where
         r#"{{"request_id":"{}","tool":"system.uptime","arguments":{{}}}}"#,
         request_id.as_str()
     );
-    let result = match engine.begin(&request_json, clock.now_ms()) {
+    let result = match begin_cli_json!(engine, request_json, "/", clock.now_ms()) {
         Ok(BeginOutcome::Completed(completed)) => match completed.output {
             ToolOutput::Uptime(uptime) if completed.verification.succeeded => {
                 Some(render_uptime(&uptime))
@@ -356,7 +393,7 @@ where
     }]);
     let mut engine = BlossomEngine::with_memory_summary(
         policy,
-        ApprovalStore::new(APPROVAL_TTL_MS),
+        PreparedApprovalStore::new(APPROVAL_TTL_MS),
         executor,
         memory_summary,
     );
@@ -364,7 +401,7 @@ where
         r#"{{"request_id":"{}","tool":"system.memory.summary","arguments":{{}}}}"#,
         request_id.as_str()
     );
-    let result = match engine.begin(&request_json, clock.now_ms()) {
+    let result = match begin_cli_json!(engine, request_json, "/", clock.now_ms()) {
         Ok(BeginOutcome::Completed(completed)) => match completed.output {
             ToolOutput::MemorySummary(summary) if completed.verification.succeeded => {
                 Some(render_memory_summary(&summary))
@@ -393,7 +430,7 @@ where
     }]);
     let mut engine = BlossomEngine::with_storage_summary(
         policy,
-        ApprovalStore::new(APPROVAL_TTL_MS),
+        PreparedApprovalStore::new(APPROVAL_TTL_MS),
         executor,
         storage_summary,
     );
@@ -401,7 +438,7 @@ where
         r#"{{"request_id":"{}","tool":"system.storage.summary","arguments":{{}}}}"#,
         request_id.as_str()
     );
-    let result = match engine.begin(&request_json, clock.now_ms()) {
+    let result = match begin_cli_json!(engine, request_json, "/", clock.now_ms()) {
         Ok(BeginOutcome::Completed(completed)) => match completed.output {
             ToolOutput::StorageSummary(summary) if completed.verification.succeeded => {
                 Some(render_storage_summary(&summary))
@@ -430,7 +467,7 @@ where
     }]);
     let mut engine = BlossomEngine::with_process_self(
         policy,
-        ApprovalStore::new(APPROVAL_TTL_MS),
+        PreparedApprovalStore::new(APPROVAL_TTL_MS),
         executor,
         process_self,
     );
@@ -438,7 +475,7 @@ where
         r#"{{"request_id":"{}","tool":"process.self","arguments":{{}}}}"#,
         request_id.as_str()
     );
-    let result = match engine.begin(&request_json, clock.now_ms()) {
+    let result = match begin_cli_json!(engine, request_json, "/", clock.now_ms()) {
         Ok(BeginOutcome::Completed(completed)) => match completed.output {
             ToolOutput::ProcessSelf(identity) if completed.verification.succeeded => {
                 Some(render_process_self(&identity))
@@ -469,7 +506,7 @@ where
     }]);
     let mut engine = BlossomEngine::with_process_list(
         policy,
-        ApprovalStore::new(APPROVAL_TTL_MS),
+        PreparedApprovalStore::new(APPROVAL_TTL_MS),
         executor,
         process_list,
     );
@@ -478,12 +515,21 @@ where
         r#"{{"request_id":"{}","tool":"process.list","arguments":{{}}}}"#,
         request.request_id().as_str()
     );
-    let (request, token) = match engine.begin(&request_json, clock.now_ms()) {
-        Ok(BeginOutcome::ApprovalRequired { request, token }) => (request, token),
+    let prepared = match prepare_cli_json!(engine, request_json, "/") {
+        Ok(prepared) => prepared,
+        Err(_) => return outcome(1, &engine),
+    };
+    let preview = process_list_preview(prepared.request());
+    let preview_sha256 = blossom_core::audit::digest_bytes(preview.as_bytes());
+    let token = match engine.begin_prepared_with_preview(
+        prepared,
+        preview_sha256.clone(),
+        clock.now_ms(),
+    ) {
+        Ok(BeginOutcome::ApprovalRequired { token, .. }) => token,
         Ok(BeginOutcome::Denied) => return outcome(2, &engine),
         _ => return outcome(1, &engine),
     };
-    let preview = process_list_preview(&request);
     let choice = if interaction.is_interactive() {
         interaction.choose(&preview)
     } else {
@@ -491,7 +537,7 @@ where
     };
     let decided_at = clock.now_ms();
     match choice {
-        ApprovalChoice::ApproveOnce => match engine.approve(token, request, decided_at) {
+        ApprovalChoice::ApproveOnce => match engine.approve(token, &preview_sha256, decided_at) {
             Ok(completed) => match completed.output {
                 ToolOutput::ProcessList(list) if completed.verification.succeeded => {
                     outcome_with_result(0, Some(render_process_list(&list)), &engine)
@@ -501,15 +547,17 @@ where
             Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
             Err(_) => outcome(1, &engine),
         },
-        ApprovalChoice::Deny => match engine.deny_approval(token, request, decided_at) {
+        ApprovalChoice::Deny => match engine.deny_approval(token, &preview_sha256, decided_at) {
             Ok(()) => outcome(2, &engine),
             Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
             Err(_) => outcome(1, &engine),
         },
-        ApprovalChoice::Cancel => match engine.cancel_approval(token, request, decided_at) {
-            Ok(()) => outcome(2, &engine),
-            Err(_) => outcome(1, &engine),
-        },
+        ApprovalChoice::Cancel => {
+            match engine.cancel_approval(token, &preview_sha256, decided_at) {
+                Ok(()) => outcome(2, &engine),
+                Err(_) => outcome(1, &engine),
+            }
+        }
     }
 }
 
@@ -522,40 +570,46 @@ pub fn process_list_preview(request: &ToolRequest) -> String {
     )
 }
 
-pub fn run_file_read<E, F, I, C>(
+pub fn run_file_read<E, I, C>(
     executor: E,
-    file_content: F,
+    absolute_path: &str,
     interaction: &mut I,
     clock: &mut C,
     request_id: RequestId,
 ) -> RunOutcome
 where
     E: Executor,
-    F: FileContentProvider,
     I: Interaction,
     C: Clock,
 {
-    let selection = file_content.selection().clone();
     let policy = PolicyEngine::new(vec![PolicyRule {
         capability: Capability::FilesReadContent,
         decision: PolicyDecision::Ask,
     }]);
-    let mut engine = BlossomEngine::with_file_content(
+    let mut engine = BlossomEngine::new(
         policy,
-        ApprovalStore::new(APPROVAL_TTL_MS),
+        PreparedApprovalStore::new(APPROVAL_TTL_MS),
         executor,
-        file_content,
     );
     let request_json = serde_json::json!({
         "request_id": request_id.as_str(), "tool": "files.read.content",
-        "arguments": { "selection": selection }
+        "arguments": { "absolute_path": absolute_path }
     })
     .to_string();
-    let (request, token) = match engine.begin(&request_json, clock.now_ms()) {
-        Ok(BeginOutcome::ApprovalRequired { request, token }) => (request, token),
+    let prepared = match prepare_cli_json!(engine, request_json, "/") {
+        Ok(prepared) => prepared,
+        Err(_) => return outcome(1, &engine),
+    };
+    let preview = file_read_preview(prepared.request());
+    let preview_sha256 = blossom_core::audit::digest_bytes(preview.as_bytes());
+    let token = match engine.begin_prepared_with_preview(
+        prepared,
+        preview_sha256.clone(),
+        clock.now_ms(),
+    ) {
+        Ok(BeginOutcome::ApprovalRequired { token, .. }) => token,
         _ => return outcome(1, &engine),
     };
-    let preview = file_read_preview(&request);
     let choice = if interaction.is_interactive() {
         interaction.choose(&preview)
     } else {
@@ -563,7 +617,7 @@ where
     };
     let decided_at = clock.now_ms();
     match choice {
-        ApprovalChoice::ApproveOnce => match engine.approve(token, request, decided_at) {
+        ApprovalChoice::ApproveOnce => match engine.approve(token, &preview_sha256, decided_at) {
             Ok(completed) => match completed.output {
                 ToolOutput::FileContent(result) if completed.verification.succeeded => {
                     outcome_with_result(0, Some(render_file_content(&result)), &engine)
@@ -573,15 +627,17 @@ where
             Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
             Err(_) => outcome(1, &engine),
         },
-        ApprovalChoice::Deny => match engine.deny_approval(token, request, decided_at) {
+        ApprovalChoice::Deny => match engine.deny_approval(token, &preview_sha256, decided_at) {
             Ok(()) => outcome(2, &engine),
             Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
             Err(_) => outcome(1, &engine),
         },
-        ApprovalChoice::Cancel => match engine.cancel_approval(token, request, decided_at) {
-            Ok(()) => outcome(2, &engine),
-            Err(_) => outcome(1, &engine),
-        },
+        ApprovalChoice::Cancel => {
+            match engine.cancel_approval(token, &preview_sha256, decided_at) {
+                Ok(()) => outcome(2, &engine),
+                Err(_) => outcome(1, &engine),
+            }
+        }
     }
 }
 
@@ -599,40 +655,51 @@ pub fn file_read_preview(request: &ToolRequest) -> String {
     )
 }
 
-pub fn run_workspace_create<E, W, I, C>(
+pub fn run_workspace_create<E, I, C>(
     executor: E,
-    workspace_create: W,
+    workspace_root: &str,
+    name: &str,
+    content: &str,
     interaction: &mut I,
     clock: &mut C,
     request_id: RequestId,
 ) -> RunOutcome
 where
     E: Executor,
-    W: WorkspaceCreateProvider,
     I: Interaction,
     C: Clock,
 {
-    let selection = workspace_create.selection().clone();
     let policy = PolicyEngine::new(vec![PolicyRule {
         capability: Capability::FilesWriteCreate,
         decision: PolicyDecision::Ask,
     }]);
-    let mut engine = BlossomEngine::with_workspace_create(
+    let mut engine = BlossomEngine::new(
         policy,
-        ApprovalStore::new(APPROVAL_TTL_MS),
+        PreparedApprovalStore::new(APPROVAL_TTL_MS),
         executor,
-        workspace_create,
     );
     let request_json = serde_json::json!({
         "request_id": request_id.as_str(), "tool": "files.write.create",
-        "arguments": { "selection": selection }
+        "arguments": {
+            "name": name,
+            "content": content,
+        }
     })
     .to_string();
-    let (request, token) = match engine.begin(&request_json, clock.now_ms()) {
-        Ok(BeginOutcome::ApprovalRequired { request, token }) => (request, token),
+    let prepared = match prepare_cli_json!(engine, request_json, workspace_root) {
+        Ok(prepared) => prepared,
+        Err(_) => return outcome(1, &engine),
+    };
+    let preview = workspace_create_preview(prepared.request());
+    let preview_sha256 = blossom_core::audit::digest_bytes(preview.as_bytes());
+    let token = match engine.begin_prepared_with_preview(
+        prepared,
+        preview_sha256.clone(),
+        clock.now_ms(),
+    ) {
+        Ok(BeginOutcome::ApprovalRequired { token, .. }) => token,
         _ => return outcome(1, &engine),
     };
-    let preview = workspace_create_preview(&request);
     let choice = if interaction.is_interactive() {
         interaction.choose(&preview)
     } else {
@@ -640,7 +707,7 @@ where
     };
     let decided_at = clock.now_ms();
     match choice {
-        ApprovalChoice::ApproveOnce => match engine.approve(token, request, decided_at) {
+        ApprovalChoice::ApproveOnce => match engine.approve(token, &preview_sha256, decided_at) {
             Ok(completed) => match completed.output {
                 ToolOutput::WorkspaceFileCreated(result) => {
                     let exit_code = if result.state == WorkspaceCreateState::DurableCreated
@@ -657,15 +724,17 @@ where
             Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
             Err(_) => outcome(1, &engine),
         },
-        ApprovalChoice::Deny => match engine.deny_approval(token, request, decided_at) {
+        ApprovalChoice::Deny => match engine.deny_approval(token, &preview_sha256, decided_at) {
             Ok(()) => outcome(2, &engine),
             Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
             Err(_) => outcome(1, &engine),
         },
-        ApprovalChoice::Cancel => match engine.cancel_approval(token, request, decided_at) {
-            Ok(()) => outcome(2, &engine),
-            Err(_) => outcome(1, &engine),
-        },
+        ApprovalChoice::Cancel => {
+            match engine.cancel_approval(token, &preview_sha256, decided_at) {
+                Ok(()) => outcome(2, &engine),
+                Err(_) => outcome(1, &engine),
+            }
+        }
     }
 }
 
@@ -709,20 +778,29 @@ where
     }]);
     let mut engine = BlossomEngine::with_service_status(
         policy,
-        ApprovalStore::new(APPROVAL_TTL_MS),
+        PreparedApprovalStore::new(APPROVAL_TTL_MS),
         executor,
         service_status,
     );
     let request_json = serde_json::json!({
         "request_id": request_id.as_str(), "tool": "services.read.status",
-        "arguments": { "selection": { "unit": unit } }
+        "arguments": { "unit": unit }
     })
     .to_string();
-    let (request, token) = match engine.begin(&request_json, clock.now_ms()) {
-        Ok(BeginOutcome::ApprovalRequired { request, token }) => (request, token),
+    let prepared = match prepare_cli_json!(engine, request_json, "/") {
+        Ok(prepared) => prepared,
+        Err(_) => return outcome(1, &engine),
+    };
+    let preview = service_status_preview(prepared.request());
+    let preview_sha256 = blossom_core::audit::digest_bytes(preview.as_bytes());
+    let token = match engine.begin_prepared_with_preview(
+        prepared,
+        preview_sha256.clone(),
+        clock.now_ms(),
+    ) {
+        Ok(BeginOutcome::ApprovalRequired { token, .. }) => token,
         _ => return outcome(1, &engine),
     };
-    let preview = service_status_preview(&request);
     let choice = if interaction.is_interactive() {
         interaction.choose(&preview)
     } else {
@@ -730,7 +808,7 @@ where
     };
     let decided_at = clock.now_ms();
     match choice {
-        ApprovalChoice::ApproveOnce => match engine.approve(token, request, decided_at) {
+        ApprovalChoice::ApproveOnce => match engine.approve(token, &preview_sha256, decided_at) {
             Ok(completed) => match completed.output {
                 ToolOutput::ServiceStatus(result) if completed.verification.succeeded => {
                     outcome_with_result(0, Some(render_service_status(&result)), &engine)
@@ -740,15 +818,17 @@ where
             Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
             Err(_) => outcome(1, &engine),
         },
-        ApprovalChoice::Deny => match engine.deny_approval(token, request, decided_at) {
+        ApprovalChoice::Deny => match engine.deny_approval(token, &preview_sha256, decided_at) {
             Ok(()) => outcome(2, &engine),
             Err(EngineError::Approval(ApprovalError::Expired)) => outcome(3, &engine),
             Err(_) => outcome(1, &engine),
         },
-        ApprovalChoice::Cancel => match engine.cancel_approval(token, request, decided_at) {
-            Ok(()) => outcome(2, &engine),
-            Err(_) => outcome(1, &engine),
-        },
+        ApprovalChoice::Cancel => {
+            match engine.cancel_approval(token, &preview_sha256, decided_at) {
+                Ok(()) => outcome(2, &engine),
+                Err(_) => outcome(1, &engine),
+            }
+        }
     }
 }
 
@@ -804,12 +884,11 @@ fn outcome<
     S: StorageSummaryProvider,
     P: ProcessSelfProvider,
     L: ProcessListProvider,
-    F: FileContentProvider,
-    W: WorkspaceCreateProvider,
     V: ServiceStatusProvider,
+    B: BatterySummaryProvider,
 >(
     exit_code: i32,
-    engine: &BlossomEngine<E, O, U, M, S, P, L, F, W, V>,
+    engine: &BlossomEngine<E, O, U, M, S, P, L, V, B>,
 ) -> RunOutcome {
     outcome_with_result(exit_code, None, engine)
 }
@@ -822,13 +901,12 @@ fn outcome_with_result<
     S: StorageSummaryProvider,
     P: ProcessSelfProvider,
     L: ProcessListProvider,
-    F: FileContentProvider,
-    W: WorkspaceCreateProvider,
     V: ServiceStatusProvider,
+    B: BatterySummaryProvider,
 >(
     exit_code: i32,
     result: Option<String>,
-    engine: &BlossomEngine<E, O, U, M, S, P, L, F, W, V>,
+    engine: &BlossomEngine<E, O, U, M, S, P, L, V, B>,
 ) -> RunOutcome {
     RunOutcome {
         exit_code,
@@ -982,8 +1060,12 @@ fn describe_event(event: &AuditEvent) -> String {
             outcome
         ),
         AuditEvent::RequestRejected { category } => format!("request rejected ({category})"),
-        AuditEvent::RequestAccepted { request_id, tool } => {
-            format!("request {request_id} accepted for {tool}")
+        AuditEvent::RequestAccepted {
+            request_id,
+            tool,
+            origin,
+        } => {
+            format!("request {request_id} accepted for {tool} ({origin:?})")
         }
         AuditEvent::PolicyEvaluated {
             request_id,

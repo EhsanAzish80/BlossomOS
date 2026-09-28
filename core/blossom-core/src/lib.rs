@@ -16,6 +16,7 @@ pub mod network_connectivity;
 pub mod orchestration;
 pub mod os_identity;
 pub mod policy;
+pub mod prepared_request;
 pub mod privileged;
 pub mod process_list;
 pub mod process_self;
@@ -30,7 +31,7 @@ pub mod uptime;
 pub mod verification;
 pub mod workspace_create;
 
-pub use approval::{ApprovalError, ApprovalStore, ApprovalToken};
+pub use approval::{ApprovalError, ApprovalToken};
 pub use audit::{AuditEvent, AuditLog, AuditRecord, BatteryAuditStatus};
 pub use battery_summary::{
     BATTERY_READ_TIMEOUT_MS, BatteryObservation, BatteryObservationError, BatteryReadError,
@@ -124,6 +125,11 @@ pub use os_identity::{
     UnavailableOsIdentityProvider, parse_os_release,
 };
 pub use policy::{Capability, PolicyDecision, PolicyEngine, PolicyRule};
+pub use prepared_request::{
+    ApprovalCapacity, CapacityError, CapacityReservation, PreparedApprovalStore,
+    PreparedToolRequest, RequestOrigin, RequestResolver, ResolveError, SessionContext,
+    ToolRequestWire,
+};
 pub use process_list::{
     MAX_PROCESS_DIRECTORY_ENTRIES, MAX_PROCESS_NAME_BYTES, MAX_PROCESS_RESULTS,
     MAX_PROCESS_STATUS_BYTES, MAX_PROCESS_STATUS_LINES, PROC_ROOT, ProcProcessListReader,
@@ -176,9 +182,9 @@ pub use verification::{
 pub use workspace_create::{
     AtomicWorkspaceFileCreator, DirectoryIdentity, MAX_MODEL_WORKSPACE_CONTENT_BYTES,
     MODEL_WORKSPACE_NAME_PATTERN, ModelWorkspaceCreateProposal, ModelWorkspaceProposalError,
-    UnavailableWorkspaceCreateProvider,
-    WORKSPACE_FILE_MODE, WorkspaceCreateError, WorkspaceCreateProvider, WorkspaceCreateSelection,
-    WorkspaceCreateState, WorkspaceFileCreated, model_workspace_proposal_grammar,
-    model_workspace_proposal_schema, resolve_model_workspace_proposal,
-    validate_model_workspace_proposal, validate_relative_destination, validate_workspace_selection,
+    UnavailableWorkspaceCreateProvider, WORKSPACE_FILE_MODE, WorkspaceCreateError,
+    WorkspaceCreateProvider, WorkspaceCreateSelection, WorkspaceCreateState, WorkspaceFileCreated,
+    model_workspace_proposal_grammar, model_workspace_proposal_schema,
+    resolve_model_workspace_proposal, validate_model_workspace_proposal,
+    validate_relative_destination, validate_workspace_selection,
 };

@@ -1,7 +1,7 @@
 use blossom_core::{
-    ApprovalStore, BlossomEngine, Capability, CommandSpec, ExecutionResult, Executor,
-    ExecutorError, OrchestrationEvent, PlanId, PlanOrchestrator, PlanOutcome, PolicyDecision,
-    PolicyEngine, PolicyRule, ProposedPlanStep, RequestId, StepId, StepTerminalOutcome,
+    BlossomEngine, Capability, CommandSpec, ExecutionResult, Executor, ExecutorError,
+    OrchestrationEvent, PlanId, PlanOrchestrator, PlanOutcome, PolicyDecision, PolicyEngine,
+    PolicyRule, PreparedApprovalStore, ProposedPlanStep, RequestId, StepId, StepTerminalOutcome,
     ToolRequest, ValidatedPlan,
 };
 use std::sync::{
@@ -67,7 +67,7 @@ fn engine(
             capability: Capability::SystemReadKernelIdentity,
             decision,
         }]),
-        ApprovalStore::new(ttl_ms),
+        PreparedApprovalStore::new(ttl_ms),
         CountingExecutor { calls, exit_code },
     )
 }

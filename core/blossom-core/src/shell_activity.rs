@@ -43,12 +43,16 @@ fn project_event(
     event: &AuditEvent,
 ) -> Result<(RequestId, ShellActivityKind, ShellActivityCategory), ShellActivityError> {
     let (id, kind, category) = match event {
-        AuditEvent::RequestAccepted { request_id, tool } if tool == "system.uname" => (
+        AuditEvent::RequestAccepted {
+            request_id, tool, ..
+        } if tool == "system.uname" => (
             request_id,
             ShellActivityKind::Request,
             ShellActivityCategory::Accepted,
         ),
-        AuditEvent::RequestAccepted { request_id, tool } if tool == "system.battery.summary" => (
+        AuditEvent::RequestAccepted {
+            request_id, tool, ..
+        } if tool == "system.battery.summary" => (
             request_id,
             ShellActivityKind::Request,
             ShellActivityCategory::Accepted,
@@ -197,6 +201,7 @@ mod tests {
         audit.append(AuditEvent::RequestAccepted {
             request_id: "shell-0000000000000007-1".into(),
             tool: "system.uname".into(),
+            origin: crate::RequestOrigin::InternalFixed,
         });
         audit.append(AuditEvent::PolicyEvaluated {
             request_id: "shell-0000000000000007-1".into(),

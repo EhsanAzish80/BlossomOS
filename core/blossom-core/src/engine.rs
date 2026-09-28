@@ -1,12 +1,10 @@
-use crate::approval::{ApprovalError, ApprovalStore, ApprovalToken};
+use crate::approval::{ApprovalError, ApprovalToken};
 use crate::audit::{AuditEvent, AuditLog};
 use crate::battery_summary::{
     BatteryObservation, BatteryReadError, BatterySummaryProvider, UnavailableBatterySummaryProvider,
 };
 use crate::executor::{CommandSpec, Executor, ExecutorError};
-use crate::file_read::{
-    FileContent, FileContentProvider, FileReadError, UnavailableFileContentProvider,
-};
+use crate::file_read::{FileContent, FileContentProvider, FileReadError};
 use crate::memory_summary::{
     MemorySummary, MemorySummaryError, MemorySummaryProvider, UnavailableMemorySummaryProvider,
 };
@@ -14,11 +12,14 @@ use crate::network_connectivity::{
     NetworkConnectivityObservation, NetworkConnectivityProvider, NetworkConnectivityReadError,
     UnavailableNetworkConnectivityProvider,
 };
-use crate::orchestration::TypedRequestEngine;
 use crate::os_identity::{
     OsIdentity, OsIdentityError, OsIdentityProvider, UnavailableOsIdentityProvider,
 };
 use crate::policy::{PolicyDecision, PolicyEngine};
+use crate::prepared_request::{
+    ApprovalCapacity, CapacityError, PreparedApprovalStore, PreparedAuthority, PreparedToolRequest,
+    RequestResolver, ResolveError, SessionContext, ToolRequestWire,
+};
 use crate::process_list::{
     ProcessList, ProcessListError, ProcessListProvider, UnavailableProcessListProvider,
 };
@@ -40,8 +41,7 @@ use crate::verification::{
     verify_workspace_file_created,
 };
 use crate::workspace_create::{
-    UnavailableWorkspaceCreateProvider, WorkspaceCreateError, WorkspaceCreateProvider,
-    WorkspaceFileCreated,
+    WorkspaceCreateError, WorkspaceCreateProvider, WorkspaceFileCreated,
 };
 
 pub struct BlossomEngine<
@@ -52,13 +52,12 @@ pub struct BlossomEngine<
     S = UnavailableStorageSummaryProvider,
     P = UnavailableProcessSelfProvider,
     L = UnavailableProcessListProvider,
-    F = UnavailableFileContentProvider,
-    W = UnavailableWorkspaceCreateProvider,
     V = UnavailableServiceStatusProvider,
     B = UnavailableBatterySummaryProvider,
 > {
     policy: PolicyEngine,
-    approvals: ApprovalStore,
+    approvals: PreparedApprovalStore,
+    capacity: ApprovalCapacity,
     executor: E,
     os_identity: O,
     uptime: U,
@@ -66,8 +65,6 @@ pub struct BlossomEngine<
     storage_summary: S,
     process_self: P,
     process_list: L,
-    file_content: F,
-    workspace_create: W,
     service_status: V,
     battery_summary: B,
     network_connectivity: Box<dyn NetworkConnectivityProvider + Send>,
@@ -83,14 +80,13 @@ impl<E: Executor>
         UnavailableStorageSummaryProvider,
         UnavailableProcessSelfProvider,
         UnavailableProcessListProvider,
-        UnavailableFileContentProvider,
-        UnavailableWorkspaceCreateProvider,
     >
 {
-    pub fn new(policy: PolicyEngine, approvals: ApprovalStore, executor: E) -> Self {
+    pub fn new(policy: PolicyEngine, approvals: PreparedApprovalStore, executor: E) -> Self {
         Self {
             policy,
             approvals,
+            capacity: ApprovalCapacity::new(32).expect("non-zero approval capacity"),
             executor,
             os_identity: UnavailableOsIdentityProvider,
             uptime: UnavailableUptimeProvider,
@@ -98,8 +94,6 @@ impl<E: Executor>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
-            file_content: UnavailableFileContentProvider::default(),
-            workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
             network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
@@ -113,13 +107,14 @@ impl<E: Executor, O: OsIdentityProvider>
 {
     pub fn with_os_identity(
         policy: PolicyEngine,
-        approvals: ApprovalStore,
+        approvals: PreparedApprovalStore,
         executor: E,
         os_identity: O,
     ) -> Self {
         Self {
             policy,
             approvals,
+            capacity: ApprovalCapacity::new(32).expect("non-zero approval capacity"),
             executor,
             os_identity,
             uptime: UnavailableUptimeProvider,
@@ -127,8 +122,6 @@ impl<E: Executor, O: OsIdentityProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
-            file_content: UnavailableFileContentProvider::default(),
-            workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
             network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
@@ -142,13 +135,14 @@ impl<E: Executor, U: UptimeProvider>
 {
     pub fn with_uptime(
         policy: PolicyEngine,
-        approvals: ApprovalStore,
+        approvals: PreparedApprovalStore,
         executor: E,
         uptime: U,
     ) -> Self {
         Self {
             policy,
             approvals,
+            capacity: ApprovalCapacity::new(32).expect("non-zero approval capacity"),
             executor,
             os_identity: UnavailableOsIdentityProvider,
             uptime,
@@ -156,8 +150,6 @@ impl<E: Executor, U: UptimeProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
-            file_content: UnavailableFileContentProvider::default(),
-            workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
             network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
@@ -171,13 +163,14 @@ impl<E: Executor, M: MemorySummaryProvider>
 {
     pub fn with_memory_summary(
         policy: PolicyEngine,
-        approvals: ApprovalStore,
+        approvals: PreparedApprovalStore,
         executor: E,
         memory_summary: M,
     ) -> Self {
         Self {
             policy,
             approvals,
+            capacity: ApprovalCapacity::new(32).expect("non-zero approval capacity"),
             executor,
             os_identity: UnavailableOsIdentityProvider,
             uptime: UnavailableUptimeProvider,
@@ -185,8 +178,6 @@ impl<E: Executor, M: MemorySummaryProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
-            file_content: UnavailableFileContentProvider::default(),
-            workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
             network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
@@ -206,13 +197,14 @@ impl<E: Executor, S: StorageSummaryProvider>
 {
     pub fn with_storage_summary(
         policy: PolicyEngine,
-        approvals: ApprovalStore,
+        approvals: PreparedApprovalStore,
         executor: E,
         storage_summary: S,
     ) -> Self {
         Self {
             policy,
             approvals,
+            capacity: ApprovalCapacity::new(32).expect("non-zero approval capacity"),
             executor,
             os_identity: UnavailableOsIdentityProvider,
             uptime: UnavailableUptimeProvider,
@@ -220,8 +212,6 @@ impl<E: Executor, S: StorageSummaryProvider>
             storage_summary,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
-            file_content: UnavailableFileContentProvider::default(),
-            workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
             network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
@@ -239,19 +229,18 @@ impl<E: Executor, P: ProcessSelfProvider>
         UnavailableStorageSummaryProvider,
         P,
         UnavailableProcessListProvider,
-        UnavailableFileContentProvider,
-        UnavailableWorkspaceCreateProvider,
     >
 {
     pub fn with_process_self(
         policy: PolicyEngine,
-        approvals: ApprovalStore,
+        approvals: PreparedApprovalStore,
         executor: E,
         process_self: P,
     ) -> Self {
         Self {
             policy,
             approvals,
+            capacity: ApprovalCapacity::new(32).expect("non-zero approval capacity"),
             executor,
             os_identity: UnavailableOsIdentityProvider,
             uptime: UnavailableUptimeProvider,
@@ -259,8 +248,6 @@ impl<E: Executor, P: ProcessSelfProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self,
             process_list: UnavailableProcessListProvider,
-            file_content: UnavailableFileContentProvider::default(),
-            workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
             network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
@@ -278,18 +265,18 @@ impl<E: Executor, L: ProcessListProvider>
         UnavailableStorageSummaryProvider,
         UnavailableProcessSelfProvider,
         L,
-        UnavailableFileContentProvider,
     >
 {
     pub fn with_process_list(
         policy: PolicyEngine,
-        approvals: ApprovalStore,
+        approvals: PreparedApprovalStore,
         executor: E,
         process_list: L,
     ) -> Self {
         Self {
             policy,
             approvals,
+            capacity: ApprovalCapacity::new(32).expect("non-zero approval capacity"),
             executor,
             os_identity: UnavailableOsIdentityProvider,
             uptime: UnavailableUptimeProvider,
@@ -297,86 +284,6 @@ impl<E: Executor, L: ProcessListProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list,
-            file_content: UnavailableFileContentProvider::default(),
-            workspace_create: UnavailableWorkspaceCreateProvider::default(),
-            service_status: UnavailableServiceStatusProvider,
-            battery_summary: UnavailableBatterySummaryProvider,
-            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
-            audit: AuditLog::default(),
-        }
-    }
-}
-
-impl<E: Executor, F: FileContentProvider>
-    BlossomEngine<
-        E,
-        UnavailableOsIdentityProvider,
-        UnavailableUptimeProvider,
-        UnavailableMemorySummaryProvider,
-        UnavailableStorageSummaryProvider,
-        UnavailableProcessSelfProvider,
-        UnavailableProcessListProvider,
-        F,
-        UnavailableWorkspaceCreateProvider,
-    >
-{
-    pub fn with_file_content(
-        policy: PolicyEngine,
-        approvals: ApprovalStore,
-        executor: E,
-        file_content: F,
-    ) -> Self {
-        Self {
-            policy,
-            approvals,
-            executor,
-            os_identity: UnavailableOsIdentityProvider,
-            uptime: UnavailableUptimeProvider,
-            memory_summary: UnavailableMemorySummaryProvider,
-            storage_summary: UnavailableStorageSummaryProvider,
-            process_self: UnavailableProcessSelfProvider,
-            process_list: UnavailableProcessListProvider,
-            file_content,
-            workspace_create: UnavailableWorkspaceCreateProvider::default(),
-            service_status: UnavailableServiceStatusProvider,
-            battery_summary: UnavailableBatterySummaryProvider,
-            network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
-            audit: AuditLog::default(),
-        }
-    }
-}
-
-impl<E: Executor, W: WorkspaceCreateProvider>
-    BlossomEngine<
-        E,
-        UnavailableOsIdentityProvider,
-        UnavailableUptimeProvider,
-        UnavailableMemorySummaryProvider,
-        UnavailableStorageSummaryProvider,
-        UnavailableProcessSelfProvider,
-        UnavailableProcessListProvider,
-        UnavailableFileContentProvider,
-        W,
-    >
-{
-    pub fn with_workspace_create(
-        policy: PolicyEngine,
-        approvals: ApprovalStore,
-        executor: E,
-        workspace_create: W,
-    ) -> Self {
-        Self {
-            policy,
-            approvals,
-            executor,
-            os_identity: UnavailableOsIdentityProvider,
-            uptime: UnavailableUptimeProvider,
-            memory_summary: UnavailableMemorySummaryProvider,
-            storage_summary: UnavailableStorageSummaryProvider,
-            process_self: UnavailableProcessSelfProvider,
-            process_list: UnavailableProcessListProvider,
-            file_content: UnavailableFileContentProvider::default(),
-            workspace_create,
             service_status: UnavailableServiceStatusProvider,
             battery_summary: UnavailableBatterySummaryProvider,
             network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
@@ -394,20 +301,19 @@ impl<E: Executor, V: ServiceStatusProvider>
         UnavailableStorageSummaryProvider,
         UnavailableProcessSelfProvider,
         UnavailableProcessListProvider,
-        UnavailableFileContentProvider,
-        UnavailableWorkspaceCreateProvider,
         V,
     >
 {
     pub fn with_service_status(
         policy: PolicyEngine,
-        approvals: ApprovalStore,
+        approvals: PreparedApprovalStore,
         executor: E,
         service_status: V,
     ) -> Self {
         Self {
             policy,
             approvals,
+            capacity: ApprovalCapacity::new(32).expect("non-zero approval capacity"),
             executor,
             os_identity: UnavailableOsIdentityProvider,
             uptime: UnavailableUptimeProvider,
@@ -415,8 +321,6 @@ impl<E: Executor, V: ServiceStatusProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
-            file_content: UnavailableFileContentProvider::default(),
-            workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status,
             battery_summary: UnavailableBatterySummaryProvider,
             network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
@@ -434,21 +338,20 @@ impl<E: Executor, B: BatterySummaryProvider>
         UnavailableStorageSummaryProvider,
         UnavailableProcessSelfProvider,
         UnavailableProcessListProvider,
-        UnavailableFileContentProvider,
-        UnavailableWorkspaceCreateProvider,
         UnavailableServiceStatusProvider,
         B,
     >
 {
     pub fn with_battery_summary(
         policy: PolicyEngine,
-        approvals: ApprovalStore,
+        approvals: PreparedApprovalStore,
         executor: E,
         battery_summary: B,
     ) -> Self {
         Self {
             policy,
             approvals,
+            capacity: ApprovalCapacity::new(32).expect("non-zero approval capacity"),
             executor,
             os_identity: UnavailableOsIdentityProvider,
             uptime: UnavailableUptimeProvider,
@@ -456,8 +359,6 @@ impl<E: Executor, B: BatterySummaryProvider>
             storage_summary: UnavailableStorageSummaryProvider,
             process_self: UnavailableProcessSelfProvider,
             process_list: UnavailableProcessListProvider,
-            file_content: UnavailableFileContentProvider::default(),
-            workspace_create: UnavailableWorkspaceCreateProvider::default(),
             service_status: UnavailableServiceStatusProvider,
             battery_summary,
             network_connectivity: Box::new(UnavailableNetworkConnectivityProvider),
@@ -474,12 +375,50 @@ impl<
     S: StorageSummaryProvider,
     P: ProcessSelfProvider,
     L: ProcessListProvider,
-    F: FileContentProvider,
-    W: WorkspaceCreateProvider,
     V: ServiceStatusProvider,
     B: BatterySummaryProvider,
-> BlossomEngine<E, O, U, M, S, P, L, F, W, V, B>
+> BlossomEngine<E, O, U, M, S, P, L, V, B>
 {
+    pub fn begin_wire(
+        &mut self,
+        wire: ToolRequestWire,
+        session: SessionContext<'_>,
+        preview_sha256: Option<String>,
+        now_ms: u64,
+    ) -> Result<BeginOutcome, EngineError> {
+        let prepared = self.prepare_wire(wire, session)?;
+        match preview_sha256 {
+            Some(preview_sha256) => {
+                self.begin_prepared_with_preview(prepared, preview_sha256, now_ms)
+            }
+            None => self.begin_prepared(prepared, now_ms),
+        }
+    }
+
+    pub fn prepare_wire(
+        &self,
+        wire: ToolRequestWire,
+        session: SessionContext<'_>,
+    ) -> Result<PreparedToolRequest, EngineError> {
+        let reservation = self.capacity.reserve().map_err(EngineError::Capacity)?;
+        RequestResolver::resolve(wire, session, reservation).map_err(EngineError::Resolve)
+    }
+
+    #[cfg(test)]
+    fn begin_test_wire(&mut self, input: &str, now_ms: u64) -> Result<BeginOutcome, EngineError> {
+        let wire =
+            crate::ToolRequestWire::parse_json(input).map_err(EngineError::InvalidRequest)?;
+        self.begin_wire(
+            wire,
+            crate::SessionContext {
+                workspace_root: "/tmp",
+                origin: crate::RequestOrigin::UserCli,
+            },
+            None,
+            now_ms,
+        )
+    }
+
     pub fn with_network_connectivity<N: NetworkConnectivityProvider + Send + 'static>(
         mut self,
         provider: N,
@@ -488,29 +427,26 @@ impl<
         self
     }
 
-    pub fn begin(&mut self, input: &str, now_ms: u64) -> Result<BeginOutcome, EngineError> {
-        let request = match ToolRequest::parse_json(input) {
-            Ok(request) => request,
-            Err(error) => {
-                self.audit.append(AuditEvent::RequestRejected {
-                    category: request_error_category(&error).into(),
-                });
-                return Err(EngineError::InvalidRequest(error));
-            }
-        };
-        self.begin_request(request, now_ms)
-    }
-
-    /// Starts one already-validated typed request through the same policy,
-    /// approval, execution, verification, and audit path as JSON input.
-    pub fn begin_request(
+    pub fn begin_prepared(
         &mut self,
-        request: ToolRequest,
+        prepared: PreparedToolRequest,
         now_ms: u64,
     ) -> Result<BeginOutcome, EngineError> {
+        let preview_sha256 = request_preview_sha256(prepared.request());
+        self.begin_prepared_with_preview(prepared, preview_sha256, now_ms)
+    }
+
+    pub fn begin_prepared_with_preview(
+        &mut self,
+        prepared: PreparedToolRequest,
+        preview_sha256: String,
+        now_ms: u64,
+    ) -> Result<BeginOutcome, EngineError> {
+        let request = prepared.request();
         self.audit.append(AuditEvent::RequestAccepted {
             request_id: request.request_id().as_str().into(),
             tool: request.tool_name().into(),
+            origin: prepared.origin(),
         });
         let capability = PolicyEngine::required_capability(&request);
         let decision = self.policy.evaluate(&request);
@@ -527,50 +463,69 @@ impl<
                 Ok(BeginOutcome::Denied)
             }
             PolicyDecision::Ask => {
-                let token = self.approvals.issue(request.clone(), now_ms);
+                let request = request.clone();
+                let token = self
+                    .approvals
+                    .issue(prepared, preview_sha256.clone(), now_ms);
                 self.audit.append(AuditEvent::ApprovalIssued {
                     request_id: request.request_id().as_str().into(),
                 });
-                Ok(BeginOutcome::ApprovalRequired { request, token })
+                Ok(BeginOutcome::ApprovalRequired {
+                    request,
+                    token,
+                    preview_sha256,
+                })
             }
-            PolicyDecision::Allow => self.execute(request, now_ms).map(BeginOutcome::Completed),
+            PolicyDecision::Allow => self.execute(prepared, now_ms).map(BeginOutcome::Completed),
         }
     }
 
     pub fn approve(
         &mut self,
         token: ApprovalToken,
-        request: ToolRequest,
+        preview_sha256: &str,
         now_ms: u64,
     ) -> Result<CompletionOutcome, EngineError> {
-        if let Err(error) = self.approvals.consume(token, &request, now_ms) {
-            self.audit.append(AuditEvent::ApprovalRejected {
-                request_id: request.request_id().as_str().into(),
-                error,
-            });
-            return Err(EngineError::Approval(error));
-        }
+        let request_id = self
+            .approvals
+            .request(token)
+            .map(|request| request.request_id().as_str().to_owned())
+            .unwrap_or_else(|| "unknown".into());
+        let prepared = match self.approvals.consume(token, preview_sha256, now_ms) {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                self.audit
+                    .append(AuditEvent::ApprovalRejected { request_id, error });
+                return Err(EngineError::Approval(error));
+            }
+        };
         self.audit.append(AuditEvent::ApprovalConsumed {
-            request_id: request.request_id().as_str().into(),
+            request_id: prepared.request().request_id().as_str().into(),
         });
-        self.execute(request, now_ms)
+        self.execute(prepared, now_ms)
     }
 
     pub fn deny_approval(
         &mut self,
         token: ApprovalToken,
-        request: ToolRequest,
+        preview_sha256: &str,
         now_ms: u64,
     ) -> Result<(), EngineError> {
-        if let Err(error) = self.approvals.consume(token, &request, now_ms) {
-            self.audit.append(AuditEvent::ApprovalRejected {
-                request_id: request.request_id().as_str().into(),
-                error,
-            });
-            return Err(EngineError::Approval(error));
-        }
+        let request_id = self
+            .approvals
+            .request(token)
+            .map(|request| request.request_id().as_str().to_owned())
+            .unwrap_or_else(|| "unknown".into());
+        let prepared = match self.approvals.consume(token, preview_sha256, now_ms) {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                self.audit
+                    .append(AuditEvent::ApprovalRejected { request_id, error });
+                return Err(EngineError::Approval(error));
+            }
+        };
         self.audit.append(AuditEvent::ApprovalDenied {
-            request_id: request.request_id().as_str().into(),
+            request_id: prepared.request().request_id().as_str().into(),
         });
         Ok(())
     }
@@ -578,21 +533,49 @@ impl<
     pub fn cancel_approval(
         &mut self,
         token: ApprovalToken,
-        request: ToolRequest,
+        preview_sha256: &str,
         now_ms: u64,
     ) -> Result<(), EngineError> {
-        if let Err(error) = self.approvals.consume(token, &request, now_ms) {
+        let request_id = self
+            .approvals
+            .request(token)
+            .map(|request| request.request_id().as_str().to_owned())
+            .unwrap_or_else(|| "unknown".into());
+        if let Err(error) = self.approvals.remove(token, preview_sha256, now_ms) {
             self.audit.append(AuditEvent::ApprovalRejected {
-                request_id: request.request_id().as_str().into(),
+                request_id: request_id.clone(),
                 error,
             });
             if error != ApprovalError::Expired {
                 return Err(EngineError::Approval(error));
             }
         }
-        self.audit.append(AuditEvent::ApprovalCancelled {
-            request_id: request.request_id().as_str().into(),
-        });
+        self.audit
+            .append(AuditEvent::ApprovalCancelled { request_id });
+        Ok(())
+    }
+
+    pub(crate) fn cancel_pending(
+        &mut self,
+        token: ApprovalToken,
+        now_ms: u64,
+    ) -> Result<(), EngineError> {
+        let request_id = self
+            .approvals
+            .request(token)
+            .map(|request| request.request_id().as_str().to_owned())
+            .unwrap_or_else(|| "unknown".into());
+        if let Err(error) = self.approvals.discard(token, now_ms) {
+            self.audit.append(AuditEvent::ApprovalRejected {
+                request_id: request_id.clone(),
+                error,
+            });
+            if error != ApprovalError::Expired {
+                return Err(EngineError::Approval(error));
+            }
+        }
+        self.audit
+            .append(AuditEvent::ApprovalCancelled { request_id });
         Ok(())
     }
 
@@ -602,9 +585,10 @@ impl<
 
     fn execute(
         &mut self,
-        request: ToolRequest,
+        prepared: PreparedToolRequest,
         now_ms: u64,
     ) -> Result<CompletionOutcome, EngineError> {
+        let (request, _origin, authority) = prepared.into_parts();
         match request {
             ToolRequest::SystemUname { .. } => self.execute_command(request),
             ToolRequest::SystemOsIdentity { .. } => self.execute_os_identity(request),
@@ -619,8 +603,18 @@ impl<
             }
             ToolRequest::ProcessSelf { .. } => self.execute_process_self(request),
             ToolRequest::ProcessList { .. } => self.execute_process_list(request),
-            ToolRequest::FilesReadContent { .. } => self.execute_file_content(request),
-            ToolRequest::FilesWriteCreate { .. } => self.execute_workspace_create(request),
+            ToolRequest::FilesReadContent { .. } => match authority {
+                PreparedAuthority::FileRead(mut provider) => {
+                    self.execute_file_content_with(request, &mut provider)
+                }
+                _ => unreachable!("prepared file read must retain file authority"),
+            },
+            ToolRequest::FilesWriteCreate { .. } => match authority {
+                PreparedAuthority::WorkspaceCreate(mut provider) => {
+                    self.execute_workspace_create_with(request, &mut provider)
+                }
+                _ => unreachable!("prepared workspace create must retain workspace authority"),
+            },
             ToolRequest::ServicesReadStatus { .. } => self.execute_service_status(request),
         }
     }
@@ -923,9 +917,10 @@ impl<
         })
     }
 
-    fn execute_file_content(
+    fn execute_file_content_with<R: FileContentProvider>(
         &mut self,
         request: ToolRequest,
+        provider: &mut R,
     ) -> Result<CompletionOutcome, EngineError> {
         let selection = match &request {
             ToolRequest::FilesReadContent { selection, .. } => selection.clone(),
@@ -936,7 +931,7 @@ impl<
             request_id: request.request_id().as_str().into(),
             resource: format!("file.content:sha256:{path_sha256}"),
         });
-        let result = match self.file_content.read_selected_file(&selection) {
+        let result = match provider.read_selected_file(&selection) {
             Ok(result) => result,
             Err(error) => {
                 self.audit.append(AuditEvent::FileContentReadFailed {
@@ -961,9 +956,10 @@ impl<
         })
     }
 
-    fn execute_workspace_create(
+    fn execute_workspace_create_with<C: WorkspaceCreateProvider>(
         &mut self,
         request: ToolRequest,
+        provider: &mut C,
     ) -> Result<CompletionOutcome, EngineError> {
         let selection = match &request {
             ToolRequest::FilesWriteCreate { selection, .. } => selection.clone(),
@@ -971,7 +967,7 @@ impl<
         };
         self.audit
             .append(AuditEvent::workspace_create_started(&request, &selection));
-        let result = match self.workspace_create.create_selected_file(&selection) {
+        let result = match provider.create_selected_file(&selection) {
             Ok(result) => result,
             Err(error) => {
                 self.audit.append(AuditEvent::WorkspaceCreateFailed {
@@ -1048,11 +1044,9 @@ impl<
     S: StorageSummaryProvider,
     P: ProcessSelfProvider,
     L: ProcessListProvider,
-    F: FileContentProvider,
-    W: WorkspaceCreateProvider,
     V: ServiceStatusProvider,
     B: BatterySummaryProvider,
-> TypedRequestEngine for BlossomEngine<E, O, U, M, S, P, L, F, W, V, B>
+> crate::orchestration::TypedRequestEngine for BlossomEngine<E, O, U, M, S, P, L, V, B>
 {
     fn record_orchestration(&mut self, event: AuditEvent) {
         self.audit.append(event);
@@ -1063,34 +1057,72 @@ impl<
         request: ToolRequest,
         now_ms: u64,
     ) -> Result<BeginOutcome, EngineError> {
-        self.begin_request(request, now_ms)
+        let request_id = request.request_id().clone();
+        let tool = request.tool_name().to_owned();
+        match request {
+            ToolRequest::SystemUname { .. }
+            | ToolRequest::SystemOsIdentity { .. }
+            | ToolRequest::SystemUptime { .. }
+            | ToolRequest::SystemMemorySummary { .. }
+            | ToolRequest::SystemStorageSummary { .. }
+            | ToolRequest::SystemBatterySummary { .. }
+            | ToolRequest::SystemNetworkConnectivity { .. }
+            | ToolRequest::ProcessSelf { .. }
+            | ToolRequest::ProcessList { .. } => {}
+            ToolRequest::ServicesReadStatus { selection, .. } => {
+                return self.begin_wire(
+                    ToolRequestWire::ServiceStatus {
+                        request_id,
+                        unit: selection.unit,
+                    },
+                    SessionContext {
+                        workspace_root: "/",
+                        origin: crate::RequestOrigin::InternalFixed,
+                    },
+                    None,
+                    now_ms,
+                );
+            }
+            ToolRequest::FilesReadContent { .. } | ToolRequest::FilesWriteCreate { .. } => {
+                return Err(EngineError::Resolve(ResolveError::UnsupportedOrigin));
+            }
+        }
+        self.begin_wire(
+            ToolRequestWire::Fixed { request_id, tool },
+            SessionContext {
+                workspace_root: "/",
+                origin: crate::RequestOrigin::InternalFixed,
+            },
+            None,
+            now_ms,
+        )
     }
 
     fn approve_typed(
         &mut self,
         token: ApprovalToken,
-        request: ToolRequest,
+        preview_sha256: &str,
         now_ms: u64,
     ) -> Result<CompletionOutcome, EngineError> {
-        self.approve(token, request, now_ms)
+        self.approve(token, preview_sha256, now_ms)
     }
 
     fn deny_typed(
         &mut self,
         token: ApprovalToken,
-        request: ToolRequest,
+        preview_sha256: &str,
         now_ms: u64,
     ) -> Result<(), EngineError> {
-        self.deny_approval(token, request, now_ms)
+        self.deny_approval(token, preview_sha256, now_ms)
     }
 
     fn cancel_typed(
         &mut self,
         token: ApprovalToken,
-        request: ToolRequest,
+        preview_sha256: &str,
         now_ms: u64,
     ) -> Result<(), EngineError> {
-        self.cancel_approval(token, request, now_ms)
+        self.cancel_approval(token, preview_sha256, now_ms)
     }
 }
 
@@ -1111,15 +1143,9 @@ pub fn command_for(request: &ToolRequest) -> Option<CommandSpec> {
     }
 }
 
-fn request_error_category(error: &RequestError) -> &'static str {
-    match error {
-        RequestError::RequestTooLarge => "request_too_large",
-        RequestError::MalformedJson { .. } => "malformed_json",
-        RequestError::InvalidRequestId => "invalid_request_id",
-        RequestError::InvalidToolName => "invalid_tool_name",
-        RequestError::UnknownTool { .. } => "unknown_tool",
-        RequestError::InvalidArguments { .. } => "invalid_arguments",
-    }
+pub fn request_preview_sha256(request: &ToolRequest) -> String {
+    let encoded = serde_json::to_vec(request).expect("typed requests serialize deterministically");
+    crate::audit::digest_bytes(&encoded)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1128,6 +1154,7 @@ pub enum BeginOutcome {
     ApprovalRequired {
         request: ToolRequest,
         token: ApprovalToken,
+        preview_sha256: String,
     },
     Completed(CompletionOutcome),
 }
@@ -1159,6 +1186,8 @@ pub enum ToolOutput {
 pub enum EngineError {
     InvalidRequest(RequestError),
     Approval(ApprovalError),
+    Capacity(CapacityError),
+    Resolve(ResolveError),
     Executor(ExecutorError),
     OsIdentity(OsIdentityError),
     Uptime(UptimeError),
@@ -1399,7 +1428,7 @@ mod tests {
                 capability: Capability::SystemReadKernelIdentity,
                 decision,
             }]),
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             executor,
         )
     }
@@ -1407,12 +1436,15 @@ mod tests {
     #[test]
     fn completes_ask_approve_execute_verify_audit_flow() {
         let mut engine = engine(PolicyDecision::Ask, ScriptedExecutor::successful());
-        let (request, token) = match engine.begin(REQUEST, 1_000).expect("begin should work") {
-            BeginOutcome::ApprovalRequired { request, token } => (request, token),
+        let (request, token) = match engine
+            .begin_test_wire(REQUEST, 1_000)
+            .expect("begin should work")
+        {
+            BeginOutcome::ApprovalRequired { request, token, .. } => (request, token),
             outcome => panic!("unexpected begin outcome: {outcome:?}"),
         };
         let completed = engine
-            .approve(token, request, 1_001)
+            .approve(token, &request_preview_sha256(&request), 1_001)
             .expect("approval should work");
         assert!(completed.verification.succeeded);
         assert!(engine.audit().verify_chain());
@@ -1428,7 +1460,9 @@ mod tests {
     fn deny_never_calls_executor() {
         let mut engine = engine(PolicyDecision::Deny, ScriptedExecutor::successful());
         assert_eq!(
-            engine.begin(REQUEST, 1_000).expect("begin should work"),
+            engine
+                .begin_test_wire(REQUEST, 1_000)
+                .expect("begin should work"),
             BeginOutcome::Denied
         );
         assert!(engine.executor.calls.is_empty());
@@ -1438,16 +1472,19 @@ mod tests {
     #[test]
     fn user_denial_consumes_approval_without_execution() {
         let mut engine = engine(PolicyDecision::Ask, ScriptedExecutor::successful());
-        let (request, token) = match engine.begin(REQUEST, 1_000).expect("begin should work") {
-            BeginOutcome::ApprovalRequired { request, token } => (request, token),
+        let (request, token) = match engine
+            .begin_test_wire(REQUEST, 1_000)
+            .expect("begin should work")
+        {
+            BeginOutcome::ApprovalRequired { request, token, .. } => (request, token),
             outcome => panic!("unexpected begin outcome: {outcome:?}"),
         };
         engine
-            .deny_approval(token, request.clone(), 1_001)
+            .deny_approval(token, &request_preview_sha256(&request), 1_001)
             .expect("denial should consume approval");
         assert!(engine.executor.calls.is_empty());
         assert!(matches!(
-            engine.approve(token, request, 1_002),
+            engine.approve(token, &request_preview_sha256(&request), 1_002),
             Err(EngineError::Approval(ApprovalError::Replay))
         ));
         assert!(engine.audit().verify_chain());
@@ -1456,16 +1493,19 @@ mod tests {
     #[test]
     fn cancellation_consumes_approval_without_execution() {
         let mut engine = engine(PolicyDecision::Ask, ScriptedExecutor::successful());
-        let (request, token) = match engine.begin(REQUEST, 1_000).expect("begin should work") {
-            BeginOutcome::ApprovalRequired { request, token } => (request, token),
+        let (request, token) = match engine
+            .begin_test_wire(REQUEST, 1_000)
+            .expect("begin should work")
+        {
+            BeginOutcome::ApprovalRequired { request, token, .. } => (request, token),
             outcome => panic!("unexpected begin outcome: {outcome:?}"),
         };
         engine
-            .cancel_approval(token, request.clone(), 1_001)
+            .cancel_approval(token, &request_preview_sha256(&request), 1_001)
             .expect("cancellation should consume approval");
         assert!(engine.executor.calls.is_empty());
         assert!(matches!(
-            engine.approve(token, request, 1_002),
+            engine.approve(token, &request_preview_sha256(&request), 1_002),
             Err(EngineError::Approval(ApprovalError::Replay))
         ));
         assert!(matches!(
@@ -1477,12 +1517,15 @@ mod tests {
     #[test]
     fn cancellation_is_recorded_even_after_approval_expires() {
         let mut engine = engine(PolicyDecision::Ask, ScriptedExecutor::successful());
-        let (request, token) = match engine.begin(REQUEST, 1_000).expect("begin should work") {
-            BeginOutcome::ApprovalRequired { request, token } => (request, token),
+        let (request, token) = match engine
+            .begin_test_wire(REQUEST, 1_000)
+            .expect("begin should work")
+        {
+            BeginOutcome::ApprovalRequired { request, token, .. } => (request, token),
             outcome => panic!("unexpected begin outcome: {outcome:?}"),
         };
         engine
-            .cancel_approval(token, request, 1_101)
+            .cancel_approval(token, &request_preview_sha256(&request), 1_101)
             .expect("cancellation should remain auditable after expiry");
         assert!(engine.executor.calls.is_empty());
         assert!(matches!(
@@ -1494,7 +1537,9 @@ mod tests {
     #[test]
     fn explicit_allow_executes_without_approval() {
         let mut engine = engine(PolicyDecision::Allow, ScriptedExecutor::successful());
-        let outcome = engine.begin(REQUEST, 1_000).expect("begin should work");
+        let outcome = engine
+            .begin_test_wire(REQUEST, 1_000)
+            .expect("begin should work");
         assert!(matches!(outcome, BeginOutcome::Completed(_)));
         assert_eq!(engine.executor.calls.len(), 1);
     }
@@ -1511,12 +1556,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_os_identity(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         let outcome = engine
-            .begin(
+            .begin_test_wire(
                 r#"{"request_id":"req-os","tool":"system.os.identity","arguments":{}}"#,
                 1_000,
             )
@@ -1551,12 +1596,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_os_identity(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         assert!(matches!(
-            engine.begin(
+            engine.begin_test_wire(
                 r#"{"request_id":"req-os","tool":"system.os.identity","arguments":{}}"#,
                 1_000,
             ),
@@ -1581,12 +1626,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_uptime(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         let outcome = engine
-            .begin(
+            .begin_test_wire(
                 r#"{"request_id":"req-up","tool":"system.uptime","arguments":{}}"#,
                 1_000,
             )
@@ -1621,12 +1666,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_uptime(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         assert!(matches!(
-            engine.begin(
+            engine.begin_test_wire(
                 r#"{"request_id":"req-up","tool":"system.uptime","arguments":{}}"#,
                 1_000,
             ),
@@ -1651,12 +1696,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_memory_summary(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         let outcome = engine
-            .begin(
+            .begin_test_wire(
                 r#"{"request_id":"req-memory","tool":"system.memory.summary","arguments":{}}"#,
                 1_000,
             )
@@ -1691,12 +1736,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_memory_summary(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         assert!(matches!(
-            engine.begin(
+            engine.begin_test_wire(
                 r#"{"request_id":"req-memory","tool":"system.memory.summary","arguments":{}}"#,
                 1_000,
             ),
@@ -1721,12 +1766,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_storage_summary(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         let outcome = engine
-            .begin(
+            .begin_test_wire(
                 r#"{"request_id":"req-storage","tool":"system.storage.summary","arguments":{}}"#,
                 1_000,
             )
@@ -1760,12 +1805,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_storage_summary(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         assert!(matches!(
-            engine.begin(
+            engine.begin_test_wire(
                 r#"{"request_id":"req-storage","tool":"system.storage.summary","arguments":{}}"#,
                 1_000,
             ),
@@ -1790,12 +1835,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_battery_summary(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         let outcome = engine
-            .begin(
+            .begin_test_wire(
                 r#"{"request_id":"req-battery","tool":"system.battery.summary","arguments":{}}"#,
                 10_001,
             )
@@ -1825,23 +1870,23 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_battery_summary(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         let (request, token) = match engine
-            .begin(
+            .begin_test_wire(
                 r#"{"request_id":"req-battery","tool":"system.battery.summary","arguments":{}}"#,
                 10_000,
             )
             .expect("ask should issue approval")
         {
-            BeginOutcome::ApprovalRequired { request, token } => (request, token),
+            BeginOutcome::ApprovalRequired { request, token, .. } => (request, token),
             other => panic!("unexpected outcome: {other:?}"),
         };
         assert_eq!(engine.battery_summary.calls, 0);
         let completed = engine
-            .approve(token, request, 10_001)
+            .approve(token, &request_preview_sha256(&request), 10_001)
             .expect("approval should execute exact request");
         assert!(completed.verification.succeeded);
         assert!(engine.executor.calls.is_empty());
@@ -1860,12 +1905,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_battery_summary(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         assert!(matches!(
-            engine.begin(
+            engine.begin_test_wire(
                 r#"{"request_id":"req-battery","tool":"system.battery.summary","arguments":{}}"#,
                 10_000,
             ),
@@ -1886,14 +1931,14 @@ mod tests {
         }]);
         let mut engine = BlossomEngine::new(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
         )
         .with_network_connectivity(ScriptedNetworkConnectivity {
             result: Some(Ok(network_observation(10_000))),
         });
         let outcome = engine
-            .begin(
+            .begin_test_wire(
                 r#"{"request_id":"req-network","tool":"system.network.connectivity","arguments":{}}"#,
                 10_001,
             )
@@ -1921,14 +1966,14 @@ mod tests {
         }]);
         let mut engine = BlossomEngine::new(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
         )
         .with_network_connectivity(ScriptedNetworkConnectivity {
             result: Some(Err(NetworkConnectivityReadError::Timeout)),
         });
         assert!(matches!(
-            engine.begin(
+            engine.begin_test_wire(
                 r#"{"request_id":"req-network","tool":"system.network.connectivity","arguments":{}}"#,
                 10_000,
             ),
@@ -1955,12 +2000,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_process_self(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         let outcome = engine
-            .begin(
+            .begin_test_wire(
                 r#"{"request_id":"req-self","tool":"process.self","arguments":{}}"#,
                 1_000,
             )
@@ -1995,12 +2040,12 @@ mod tests {
         };
         let mut engine = BlossomEngine::with_process_self(
             policy,
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             ScriptedExecutor::successful(),
             provider,
         );
         assert!(matches!(
-            engine.begin(
+            engine.begin_test_wire(
                 r#"{"request_id":"req-self","tool":"process.self","arguments":{}}"#,
                 1_000,
             ),
@@ -2021,7 +2066,7 @@ mod tests {
         };
         let mut engine = engine(PolicyDecision::Allow, executor);
         assert!(matches!(
-            engine.begin(REQUEST, 1_000),
+            engine.begin_test_wire(REQUEST, 1_000),
             Err(EngineError::Executor(ExecutorError::Timeout))
         ));
         assert!(engine.audit().verify_chain());
@@ -2031,14 +2076,41 @@ mod tests {
     fn rejects_malformed_request_before_execution() {
         let mut engine = engine(PolicyDecision::Allow, ScriptedExecutor::successful());
         assert!(matches!(
-            engine.begin("not-json", 1_000),
+            engine.begin_test_wire("not-json", 1_000),
             Err(EngineError::InvalidRequest(_))
         ));
         assert!(engine.executor.calls.is_empty());
-        assert_eq!(engine.audit().records().len(), 1);
-        assert!(matches!(
-            engine.audit().records()[0].event,
-            AuditEvent::RequestRejected { .. }
-        ));
+        assert!(engine.audit().records().is_empty());
+    }
+
+    #[test]
+    fn audit_preserves_cli_and_model_request_origins() {
+        for origin in [
+            crate::RequestOrigin::UserCli,
+            crate::RequestOrigin::ModelProposed,
+        ] {
+            let mut engine = engine(PolicyDecision::Deny, ScriptedExecutor::successful());
+            let wire = ToolRequestWire::Fixed {
+                request_id: crate::RequestId::parse(format!("origin-{origin:?}").to_lowercase())
+                    .unwrap(),
+                tool: "system.uname".into(),
+            };
+            assert!(matches!(
+                engine.begin_wire(
+                    wire,
+                    SessionContext {
+                        workspace_root: "/tmp",
+                        origin
+                    },
+                    None,
+                    1_000,
+                ),
+                Ok(BeginOutcome::Denied)
+            ));
+            assert!(matches!(
+                &engine.audit().records()[0].event,
+                AuditEvent::RequestAccepted { origin: recorded, .. } if *recorded == origin
+            ));
+        }
     }
 }

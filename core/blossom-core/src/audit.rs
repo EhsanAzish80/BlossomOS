@@ -8,6 +8,7 @@ use crate::network_connectivity::{NetworkConnectivityObservation, NetworkConnect
 use crate::orchestration::{PlanOutcome, StepPhase};
 use crate::os_identity::{OsIdentity, OsIdentityError};
 use crate::policy::{Capability, PolicyDecision};
+use crate::prepared_request::RequestOrigin;
 use crate::process_list::{ProcessList, ProcessListError};
 use crate::process_self::{ProcessSelf, ProcessSelfError};
 use crate::request::ToolRequest;
@@ -66,6 +67,7 @@ pub enum AuditEvent {
     RequestAccepted {
         request_id: String,
         tool: String,
+        origin: RequestOrigin,
     },
     PolicyEvaluated {
         request_id: String,
@@ -475,7 +477,7 @@ fn digest(bytes: &[u8]) -> String {
     encoded
 }
 
-pub(crate) fn digest_bytes(bytes: &[u8]) -> String {
+pub fn digest_bytes(bytes: &[u8]) -> String {
     digest(bytes)
 }
 
@@ -483,12 +485,24 @@ pub(crate) fn digest_bytes(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
 
+    fn fixed_request(request_id: &str, tool: &str) -> ToolRequest {
+        let request_id = crate::RequestId::parse(request_id.into()).unwrap();
+        match tool {
+            "system.uname" => ToolRequest::SystemUname { request_id },
+            "system.os.identity" => ToolRequest::SystemOsIdentity { request_id },
+            "system.uptime" => ToolRequest::SystemUptime { request_id },
+            "system.memory.summary" => ToolRequest::SystemMemorySummary { request_id },
+            "system.storage.summary" => ToolRequest::SystemStorageSummary { request_id },
+            "system.battery.summary" => ToolRequest::SystemBatterySummary { request_id },
+            "system.network.connectivity" => ToolRequest::SystemNetworkConnectivity { request_id },
+            "process.self" => ToolRequest::ProcessSelf { request_id },
+            _ => panic!("unsupported fixed test request"),
+        }
+    }
+
     #[test]
     fn battery_audit_records_boundary_metadata_not_battery_content() {
-        let request = ToolRequest::parse_json(
-            r#"{"request_id":"req-battery","tool":"system.battery.summary","arguments":{}}"#,
-        )
-        .expect("valid battery request");
+        let request = fixed_request("req-battery", "system.battery.summary");
         let observation = crate::ContextObservation::new(
             crate::ContextSource::SystemBatterySummary,
             987_654_321,
@@ -509,10 +523,7 @@ mod tests {
 
     #[test]
     fn network_audit_records_boundary_metadata_not_connectivity_content() {
-        let request = ToolRequest::parse_json(
-            r#"{"request_id":"req-network","tool":"system.network.connectivity","arguments":{}}"#,
-        )
-        .expect("valid network request");
+        let request = fixed_request("req-network", "system.network.connectivity");
         let observation = crate::ContextObservation::new(
             crate::ContextSource::SystemNetworkConnectivity,
             987_654_321,
@@ -536,10 +547,7 @@ mod tests {
         audit.append(AuditEvent::Denied {
             request_id: "req-1".into(),
         });
-        let request = ToolRequest::parse_json(
-            r#"{"request_id":"req-2","tool":"system.uname","arguments":{}}"#,
-        )
-        .expect("valid request");
+        let request = fixed_request("req-2", "system.uname");
         audit.append(AuditEvent::execution_finished(
             &request,
             &ExecutionResult {
@@ -556,11 +564,41 @@ mod tests {
     }
 
     #[test]
+    fn workspace_audit_records_only_content_digest_and_length() {
+        let request_id = crate::RequestId::parse("workspace-audit".into()).unwrap();
+        let content = "private-model-content".to_string();
+        let selection = WorkspaceCreateSelection {
+            workspace_root: "/workspace/private-root".into(),
+            root_identity: crate::DirectoryIdentity {
+                device: 1,
+                inode: 2,
+            },
+            parent_identity: crate::DirectoryIdentity {
+                device: 1,
+                inode: 3,
+            },
+            relative_destination: "private-name.txt".into(),
+            content: content.clone(),
+            content_sha256: digest(content.as_bytes()),
+            mode: crate::WORKSPACE_FILE_MODE,
+        };
+        let request = ToolRequest::FilesWriteCreate {
+            request_id,
+            selection: selection.clone(),
+        };
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::workspace_create_started(&request, &selection));
+        let encoded = serde_json::to_string(audit.records()).unwrap();
+        assert!(encoded.contains(&digest(content.as_bytes())));
+        assert!(encoded.contains(&content.len().to_string()));
+        assert!(!encoded.contains(&content));
+        assert!(!encoded.contains("private-root"));
+        assert!(!encoded.contains("private-name"));
+    }
+
+    #[test]
     fn os_identity_audit_records_provenance_not_identity_values() {
-        let request = ToolRequest::parse_json(
-            r#"{"request_id":"req-os","tool":"system.os.identity","arguments":{}}"#,
-        )
-        .expect("valid OS identity request");
+        let request = fixed_request("req-os", "system.os.identity");
         let identity = OsIdentity {
             source: crate::os_identity::OsReleaseSource::EtcOsRelease,
             source_path: "/etc/os-release".into(),
@@ -585,10 +623,7 @@ mod tests {
 
     #[test]
     fn uptime_audit_records_provenance_not_duration_or_idle_values() {
-        let request = ToolRequest::parse_json(
-            r#"{"request_id":"req-up","tool":"system.uptime","arguments":{}}"#,
-        )
-        .expect("valid uptime request");
+        let request = fixed_request("req-up", "system.uptime");
         let uptime = SystemUptime {
             seconds: 12_345,
             nanoseconds: 670_000_000,
@@ -606,10 +641,7 @@ mod tests {
 
     #[test]
     fn memory_audit_records_provenance_not_memory_values() {
-        let request = ToolRequest::parse_json(
-            r#"{"request_id":"req-memory","tool":"system.memory.summary","arguments":{}}"#,
-        )
-        .expect("valid memory summary request");
+        let request = fixed_request("req-memory", "system.memory.summary");
         let summary = MemorySummary {
             total_bytes: 17_179_869_184,
             available_bytes: 8_589_934_592,
@@ -629,10 +661,7 @@ mod tests {
 
     #[test]
     fn storage_audit_records_scope_not_capacity_values() {
-        let request = ToolRequest::parse_json(
-            r#"{"request_id":"req-storage","tool":"system.storage.summary","arguments":{}}"#,
-        )
-        .expect("valid storage summary request");
+        let request = fixed_request("req-storage", "system.storage.summary");
         let summary = StorageSummary {
             source: crate::storage_summary::StorageSummarySource::RootStatvfs,
             resource_path: "/".into(),
@@ -649,10 +678,7 @@ mod tests {
 
     #[test]
     fn process_self_audit_omits_process_and_user_identifiers() {
-        let request = ToolRequest::parse_json(
-            r#"{"request_id":"req-self","tool":"process.self","arguments":{}}"#,
-        )
-        .expect("valid process self request");
+        let request = fixed_request("req-self", "process.self");
         let identity = ProcessSelf {
             source: crate::process_self::ProcessSelfSource::NativeProcessIdentity,
             process_id: 987_654,

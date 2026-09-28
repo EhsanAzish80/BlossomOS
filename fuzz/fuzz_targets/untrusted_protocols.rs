@@ -1,7 +1,8 @@
 #![no_main]
 
 use blossom_core::{
-    GatewayFrameDecoder, GatewayProfile, ModelProfile, ModelProviderKind, decode_gateway_cancel,
+    ApprovalCapacity, GatewayFrameDecoder, GatewayProfile, ModelProfile, ModelProviderKind,
+    RequestOrigin, RequestResolver, SessionContext, ToolRequestWire, decode_gateway_cancel,
     decode_gateway_event, decode_gateway_hello, decode_gateway_private_request,
     decode_gateway_synthetic_request, decode_shell_client_request,
 };
@@ -22,4 +23,18 @@ fuzz_target!(|data: &[u8]| {
         }
     }
     let _ = decoder.finish();
+    if let Ok(input) = std::str::from_utf8(data)
+        && let Ok(wire) = ToolRequestWire::parse_json(input)
+        && let Ok(capacity) = ApprovalCapacity::new(1)
+        && let Ok(reservation) = capacity.reserve()
+    {
+        let _ = RequestResolver::resolve(
+            wire,
+            SessionContext {
+                workspace_root: "/tmp",
+                origin: RequestOrigin::ModelProposed,
+            },
+            reservation,
+        );
+    }
 });
