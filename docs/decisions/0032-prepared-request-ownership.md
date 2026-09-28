@@ -43,8 +43,11 @@ or reopens a request after preview.
 
 Deny, cancel, expiry sweep and peer disconnect remove and drop the prepared
 request. The approval lifetime remains at most thirty seconds. Pending prepared
-requests are capped per peer and globally; reaching either cap rejects before
-opening another resource.
+requests are capped per peer and globally. Admission reserves capacity before
+resolution opens any resource; failure to reserve therefore opens no descriptor.
+The reservation is either filled by the resolved prepared request or released
+on every resolution failure. Capacity exhaustion never evicts an existing
+request.
 
 ### Execution revalidation
 
@@ -84,6 +87,14 @@ by lifetime, per-peer count and global count. All terminal paths must remove the
 entry so Rust drop closes descriptors. The preview digest rather than a
 client-supplied request binds the decision.
 
+A hostile process running as the desktop user can occupy the global approval
+capacity and temporarily deny prompts to the legitimate shell. This is an
+accepted fail-closed denial-of-service trade-off under the existing same-user
+trust gap. The thirty-second lifetime bounds it; the store never evicts an
+older request to admit a newer one. Capacity exhaustion emits a content-free
+activity event displayed as `approval capacity exhausted`, so the user sees an
+explicit failure rather than a silent missing prompt.
+
 ## Operational consequences
 
 The engine API, CLI, shell session approval store, tests and fuzz harness migrate
@@ -105,6 +116,9 @@ rollback is prohibited.
   `Serialize` or `Clone` as applicable.
 - Observe `/proc/self/fd` returning to baseline after deny, cancel, expiry sweep
   and peer disconnect, and enforce per-peer and global caps.
+- Prove capacity is reserved before resolution, a rejected request opens no
+  descriptor, resolution failure releases its reservation, no pending request
+  is evicted, and the shell activity projection reports capacity exhaustion.
 - Swap or mutate a selected file between resolution and execution and fail the
   same-descriptor `fstat` comparison.
 - Reject replayed, wrong-preview and mutated decisions.
