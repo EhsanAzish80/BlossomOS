@@ -1,12 +1,14 @@
 #[cfg(feature = "production-dbus-service")]
 use blossom_core::executor::bubblewrap::BubblewrapExecutor;
 #[cfg(feature = "production-dbus-service")]
+use blossom_core::model_runtime::RuntimeReadinessError;
+#[cfg(feature = "production-dbus-service")]
 use blossom_core::{
     ACTIVE_MODEL_PROFILE_PATH, ConversationMessage, ConversationRole, GatewayProfile,
     InferenceRequestId, NetworkManagerConnectivityProvider, NormalizedCompletion,
     PRIVATE_GATEWAY_SOCKET_PATH, PrivateGatewayClient, PrivateGatewayClientError,
-    RuntimeReadinessError, TurnIntentCatalogue, UpowerBatterySummaryProvider,
-    load_installed_runtime_readiness_from_set, production_provider_profile,
+    TurnIntentCatalogue, UpowerBatterySummaryProvider, load_installed_runtime_readiness_from_set,
+    production_provider_profile,
 };
 use blossom_core::{
     AgentTurnError, BatterySummaryProvider, Executor, SHELL_INTERFACE, SHELL_PROTOCOL_VERSION,
