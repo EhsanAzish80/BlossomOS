@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub const MAX_SHELL_PEER_NAME_BYTES: usize = 255;
+pub const MAX_PENDING_SHELL_APPROVALS: usize = 32;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ShellPeerId(String);
@@ -60,6 +61,9 @@ impl<S> ShellSessionApprovals<S> {
     ) -> Result<ShellApprovalPreview, ShellSessionError> {
         if self.pending.contains_key(&peer) {
             return Err(ShellSessionError::ApprovalAlreadyPending);
+        }
+        if self.pending.len() >= MAX_PENDING_SHELL_APPROVALS {
+            return Err(ShellSessionError::ApprovalCapacityReached);
         }
         let preview = ShellApprovalPreview::system_uname(&request_id, expires_at_ms);
         self.pending.insert(
@@ -198,6 +202,7 @@ pub enum ShellCancellationReason {
 pub enum ShellSessionError {
     InvalidPeerIdentity,
     ApprovalAlreadyPending,
+    ApprovalCapacityReached,
     NoPendingApproval,
     ApprovalExpired,
     BindingMismatch,
@@ -208,6 +213,7 @@ impl fmt::Display for ShellSessionError {
         formatter.write_str(match self {
             Self::InvalidPeerIdentity => "session peer identity is invalid",
             Self::ApprovalAlreadyPending => "an approval is already pending for this peer",
+            Self::ApprovalCapacityReached => "the global pending approval limit was reached",
             Self::NoPendingApproval => "no approval is pending for this peer",
             Self::ApprovalExpired => "the pending approval expired",
             Self::BindingMismatch => "the decision does not match the pending approval",
@@ -227,6 +233,25 @@ mod tests {
 
     fn request(value: &str) -> RequestId {
         RequestId::parse(value.into()).expect("valid request id")
+    }
+
+    #[test]
+    fn pending_approvals_are_one_per_peer_and_globally_bounded() {
+        let mut approvals = ShellSessionApprovals::default();
+        for index in 0..MAX_PENDING_SHELL_APPROVALS {
+            approvals
+                .register_system_uname(
+                    peer(&format!(":1.{}", index + 1)),
+                    request(&format!("request-{index}")),
+                    100,
+                    index,
+                )
+                .expect("within global bound");
+        }
+        assert_eq!(
+            approvals.register_system_uname(peer(":2.99"), request("overflow"), 100, 99),
+            Err(ShellSessionError::ApprovalCapacityReached)
+        );
     }
 
     #[test]

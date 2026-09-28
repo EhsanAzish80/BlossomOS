@@ -41,6 +41,20 @@ class Arm64AgentContractTests(unittest.TestCase):
         ):
             self.assertIn(required, adr)
 
+    def test_adr_0032_owns_prepared_requests_through_approval(self):
+        adr = (ROOT / "docs/decisions/0032-prepared-request-ownership.md").read_text()
+        for required in (
+            "Only `ToolRequestWire` deserializes",
+            "It is not `Clone`, `Serialize` or `Deserialize`",
+            "preview digest",
+            "Neither client nor engine resubmits",
+            "per peer and globally",
+            "same descriptor",
+            "`/proc/self/fd`",
+            "fuzz harness",
+        ):
+            self.assertIn(required, adr)
+
 
 if __name__ == "__main__":
     unittest.main()

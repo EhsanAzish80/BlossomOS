@@ -65,6 +65,9 @@ compatibility, packaging, or contributor obligations.
 - Model-proposed workspace creation: ADR-0031 permits only a constrained ASCII
   basename and bounded safe UTF-8 content, resolved by trusted code into the
   existing create-only selection and always-ask approval path.
+- Prepared request ownership: ADR-0032 separates untrusted wire requests from
+  domain requests and moves retained descriptors through preview, approval and
+  execution without cloning, reopening or client resubmission.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and
