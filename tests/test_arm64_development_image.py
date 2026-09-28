@@ -44,6 +44,7 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "--arch aarch64",
             "--vm-type vz",
             "--platform linux/arm64",
+            "--disk 30",
             "ArchLinuxARM-aarch64-latest.tar.gz",
             "qemu-img check",
         ):
@@ -61,6 +62,9 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "virtio_blk",
             "virtio_gpu",
             "NetworkManager.service",
+            "10-blossom-dns.conf",
+            "rc-manager=file",
+            "systemd-resolved.service",
             "qemu-guest-agent.service",
             "blossom-arm64-qualification.service",
             "graphical.target.wants/blossom-arm64-qualification.service",
@@ -103,6 +107,7 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
         for required in (
             "virtserialport",
             "org.blossomos.qualification",
+            "org.qemu.guest_agent.0",
             "-display none",
             "BLOSSOM_ARM64_QUALIFICATION_READY",
             "300",

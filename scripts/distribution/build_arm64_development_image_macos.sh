@@ -36,7 +36,7 @@ fi
 
 if ! colima status "$profile" >/dev/null 2>&1; then
   colima start "$profile" --arch aarch64 --vm-type vz --runtime docker \
-    --cpus 6 --memory 10 --disk 60 --kubernetes=false
+    --cpus 6 --memory 10 --disk 30 --kubernetes=false
 fi
 server_arch=$(docker --context "$context" info --format '{{.Architecture}}')
 if [[ "$server_arch" != aarch64 && "$server_arch" != arm64 ]]; then

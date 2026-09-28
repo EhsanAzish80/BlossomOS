@@ -133,6 +133,15 @@ install -d -m 0755 \
   "$work/root/etc/systemd/user/graphical-session.target.wants"
 ln -sf /usr/lib/systemd/system/NetworkManager.service \
   "$work/root/etc/systemd/system/multi-user.target.wants/NetworkManager.service"
+install -d -m 0755 "$work/root/etc/NetworkManager/conf.d"
+cat >"$work/root/etc/NetworkManager/conf.d/10-blossom-dns.conf" <<'EOF'
+[main]
+dns=default
+rc-manager=file
+EOF
+ln -sf /dev/null "$work/root/etc/systemd/system/systemd-resolved.service"
+rm -f "$work/root/etc/resolv.conf"
+printf 'nameserver 10.0.2.3\n' >"$work/root/etc/resolv.conf"
 ln -sf /usr/lib/systemd/system/qemu-guest-agent.service \
   "$work/root/etc/systemd/system/multi-user.target.wants/qemu-guest-agent.service"
 ln -sf /usr/lib/systemd/system/bluetooth.service \
