@@ -5,6 +5,7 @@ use std::fmt;
 
 pub const WORKSPACE_FILE_MODE: u32 = 0o600;
 pub const MAX_MODEL_WORKSPACE_CONTENT_BYTES: usize = 4096;
+pub const MODEL_WORKSPACE_NAME_PATTERN: &str = "[a-z0-9][a-z0-9._-]{0,63}";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -56,6 +57,31 @@ pub fn validate_model_workspace_proposal(
         return Err(ModelWorkspaceProposalError::InvalidContent);
     }
     Ok(())
+}
+
+pub fn model_workspace_proposal_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "content"],
+        "properties": {
+            "name": {"type": "string", "pattern": MODEL_WORKSPACE_NAME_PATTERN, "maxLength": 64},
+            "content": {"type": "string", "maxLength": MAX_MODEL_WORKSPACE_CONTENT_BYTES}
+        }
+    })
+}
+
+pub fn model_workspace_proposal_grammar() -> String {
+    format!(
+        concat!(
+            "root ::= proposal\n",
+            "proposal ::= \"{{\\\"name\\\":\\\"\" name \"\\\",\\\"content\\\":\\\"\" content \"\\\"}}\"\n",
+            "name ::= [a-z0-9] [a-z0-9._-]{{0,63}}\n",
+            "content ::= content-char{{0,{}}}\n",
+            "content-char ::= [ -!#-Z\\[\\]-~] | \"\\\\\\\"\" | \"\\\\\\\\\" | \"\\\\n\"\n"
+        ),
+        MAX_MODEL_WORKSPACE_CONTENT_BYTES
+    )
 }
 
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
@@ -565,6 +591,40 @@ mod tests {
             validate_model_workspace_proposal(&oversized),
             Err(ModelWorkspaceProposalError::InvalidContent)
         );
+
+        let escaped_bidi: ModelWorkspaceCreateProposal =
+            serde_json::from_str(r#"{"name":"note.txt","content":"hidden\u202eexe"}"#)
+                .expect("valid JSON decodes the escape");
+        assert_eq!(
+            validate_model_workspace_proposal(&escaped_bidi),
+            Err(ModelWorkspaceProposalError::InvalidContent)
+        );
+    }
+
+    #[test]
+    fn proposal_grammar_is_a_single_object_subset_of_the_validator() {
+        let grammar = model_workspace_proposal_grammar();
+        assert!(grammar.starts_with("root ::= proposal\n"));
+        assert!(!grammar.contains("\\\\u"));
+        assert!(grammar.contains("content-char{0,4096}"));
+        assert_eq!(
+            model_workspace_proposal_schema()["properties"]["name"]["pattern"],
+            MODEL_WORKSPACE_NAME_PATTERN
+        );
+        for (name, content) in [
+            ("a", ""),
+            ("note.txt", "printable ASCII"),
+            ("agent_1.md", "line one\nline two"),
+            ("x-2", "quotes \" and slash \\"),
+        ] {
+            assert_eq!(
+                validate_model_workspace_proposal(&ModelWorkspaceCreateProposal {
+                    name: name.into(),
+                    content: content.into(),
+                }),
+                Ok(())
+            );
+        }
     }
 
     #[cfg(all(target_os = "linux", target_env = "gnu"))]
