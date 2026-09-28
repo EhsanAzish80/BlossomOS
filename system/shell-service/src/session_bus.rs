@@ -1,9 +1,13 @@
+#[cfg(feature = "production-dbus-service")]
 use blossom_core::executor::bubblewrap::BubblewrapExecutor;
 use blossom_core::{
-    BatterySummaryProvider, Executor, NetworkManagerConnectivityProvider, SHELL_BUS_NAME,
-    SHELL_INTERFACE, SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellClientRequest,
-    ShellDiagnosticService, ShellPeerId, UpowerBatterySummaryProvider, decode_shell_client_request,
+    BatterySummaryProvider, Executor, SHELL_INTERFACE, SHELL_PROTOCOL_VERSION, ShellClientRequest,
+    ShellDiagnosticService, ShellPeerId, decode_shell_client_request,
 };
+#[cfg(feature = "production-dbus-service")]
+use blossom_core::{NetworkManagerConnectivityProvider, UpowerBatterySummaryProvider};
+#[cfg(any(feature = "production-dbus-service", test))]
+use blossom_core::{SHELL_BUS_NAME, SHELL_OBJECT_PATH};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zbus::message::Header;
@@ -127,6 +131,7 @@ impl ShellBusService {
         }
     }
 
+    #[cfg(any(feature = "production-dbus-service", test))]
     fn shared_handler(&self) -> Arc<Mutex<Box<dyn ShellRequestHandler>>> {
         Arc::clone(&self.handler)
     }
@@ -291,6 +296,7 @@ fn failed() -> zbus::fdo::Error {
     zbus::fdo::Error::Failed("shell service unavailable".into())
 }
 
+#[cfg(any(feature = "production-dbus-service", test))]
 fn lost_unique_owner(
     name: &str,
     old_owner: Option<&str>,
@@ -302,6 +308,7 @@ fn lost_unique_owner(
     ShellPeerId::from_bus_unique_name(name).ok()
 }
 
+#[cfg(any(feature = "production-dbus-service", test))]
 fn disconnect_match_rule() -> Result<zbus::MatchRule<'static>, ShellProcessError> {
     zbus::MatchRule::builder()
         .msg_type(zbus::message::Type::Signal)
@@ -312,6 +319,7 @@ fn disconnect_match_rule() -> Result<zbus::MatchRule<'static>, ShellProcessError
         .map_err(|_| ShellProcessError::SessionBusUnavailable)
 }
 
+#[cfg(any(feature = "production-dbus-service", test))]
 fn monitor_disconnects(
     mut messages: zbus::blocking::MessageIterator,
     handler: Arc<Mutex<Box<dyn ShellRequestHandler>>>,

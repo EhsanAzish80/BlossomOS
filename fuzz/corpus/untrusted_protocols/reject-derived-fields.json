@@ -1,0 +1,1 @@
+{"request_id":"fuzz-reject-1","tool":"files.write.create","arguments":{"name":"note.txt","content":"safe","device":1,"inode":2,"content_sha256":"caller-controlled"}}

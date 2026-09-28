@@ -1,0 +1,1 @@
+{"request_id":"fuzz-create-1","tool":"files.write.create","arguments":{"name":"note.txt","content":"hello from the model\n"}}

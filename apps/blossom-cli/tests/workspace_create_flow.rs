@@ -9,6 +9,8 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+static FIXTURE_SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
 #[derive(Debug)]
 struct RejectingExecutor(Arc<AtomicUsize>);
 impl Executor for RejectingExecutor {
@@ -38,8 +40,11 @@ impl Clock for ScriptedClock {
     }
 }
 fn root() -> std::path::PathBuf {
-    let root =
-        std::env::temp_dir().join(format!("blossom-workspace-create-{}", std::process::id()));
+    let sequence = FIXTURE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "blossom-workspace-create-{}-{sequence}",
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir(&root).unwrap();
     root

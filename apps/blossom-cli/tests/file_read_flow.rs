@@ -8,6 +8,8 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+static FIXTURE_SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
 #[derive(Debug)]
 struct RejectingExecutor(Arc<AtomicUsize>);
 impl Executor for RejectingExecutor {
@@ -38,7 +40,11 @@ impl Clock for ScriptedClock {
 }
 
 fn fixture() -> (std::path::PathBuf, std::path::PathBuf) {
-    let root = std::env::temp_dir().join(format!("blossom-cli-file-read-{}", std::process::id()));
+    let sequence = FIXTURE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let root = std::env::temp_dir().join(format!(
+        "blossom-cli-file-read-{}-{sequence}",
+        std::process::id()
+    ));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir(&root).unwrap();
     let path = root.join("selected.txt");
