@@ -9,9 +9,9 @@ use blossom_core::{
     production_provider_profile,
 };
 use blossom_core::{
-    AgentTurnError, AgentTurnProvider, BatterySummaryProvider, Executor, SHELL_INTERFACE,
-    SHELL_PROTOCOL_VERSION, ShellClientRequest, ShellDiagnosticService, ShellPeerId,
-    decode_shell_agent_turn_request, decode_shell_client_request,
+    AgentTurnError, BatterySummaryProvider, Executor, SHELL_INTERFACE, SHELL_PROTOCOL_VERSION,
+    ShellClientRequest, ShellDiagnosticService, ShellPeerId, decode_shell_agent_turn_request,
+    decode_shell_client_request,
 };
 #[cfg(any(feature = "production-dbus-service", test))]
 use blossom_core::{SHELL_BUS_NAME, SHELL_OBJECT_PATH};
@@ -138,7 +138,7 @@ impl<E: Executor + Send, B: BatterySummaryProvider + Send> ShellRequestHandler
         encode(
             &self
                 .read_activity(after, limit)
-                .map_err(HandlerError::from)?,
+                .map_err(|_| HandlerError::Rejected)?,
         )
     }
 
@@ -422,7 +422,7 @@ fn monitor_disconnects(
 struct InstalledGatewayAgentProvider;
 
 #[cfg(feature = "production-dbus-service")]
-impl AgentTurnProvider for InstalledGatewayAgentProvider {
+impl blossom_core::AgentTurnProvider for InstalledGatewayAgentProvider {
     fn complete(
         &mut self,
         request_id: &InferenceRequestId,

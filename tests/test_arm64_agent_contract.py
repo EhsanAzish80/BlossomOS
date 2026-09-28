@@ -126,6 +126,7 @@ class Arm64AgentContractTests(unittest.TestCase):
             self.assertIn(trace, driver)
         self.assertIn("subprocess.TimeoutExpired", driver)
         self.assertIn("shell activity contains a sequence gap", driver)
+        self.assertIn("--features production-private-inference", core_package)
         self.assertNotIn("qualify_agent_pipeline.py", core_package)
         self.assertIn("depends=('blossom-core'", qualification_package)
         self.assertIn("qualify_agent_pipeline.py", qualification_package)

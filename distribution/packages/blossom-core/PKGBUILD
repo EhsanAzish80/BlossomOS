@@ -20,6 +20,13 @@ build() {
       --manifest-path "$repo_root/Cargo.toml" \
       --package blossom-shell-service \
       --features production-dbus-service
+  # The workspace default gateway is intentionally inert. Installed systems
+  # must receive the reviewed private Unix-socket transport from ADR-0017.
+  CARGO_TARGET_DIR="$srcdir/target" \
+    cargo build --locked --offline --release \
+      --manifest-path "$repo_root/Cargo.toml" \
+      --package blossom-model-gateway \
+      --features production-private-inference
 }
 
 package() {
