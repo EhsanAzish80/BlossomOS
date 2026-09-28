@@ -11,6 +11,7 @@ use super::{
     ConversationRole, InferenceCancellation, InferenceOutputMode, InferenceRequest,
     ModelContractError, ModelIntentDefinition, ModelProviderKind, ModelStreamState,
     NormalizedStreamEvent, ProviderFailureCategory, ProviderStreamInput,
+    validate_provider_completion,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -236,11 +237,16 @@ impl LlamaCppAdapter {
                 Err(error @ LlamaCppAdapterError::EncodingFailed) => return Err(error),
                 Err(error) => return terminalize(error, state, events, sequence, emit),
             };
-            push_event(
-                &mut events,
-                state.apply(sequence, ProviderStreamInput::ToolIntents(completion))?,
-                emit,
-            );
+            if let Err(error) = validate_provider_completion(&completion, request.intents()) {
+                return terminalize(error.into(), state, events, sequence, emit);
+            }
+            let event = match state.apply(sequence, ProviderStreamInput::ToolIntents(completion)) {
+                Ok(event) => event,
+                Err(error) => {
+                    return terminalize(error.into(), state, events, sequence, emit);
+                }
+            };
+            push_event(&mut events, event, emit);
             sequence += 1;
         }
         if let Some(usage) = usage {
@@ -303,9 +309,9 @@ fn terminalize(
         | LlamaCppAdapterError::MalformedHttp
         | LlamaCppAdapterError::UnsupportedHttpEncoding
         | LlamaCppAdapterError::MalformedResponse
-        | LlamaCppAdapterError::EventAfterDone => ProviderFailureCategory::Malformed,
-        LlamaCppAdapterError::Contract(_)
-        | LlamaCppAdapterError::WrongProvider
+        | LlamaCppAdapterError::EventAfterDone
+        | LlamaCppAdapterError::Contract(_) => ProviderFailureCategory::Malformed,
+        LlamaCppAdapterError::WrongProvider
         | LlamaCppAdapterError::InvalidEndpoint
         | LlamaCppAdapterError::EncodingFailed => return Err(error),
     };
@@ -1070,15 +1076,18 @@ mod tests {
             "data: [DONE]\n\n"
         );
         let (adapter, handle) = server(response(unlisted.as_bytes()));
-        assert_eq!(
-            adapter.infer(
+        let events = adapter
+            .infer(
                 &request(TurnIntentCatalogue::empty(), 2_000),
-                InferenceCancellation::new()
-            ),
-            Err(LlamaCppAdapterError::Contract(
-                ModelContractError::IntentNotEligible
-            ))
-        );
+                InferenceCancellation::new(),
+            )
+            .unwrap();
+        assert!(matches!(
+            events.last().unwrap().event,
+            NormalizedStreamKind::Failed {
+                category: ProviderFailureCategory::Malformed
+            }
+        ));
         handle.join().unwrap();
 
         let reasoning = concat!(
