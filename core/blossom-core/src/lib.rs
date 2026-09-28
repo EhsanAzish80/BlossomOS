@@ -184,7 +184,8 @@ pub use workspace_create::{
     MODEL_WORKSPACE_NAME_PATTERN, ModelWorkspaceCreateProposal, ModelWorkspaceProposalError,
     UnavailableWorkspaceCreateProvider, WORKSPACE_FILE_MODE, WorkspaceCreateError,
     WorkspaceCreateProvider, WorkspaceCreateSelection, WorkspaceCreateState, WorkspaceFileCreated,
-    model_workspace_proposal_grammar, model_workspace_proposal_schema,
+    model_workspace_constraint_digests, model_workspace_proposal_grammar,
+    model_workspace_proposal_schema, model_workspace_proposal_schema_bytes,
     resolve_model_workspace_proposal, validate_model_workspace_proposal,
     validate_relative_destination, validate_workspace_selection,
 };

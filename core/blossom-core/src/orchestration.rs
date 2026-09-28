@@ -187,6 +187,7 @@ impl ValidatedPlan {
                 }
                 ModelIntentKind::ProcessSelf => ToolRequest::ProcessSelf { request_id },
                 ModelIntentKind::ProcessList => ToolRequest::ProcessList { request_id },
+                ModelIntentKind::FilesWriteCreate => return Err(PlanError::IntentNotEligible),
             };
             let step_id = StepId::parse(format!("step-{:03}", index + 1))?;
             let depends_on = proposed

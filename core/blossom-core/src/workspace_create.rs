@@ -71,6 +71,18 @@ pub fn model_workspace_proposal_schema() -> serde_json::Value {
     })
 }
 
+pub fn model_workspace_proposal_schema_bytes() -> Vec<u8> {
+    serde_json::to_vec(&model_workspace_proposal_schema())
+        .expect("closed workspace proposal schema must serialize")
+}
+
+pub fn model_workspace_constraint_digests() -> (String, String) {
+    (
+        digest(&model_workspace_proposal_schema_bytes()),
+        digest(model_workspace_proposal_grammar().as_bytes()),
+    )
+}
+
 pub fn model_workspace_proposal_grammar() -> String {
     format!(
         concat!(

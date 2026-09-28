@@ -333,7 +333,6 @@ struct LlamaRequest<'a> {
     parse_tool_calls: bool,
     parallel_tool_calls: bool,
     logprobs: bool,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     tools: Vec<LlamaTool>,
 }
 
@@ -787,6 +786,7 @@ impl std::error::Error for LlamaCppAdapterError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::GatewayProfile;
     use crate::model_runtime::{
         ConversationMessage, InferenceRequestId, ModelIntentKind, ModelProfile,
         NormalizedCompletion, NormalizedStreamKind, TurnIntentCatalogue,
@@ -898,6 +898,50 @@ mod tests {
         )
         .as_bytes()
         .to_vec()
+    }
+
+    #[test]
+    fn fixture_observes_pinned_sampling_and_exact_eligible_tool_constraint() {
+        let catalogue =
+            TurnIntentCatalogue::from_eligible([ModelIntentKind::FilesWriteCreate]).unwrap();
+        let outbound: serde_json::Value =
+            serde_json::from_slice(&encode_request(&request(catalogue, 2_000)).unwrap()).unwrap();
+        assert_eq!(outbound["temperature"], 0);
+        assert_eq!(outbound["seed"], 0);
+        assert_eq!(outbound["max_tokens"], MAX_GENERATED_TOKENS);
+        assert_eq!(outbound["parallel_tool_calls"], false);
+        assert_eq!(outbound["tools"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            outbound["tools"][0]["function"]["name"],
+            ModelIntentKind::FilesWriteCreate.name()
+        );
+        assert_eq!(
+            outbound["tools"][0]["function"]["parameters"],
+            crate::model_workspace_proposal_schema()
+        );
+
+        // llama.cpp derives its tool-call grammar from this exact schema; it
+        // rejects a separate custom grammar when tools are present. The closed
+        // profile therefore binds both the schema and derived grammar digests.
+        let package =
+            crate::fixed_synthetic_provider_package(GatewayProfile::LlamaCppCpuV1).unwrap();
+        let manifest = package.spec().manifest();
+        let (schema_sha256, grammar_sha256) = crate::model_workspace_constraint_digests();
+        assert_eq!(
+            manifest.constraint_schema_sha256(),
+            Some(schema_sha256.as_str())
+        );
+        assert_eq!(
+            manifest.constraint_grammar_sha256(),
+            Some(grammar_sha256.as_str())
+        );
+
+        let empty: serde_json::Value = serde_json::from_slice(
+            &encode_request(&request(TurnIntentCatalogue::empty(), 2_000)).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(empty["tools"], serde_json::json!([]));
+        assert_eq!(empty["parse_tool_calls"], false);
     }
 
     #[test]

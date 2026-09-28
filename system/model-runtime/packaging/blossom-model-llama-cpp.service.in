@@ -8,7 +8,7 @@ JoinsNamespaceOf=blossom-model-netns.service
 
 [Service]
 Type=simple
-ExecStart=@PROVIDER_BINARY@ --model @MODEL_PATH@ --alias @MODEL_ALIAS@ --no-webui
+ExecStart=@PROVIDER_BINARY@ --model @MODEL_PATH@ --alias @MODEL_ALIAS@ --ctx-size 4096 --threads 2 --no-webui
 User=blossom-model-provider
 Group=blossom-model-provider
 DynamicUser=no

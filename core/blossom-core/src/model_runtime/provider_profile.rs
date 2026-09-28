@@ -71,6 +71,8 @@ pub struct ProviderProfileManifest {
     profile_version: u16,
     profile: GatewayProfile,
     architecture: String,
+    constraint_schema_sha256: Option<String>,
+    constraint_grammar_sha256: Option<String>,
     provider: ModelProviderKind,
     logical_model: String,
     gateway_protocol_version: u16,
@@ -155,6 +157,14 @@ impl ProviderProfileManifest {
     /// closed profile. This is never sourced from a gateway client.
     pub fn logical_model(&self) -> &str {
         &self.logical_model
+    }
+
+    pub fn constraint_schema_sha256(&self) -> Option<&str> {
+        self.constraint_schema_sha256.as_deref()
+    }
+
+    pub fn constraint_grammar_sha256(&self) -> Option<&str> {
+        self.constraint_grammar_sha256.as_deref()
     }
 }
 
@@ -280,6 +290,10 @@ pub fn fixed_synthetic_provider_package(
                 "/usr/lib/blossom-os/models/llama-cpp/evidence.gguf".into(),
                 "--alias".into(),
                 "fixture-model:1".into(),
+                "--ctx-size".into(),
+                "4096".into(),
+                "--threads".into(),
+                "2".into(),
                 "--no-webui".into(),
             ],
             environment_names: vec!["HOME".into()],
@@ -293,6 +307,10 @@ pub fn fixed_synthetic_provider_package(
         profile_version: PROVIDER_PROFILE_VERSION,
         profile,
         architecture: std::env::consts::ARCH.into(),
+        constraint_schema_sha256: (profile == GatewayProfile::LlamaCppCpuV1)
+            .then(|| crate::workspace_create::model_workspace_constraint_digests().0),
+        constraint_grammar_sha256: (profile == GatewayProfile::LlamaCppCpuV1)
+            .then(|| crate::workspace_create::model_workspace_constraint_digests().1),
         provider: profile.provider(),
         logical_model: "fixture-model:1".into(),
         gateway_protocol_version: GATEWAY_PROTOCOL_VERSION,
@@ -624,6 +642,18 @@ fn validate_manifest(manifest: &ProviderProfileManifest) -> Result<(), ProviderP
     {
         return Err(ProviderProfileError::InvalidManifest);
     }
+    let expected_constraints = crate::workspace_create::model_workspace_constraint_digests();
+    match manifest.profile {
+        GatewayProfile::LlamaCppCpuV1
+            if manifest.constraint_schema_sha256.as_deref()
+                == Some(expected_constraints.0.as_str())
+                && manifest.constraint_grammar_sha256.as_deref()
+                    == Some(expected_constraints.1.as_str()) => {}
+        GatewayProfile::OllamaCpuV1
+            if manifest.constraint_schema_sha256.is_none()
+                && manifest.constraint_grammar_sha256.is_none() => {}
+        _ => return Err(ProviderProfileError::InvalidManifest),
+    }
     ModelProfile::parse(manifest.logical_model.clone())
         .map_err(|_| ProviderProfileError::InvalidManifest)?;
 
@@ -688,12 +718,16 @@ fn validate_arguments(manifest: &ProviderProfileManifest) -> Result<(), Provider
     let provider_arguments_valid = match manifest.profile {
         GatewayProfile::OllamaCpuV1 => arguments.len() == 2 && arguments[1] == "serve",
         GatewayProfile::LlamaCppCpuV1 => {
-            arguments.len() == 6
+            arguments.len() == 10
                 && arguments[1] == "--model"
                 && Path::new(&arguments[2]) == manifest.model_mount
                 && arguments[3] == "--alias"
                 && arguments[4] == manifest.logical_model
-                && arguments[5] == "--no-webui"
+                && arguments[5] == "--ctx-size"
+                && arguments[6] == "4096"
+                && arguments[7] == "--threads"
+                && arguments[8] == "2"
+                && arguments[9] == "--no-webui"
         }
     };
     if Path::new(&arguments[0]) != manifest.binary.path || !provider_arguments_valid {
@@ -1024,6 +1058,12 @@ mod tests {
             profile_version: PROVIDER_PROFILE_VERSION,
             profile: GatewayProfile::LlamaCppCpuV1,
             architecture: std::env::consts::ARCH.into(),
+            constraint_schema_sha256: Some(
+                crate::workspace_create::model_workspace_constraint_digests().0,
+            ),
+            constraint_grammar_sha256: Some(
+                crate::workspace_create::model_workspace_constraint_digests().1,
+            ),
             provider: ModelProviderKind::LlamaCpp,
             logical_model: "fixture-model:1".into(),
             gateway_protocol_version: GATEWAY_PROTOCOL_VERSION,
@@ -1054,6 +1094,10 @@ mod tests {
                 "/usr/lib/blossom/models/evidence.gguf".into(),
                 "--alias".into(),
                 "fixture-model:1".into(),
+                "--ctx-size".into(),
+                "4096".into(),
+                "--threads".into(),
+                "2".into(),
                 "--no-webui".into(),
             ],
             environment_names: vec!["LANG".into()],

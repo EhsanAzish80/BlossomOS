@@ -34,6 +34,8 @@ PROFILE_PATH = PurePosixPath(
 LOGICAL_MODEL = "qwen2.5-0.5b-instruct:q4_k_m"
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 MAX_GATEWAY_BYTES = 64 * 1024 * 1024
+MAX_MODEL_WORKSPACE_CONTENT_BYTES = 4096
+MODEL_WORKSPACE_NAME_PATTERN = "[a-z0-9][a-z0-9._-]{0,63}"
 
 
 def fail(message: str) -> None:
@@ -42,6 +44,36 @@ def fail(message: str) -> None:
 
 def digest_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def constraint_bytes() -> tuple[bytes, bytes]:
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["name", "content"],
+        "properties": {
+            "name": {
+                "type": "string",
+                "pattern": MODEL_WORKSPACE_NAME_PATTERN,
+                "maxLength": 64,
+            },
+            "content": {
+                "type": "string",
+                "maxLength": MAX_MODEL_WORKSPACE_CONTENT_BYTES,
+            },
+        },
+    }
+    grammar = (
+        "root ::= proposal\n"
+        'proposal ::= "{\\"name\\":\\"" name "\\",\\"content\\":\\"" content "\\"}"\n'
+        "name ::= [a-z0-9] [a-z0-9._-]{0,63}\n"
+        f"content ::= content-char{{0,{MAX_MODEL_WORKSPACE_CONTENT_BYTES}}}\n"
+        'content-char ::= [ -!#-Z\\[\\]-~] | "\\\\\\\"" | "\\\\\\\\" | "\\\\n"\n'
+    )
+    return (
+        json.dumps(schema, separators=(",", ":"), sort_keys=True).encode(),
+        grammar.encode(),
+    )
 
 
 def digest_file(path: Path, maximum: int) -> tuple[str, int]:
@@ -189,6 +221,7 @@ def render_gateway_unit() -> bytes:
 
 
 def registry_bytes(lock: dict) -> bytes:
+    schema, grammar = constraint_bytes()
     runtime_files = []
     for member in lock["runtime"]["members"]:
         for installed in member["installs"]:
@@ -203,6 +236,8 @@ def registry_bytes(lock: dict) -> bytes:
         "profile_version": 5,
         "profile": "llama_cpp_cpu_v1",
         "architecture": lock["architecture"],
+        "constraint_schema_sha256": digest_bytes(schema),
+        "constraint_grammar_sha256": digest_bytes(grammar),
         "provider": "llama_cpp",
         "logical_model": LOGICAL_MODEL,
         "gateway_protocol_version": 1,
@@ -221,6 +256,10 @@ def registry_bytes(lock: dict) -> bytes:
             str(MODEL_PATH),
             "--alias",
             LOGICAL_MODEL,
+            "--ctx-size",
+            "4096",
+            "--threads",
+            "2",
             "--no-webui",
         ],
         "environment_names": ["HOME"],

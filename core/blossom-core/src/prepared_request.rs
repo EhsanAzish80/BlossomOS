@@ -5,6 +5,7 @@ use crate::{
     Openat2FileReader, ServiceSelection, ToolRequest, WorkspaceCreateProvider,
     resolve_model_workspace_proposal, validate_service_unit,
 };
+use crate::{ModelIntentKind, ProposedToolIntent};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -302,6 +303,19 @@ struct ServiceStatusWire {
 }
 
 impl ToolRequestWire {
+    pub fn from_model_intent(
+        request_id: RequestId,
+        intent: &ProposedToolIntent,
+    ) -> Result<Self, ResolveError> {
+        match (intent.kind(), intent.workspace_create()) {
+            (ModelIntentKind::FilesWriteCreate, Some(proposal)) => Ok(Self::WorkspaceCreate {
+                request_id,
+                proposal: proposal.clone(),
+            }),
+            _ => Err(ResolveError::InvalidSelection),
+        }
+    }
+
     pub fn parse_json(input: &str) -> Result<Self, RequestError> {
         if input.len() > MAX_WIRE_REQUEST_BYTES {
             return Err(RequestError::RequestTooLarge);

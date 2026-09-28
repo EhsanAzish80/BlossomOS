@@ -196,6 +196,7 @@ pub enum ModelIntentKind {
     SystemStorageSummary,
     ProcessSelf,
     ProcessList,
+    FilesWriteCreate,
 }
 
 impl ModelIntentKind {
@@ -207,6 +208,7 @@ impl ModelIntentKind {
             Self::SystemStorageSummary => "system.storage.summary",
             Self::ProcessSelf => "process.self",
             Self::ProcessList => "process.list",
+            Self::FilesWriteCreate => "files.write:create",
         }
     }
 
@@ -218,6 +220,7 @@ impl ModelIntentKind {
             "system.storage.summary" => Some(Self::SystemStorageSummary),
             "process.self" => Some(Self::ProcessSelf),
             "process.list" => Some(Self::ProcessList),
+            "files.write:create" => Some(Self::FilesWriteCreate),
             _ => None,
         }
     }
@@ -232,8 +235,15 @@ impl ModelIntentKind {
                 Self::SystemStorageSummary => "Read a bounded root-storage summary.",
                 Self::ProcessSelf => "Read the current Blossom process identity.",
                 Self::ProcessList => "Propose reading a bounded process list.",
+                Self::FilesWriteCreate => "Propose creating one bounded workspace file.",
             },
-            parameters: EmptyIntentParameters::default(),
+            parameters: if self == Self::FilesWriteCreate {
+                ModelIntentParameters::WorkspaceCreate(
+                    crate::workspace_create::model_workspace_proposal_schema(),
+                )
+            } else {
+                ModelIntentParameters::Empty(EmptyIntentParameters::default())
+            },
         }
     }
 }
@@ -258,11 +268,18 @@ enum EmptyObjectType {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 struct EmptyProperties {}
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct ModelIntentDefinition {
     name: &'static str,
     description: &'static str,
-    parameters: EmptyIntentParameters,
+    parameters: ModelIntentParameters,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(untagged)]
+enum ModelIntentParameters {
+    Empty(EmptyIntentParameters),
+    WorkspaceCreate(Value),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
@@ -462,11 +479,19 @@ struct ProviderToolIntent {
 #[serde(deny_unknown_fields)]
 pub struct ProposedToolIntent {
     kind: ModelIntentKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    workspace_create: Option<crate::workspace_create::ModelWorkspaceCreateProposal>,
 }
 
 impl ProposedToolIntent {
     pub fn kind(&self) -> ModelIntentKind {
         self.kind
+    }
+
+    pub fn workspace_create(
+        &self,
+    ) -> Option<&crate::workspace_create::ModelWorkspaceCreateProposal> {
+        self.workspace_create.as_ref()
     }
 }
 
@@ -510,12 +535,26 @@ pub fn validate_provider_completion(
                 }
                 let argument_bytes = serde_json::to_vec(&intent.arguments)
                     .map_err(|_| ModelContractError::MalformedOutput)?;
-                if argument_bytes.len() > MAX_TOOL_ARGUMENT_BYTES
-                    || intent.arguments != Value::Object(Default::default())
-                {
+                if argument_bytes.len() > MAX_TOOL_ARGUMENT_BYTES {
                     return Err(ModelContractError::InvalidIntentArguments);
                 }
-                normalized.push(ProposedToolIntent { kind });
+                let workspace_create = if kind == ModelIntentKind::FilesWriteCreate {
+                    let proposal: crate::workspace_create::ModelWorkspaceCreateProposal =
+                        serde_json::from_value(intent.arguments)
+                            .map_err(|_| ModelContractError::InvalidIntentArguments)?;
+                    crate::workspace_create::validate_model_workspace_proposal(&proposal)
+                        .map_err(|_| ModelContractError::InvalidIntentArguments)?;
+                    Some(proposal)
+                } else {
+                    if intent.arguments != Value::Object(Default::default()) {
+                        return Err(ModelContractError::InvalidIntentArguments);
+                    }
+                    None
+                };
+                normalized.push(ProposedToolIntent {
+                    kind,
+                    workspace_create,
+                });
             }
             Ok(NormalizedCompletion::ToolIntents {
                 intents: normalized,
@@ -954,6 +993,50 @@ mod tests {
             ),
             Err(ModelContractError::DuplicateIntent)
         );
+    }
+
+    #[test]
+    fn workspace_fixture_rejects_hostile_completions_before_reservation() {
+        let eligible =
+            TurnIntentCatalogue::from_eligible([ModelIntentKind::FilesWriteCreate]).unwrap();
+        let capacity = crate::ApprovalCapacity::new(1).unwrap();
+        let invalid = [
+            r#"{"kind":"tool_intents","intents":[{"name":"process.list","arguments":{}}]}"#.to_owned(),
+            r#"{"kind":"tool_intents","intents":[{"name":"files.write:create","arguments":{"name":"../x","content":"safe"}}]}"#.to_owned(),
+            r#"{"kind":"tool_intents","intents":[{"name":"files.write:create","arguments":{"name":"note.txt","content":"\u202e"}}]}"#.to_owned(),
+            concat!(
+                r#"{"kind":"tool_intents","intents":[{"name":"files.write:create","arguments":{"name":"a.txt","content":"a"}}]}"#,
+                r#"{"kind":"tool_intents","intents":[{"name":"files.write:create","arguments":{"name":"b.txt","content":"b"}}]}"#
+            ).to_owned(),
+            concat!(
+                "explanation ",
+                r#"{"kind":"tool_intents","intents":[{"name":"files.write:create","arguments":{"name":"a.txt","content":"a"}}]}"#
+            ).to_owned(),
+            serde_json::json!({
+                "kind": "tool_intents",
+                "intents": [{
+                    "name": "files.write:create",
+                    "arguments": {"name": "limit.txt", "content": "x".repeat(crate::MAX_MODEL_WORKSPACE_CONTENT_BYTES + 1)}
+                }]
+            }).to_string(),
+        ];
+        for completion in invalid {
+            assert!(validate_provider_completion(completion.as_bytes(), &eligible).is_err());
+            assert_eq!(capacity.used(), 0, "validation must not reserve authority");
+        }
+
+        let boundary = serde_json::json!({
+            "kind": "tool_intents",
+            "intents": [{
+                "name": "files.write:create",
+                "arguments": {"name": "limit.txt", "content": "x".repeat(crate::MAX_MODEL_WORKSPACE_CONTENT_BYTES)}
+            }]
+        });
+        assert!(matches!(
+            validate_provider_completion(boundary.to_string().as_bytes(), &eligible),
+            Ok(NormalizedCompletion::ToolIntents { .. })
+        ));
+        assert_eq!(capacity.used(), 0);
     }
 
     #[test]

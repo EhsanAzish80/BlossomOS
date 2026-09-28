@@ -449,7 +449,10 @@ impl<
             origin: prepared.origin(),
         });
         let capability = PolicyEngine::required_capability(request);
-        let decision = self.policy.evaluate(request);
+        // A model may propose a request but can never authorize it. Keep this
+        // invariant at the final policy boundary so an allow rule cannot turn
+        // a model proposal into automatic execution.
+        let decision = effective_policy_decision(prepared.origin(), self.policy.evaluate(request));
         self.audit.append(AuditEvent::PolicyEvaluated {
             request_id: request.request_id().as_str().into(),
             capability,
@@ -1036,6 +1039,17 @@ impl<
     }
 }
 
+fn effective_policy_decision(
+    origin: crate::RequestOrigin,
+    configured: PolicyDecision,
+) -> PolicyDecision {
+    if origin == crate::RequestOrigin::ModelProposed && configured == PolicyDecision::Allow {
+        PolicyDecision::Ask
+    } else {
+        configured
+    }
+}
+
 impl<
     E: Executor,
     O: OsIdentityProvider,
@@ -1211,6 +1225,18 @@ mod tests {
 
     const REQUEST: &str = r#"{"request_id":"req-1","tool":"system.uname","arguments":{}}"#;
 
+    #[test]
+    fn model_origin_can_never_inherit_automatic_allow() {
+        assert_eq!(
+            effective_policy_decision(crate::RequestOrigin::ModelProposed, PolicyDecision::Allow),
+            PolicyDecision::Ask
+        );
+        assert_eq!(
+            effective_policy_decision(crate::RequestOrigin::UserCli, PolicyDecision::Allow),
+            PolicyDecision::Allow
+        );
+    }
+
     #[derive(Debug)]
     struct ScriptedExecutor {
         outcomes: VecDeque<Result<ExecutionResult, ExecutorError>>,
@@ -1246,7 +1272,6 @@ mod tests {
     fn model_workspace_proposal_resolves_previews_approves_creates_verifies_and_audits() {
         use crate::prepared_request::RequestOrigin;
         use crate::verification::VerificationReason;
-        use crate::workspace_create::ModelWorkspaceCreateProposal;
         use std::fs;
 
         let workspace =
@@ -1264,21 +1289,42 @@ mod tests {
         let mut engine = BlossomEngine::new(
             PolicyEngine::new(vec![PolicyRule {
                 capability: Capability::FilesWriteCreate,
-                decision: PolicyDecision::Ask,
+                decision: PolicyDecision::Allow,
             }]),
             PreparedApprovalStore::new(30_000),
             executor,
         );
 
+        let catalogue = crate::TurnIntentCatalogue::from_code_owned_eligible([
+            crate::ModelIntentKind::FilesWriteCreate,
+        ])
+        .unwrap();
+        let fixture_completion = serde_json::json!({
+            "kind": "tool_intents",
+            "intents": [{
+                "name": "files.write:create",
+                "arguments": {"name": "model-note.txt", "content": content}
+            }]
+        });
+        let intent = match crate::validate_provider_completion(
+            fixture_completion.to_string().as_bytes(),
+            &catalogue,
+        )
+        .unwrap()
+        {
+            crate::NormalizedCompletion::ToolIntents { intents } => {
+                intents.into_iter().next().unwrap()
+            }
+            _ => panic!("fixture must propose a tool intent"),
+        };
+        let wire = ToolRequestWire::from_model_intent(
+            crate::RequestId::parse("model-create-e2e".into()).unwrap(),
+            &intent,
+        )
+        .unwrap();
         let begin = engine
             .begin_wire(
-                ToolRequestWire::WorkspaceCreate {
-                    request_id: crate::RequestId::parse("model-create-e2e".into()).unwrap(),
-                    proposal: ModelWorkspaceCreateProposal {
-                        name: "model-note.txt".into(),
-                        content: content.into(),
-                    },
-                },
+                wire,
                 SessionContext {
                     workspace_root: workspace.to_str().unwrap(),
                     origin: RequestOrigin::ModelProposed,
@@ -1288,6 +1334,7 @@ mod tests {
             )
             .unwrap();
         assert!(!destination.exists());
+        assert!(engine.executor.calls.is_empty());
         let (token, bound_preview) = match begin {
             BeginOutcome::ApprovalRequired {
                 token,
@@ -1297,6 +1344,13 @@ mod tests {
             other => panic!("expected approval, got {other:?}"),
         };
         assert_eq!(bound_preview, preview_sha256);
+        assert!(engine.audit().records().iter().any(|record| matches!(
+            &record.event,
+            AuditEvent::PolicyEvaluated {
+                decision: PolicyDecision::Ask,
+                ..
+            }
+        )));
 
         let completion = engine.approve(token, &bound_preview, 2).unwrap();
         assert_eq!(
