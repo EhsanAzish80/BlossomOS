@@ -1,0 +1,15 @@
+pkgname=blossom-qualification
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Blossom OS VM-only agent qualification tools'
+arch=('x86_64' 'aarch64')
+license=('Apache-2.0')
+depends=('blossom-core' 'python' 'systemd')
+source=()
+sha256sums=()
+
+package() {
+  local repo_root="${BLOSSOM_REPO_ROOT:-$startdir/../../..}"
+  install -Dm0755 "$repo_root/scripts/qualify_agent_pipeline.py" \
+    "$pkgdir/usr/lib/blossom-os/qualify-agent-pipeline"
+}

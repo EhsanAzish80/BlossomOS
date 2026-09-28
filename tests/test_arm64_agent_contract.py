@@ -107,7 +107,11 @@ class Arm64AgentContractTests(unittest.TestCase):
 
     def test_qualification_driver_uses_one_public_shell_path(self):
         driver = (ROOT / "scripts/qualify_agent_pipeline.py").read_text()
-        package = (ROOT / "distribution/packages/blossom-core/PKGBUILD").read_text()
+        core_package = (ROOT / "distribution/packages/blossom-core/PKGBUILD").read_text()
+        qualification_package = (
+            ROOT / "distribution/packages/blossom-qualification/PKGBUILD"
+        ).read_text()
+        builder = (ROOT / "scripts/distribution/build_physical_candidate.sh").read_text()
         self.assertNotIn('add_argument("--mode"', driver)
         self.assertIn('profile.get("logical_model") == "fixture-model:1"', driver)
         for method in ("StartAgentTurn1", "SubmitDecision1", "ReadActivity1"):
@@ -121,7 +125,15 @@ class Arm64AgentContractTests(unittest.TestCase):
         ):
             self.assertIn(trace, driver)
         self.assertIn("subprocess.TimeoutExpired", driver)
-        self.assertIn("qualify-agent-pipeline", package)
+        self.assertIn("shell activity contains a sequence gap", driver)
+        self.assertNotIn("qualify_agent_pipeline.py", core_package)
+        self.assertIn("depends=('blossom-core'", qualification_package)
+        self.assertIn("qualify_agent_pipeline.py", qualification_package)
+        qualification_build = 'makepkg --nodeps --noconfirm --dir "$build/source/distribution/packages/blossom-qualification"'
+        qualification_copy = 'distribution/packages/blossom-qualification/blossom-qualification-*.pkg.tar.zst'
+        self.assertIn(qualification_build, builder)
+        self.assertIn(qualification_copy, builder)
+        self.assertGreaterEqual(builder.count('if [[ "$mode" == vm-qualification ]]'), 3)
 
 
 if __name__ == "__main__":

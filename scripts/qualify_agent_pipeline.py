@@ -22,6 +22,7 @@ CALL_TIMEOUT_SECONDS = max(
     1, min(30, int(os.environ.get("BLOSSOM_QUALIFICATION_TIMEOUT_SECONDS", "30")))
 )
 MAX_FILE_BYTES = 1024 * 1024
+ACTIVITY_BATCH = 64
 RECEIPT_FIELDS = {
     "schema_version",
     "architecture",
@@ -141,11 +142,11 @@ def call_bytes(method: str, payload: bytes, deadline: float) -> dict:
         raise QualificationError(f"{method} returned malformed shell JSON") from error
 
 
-def read_activity(deadline: float) -> list[dict]:
+def read_activity_page(after_sequence: int, deadline: float) -> list[dict]:
     response = busctl(
         "ReadActivity1",
         "qbtq",
-        [str(PROTOCOL_VERSION), "false", "0", "64"],
+        [str(PROTOCOL_VERSION), "true", str(after_sequence), str(ACTIVITY_BATCH)],
         deadline,
     )
     try:
@@ -155,6 +156,21 @@ def read_activity(deadline: float) -> list[dict]:
     if not isinstance(activity, list):
         raise QualificationError("activity response is not a list")
     return activity
+
+
+def read_complete_activity(after_sequence: int, deadline: float) -> tuple[list[dict], int]:
+    activity = []
+    cursor = after_sequence
+    while True:
+        page = read_activity_page(cursor, deadline)
+        for item in page:
+            sequence = item.get("sequence")
+            if sequence != cursor + 1:
+                raise QualificationError("shell activity contains a sequence gap")
+            cursor = sequence
+            activity.append(item)
+        if len(page) < ACTIVITY_BATCH:
+            return activity, cursor
 
 
 def decision(preview: dict, decision_name: str, *, mutate: bool = False) -> bytes:
@@ -189,7 +205,7 @@ def executor_starts(activity: list[dict], request_id: str) -> int:
     )
 
 
-def run_case(case: str) -> dict:
+def run_case(case: str, activity_cursor: int) -> dict:
     started = time.monotonic()
     deadline = started + CALL_TIMEOUT_SECONDS
     outcome = call_bytes("StartAgentTurn1", start_payload(case), deadline)
@@ -230,7 +246,7 @@ def run_case(case: str) -> dict:
             raise QualificationError(f"{case} approval was not denied")
     elif outcome.get("status") != "denied":
         raise QualificationError(f"{case} did not fail closed")
-    activity = read_activity(deadline)
+    activity, activity_cursor = read_complete_activity(activity_cursor, deadline)
     starts = executor_starts(activity, request_id)
     if case != "positive" and starts != 0:
         raise QualificationError(f"{case} reached executor according to shell activity")
@@ -239,6 +255,7 @@ def run_case(case: str) -> dict:
         "elapsed_ms": round((time.monotonic() - started) * 1000),
         "executor_starts": starts,
         "activity_last_sequence": max((item.get("sequence", 0) for item in activity), default=0),
+        "next_activity_cursor": activity_cursor,
     }
 
 
@@ -258,6 +275,7 @@ def main() -> int:
     parser.add_argument("--commit", required=True)
     arguments = parser.parse_args()
     identity = load_identity(arguments.profile, arguments.receipt, arguments.commit)
+    _, activity_cursor = read_complete_activity(0, time.monotonic() + CALL_TIMEOUT_SECONDS)
     sequence = 1
     if arguments.ledger.exists():
         sequence += sum(1 for _ in arguments.ledger.open(encoding="utf-8"))
@@ -266,7 +284,9 @@ def main() -> int:
         sequence += 1
         started = time.monotonic()
         try:
-            entry.update(run_case(case))
+            result = run_case(case, activity_cursor)
+            activity_cursor = result.pop("next_activity_cursor")
+            entry.update(result)
             entry.update(status="passed", reason=None)
         except Exception as error:
             entry.update(

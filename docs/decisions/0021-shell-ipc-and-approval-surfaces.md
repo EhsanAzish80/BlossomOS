@@ -77,6 +77,15 @@ The initial interface is intentionally small:
 No generic command, arguments, path, D-Bus destination, tool discovery, model
 prompt, arbitrary plan, audit query, or privileged operation is accepted.
 
+The later qualification-only `StartAgentTurn1` addition admits one bounded
+prompt through the same authenticated session interface. The service enforces
+the shell message-size limit, permits at most one pending turn per peer, and
+reserves approval capacity before resolving or retaining request authority.
+The method does not accept capabilities, paths, identities, policy decisions,
+approval tokens, provider selection, or execution results. Its qualification
+client is packaged separately from `blossom-core`, is excluded from physical
+images, and does not constitute evidence of independent human approval.
+
 ### Approval ceremony
 
 The service creates a fresh opaque request ID and immutable approval challenge.

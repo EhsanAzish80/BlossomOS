@@ -57,6 +57,13 @@ fn project_event(
             ShellActivityKind::Request,
             ShellActivityCategory::Accepted,
         ),
+        AuditEvent::RequestAccepted {
+            request_id, tool, ..
+        } if tool == "files.write.create" => (
+            request_id,
+            ShellActivityKind::Request,
+            ShellActivityCategory::Accepted,
+        ),
         AuditEvent::PolicyEvaluated {
             request_id,
             capability: Capability::SystemReadKernelIdentity,
@@ -74,6 +81,15 @@ fn project_event(
             request_id,
             ShellActivityKind::Policy,
             ShellActivityCategory::PolicyAllow,
+        ),
+        AuditEvent::PolicyEvaluated {
+            request_id,
+            capability: Capability::FilesWriteCreate,
+            decision: PolicyDecision::Ask,
+        } => (
+            request_id,
+            ShellActivityKind::Policy,
+            ShellActivityCategory::PolicyAsk,
         ),
         AuditEvent::NativeReadStarted {
             request_id,
@@ -125,6 +141,21 @@ fn project_event(
             request_id,
             ShellActivityKind::Terminal,
             ShellActivityCategory::Cancelled,
+        ),
+        AuditEvent::WorkspaceCreateStarted { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Effect,
+            ShellActivityCategory::PublicationStarted,
+        ),
+        AuditEvent::WorkspaceCreateFinished { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Effect,
+            ShellActivityCategory::PublicationFinished,
+        ),
+        AuditEvent::WorkspaceCreateFailed { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Terminal,
+            ShellActivityCategory::PublicationFailed,
         ),
         AuditEvent::ExecutionStarted {
             request_id,
@@ -271,6 +302,45 @@ mod tests {
         assert_eq!(
             project_shell_activity(&audit, None, 1),
             Err(ShellActivityError::UnexpectedAuditEvent)
+        );
+    }
+
+    #[test]
+    fn workspace_publication_is_visible_without_becoming_an_executor_event() {
+        let request_id = "shell-0000000000000007-2";
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::RequestAccepted {
+            request_id: request_id.into(),
+            tool: "files.write.create".into(),
+            origin: crate::RequestOrigin::ModelProposed,
+        });
+        audit.append(AuditEvent::PolicyEvaluated {
+            request_id: request_id.into(),
+            capability: Capability::FilesWriteCreate,
+            decision: PolicyDecision::Ask,
+        });
+        audit.append(AuditEvent::WorkspaceCreateStarted {
+            request_id: request_id.into(),
+            workspace_sha256: "1".repeat(64),
+            destination_sha256: "2".repeat(64),
+            root_device: 1,
+            root_inode: 2,
+            parent_device: 1,
+            parent_inode: 2,
+            source_bytes: 7,
+            source_sha256: "3".repeat(64),
+        });
+        let projected = project_shell_activity(&audit, None, 16).expect("projection");
+        assert_eq!(projected.len(), 3);
+        assert_eq!(projected[2].kind, ShellActivityKind::Effect);
+        assert_eq!(
+            projected[2].category,
+            ShellActivityCategory::PublicationStarted
+        );
+        assert!(
+            projected
+                .iter()
+                .all(|item| item.kind != ShellActivityKind::Execution)
         );
     }
 }

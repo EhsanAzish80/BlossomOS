@@ -93,7 +93,23 @@ class AgentQualificationDriverTests(unittest.TestCase):
                     emit({"status":status,"request_id":request["request_id"]})
                 elif method == "ReadActivity1":
                     assert signature == "qbtq"
-                    emit([])
+                    cursor = int(args[2])
+                    records = []
+                    if os.path.exists(marker):
+                        with open(marker, encoding="utf-8") as source:
+                            observations = [json.loads(line) for line in source]
+                        for sequence, observation in enumerate(observations, 1):
+                            case = observation["case"]
+                            if os.environ.get("BLOSSOM_FIXTURE_GAP") and sequence >= 2:
+                                sequence += 1
+                            records.append({
+                                "version":1,
+                                "sequence":sequence,
+                                "request_id":"fixture-" + case,
+                                "kind":"execution" if case == "positive" else "terminal",
+                                "category":"started" if case == "positive" else "denied",
+                            })
+                    emit([record for record in records if record["sequence"] > cursor][:64])
                 else:
                     sys.exit(2)
                 """
@@ -104,11 +120,12 @@ class AgentQualificationDriverTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def run_driver(self) -> subprocess.CompletedProcess[str]:
+    def run_driver(self, extra_environment=None) -> subprocess.CompletedProcess[str]:
         environment = os.environ.copy()
         environment["PATH"] = f"{self.bin}:{environment['PATH']}"
         environment["BLOSSOM_FIXTURE_MARKER"] = str(self.marker)
         environment["BLOSSOM_QUALIFICATION_TIMEOUT_SECONDS"] = "1"
+        environment.update(extra_environment or {})
         return subprocess.run(
             [
                 sys.executable,
@@ -151,7 +168,15 @@ class AgentQualificationDriverTests(unittest.TestCase):
 
     def test_timeout_is_a_logged_failure_without_retry(self) -> None:
         fake = self.bin / "busctl"
-        fake.write_text("#!/bin/sh\nsleep 5\n")
+        fake.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, sys, time\n"
+            "method = sys.argv[sys.argv.index('call') + 4]\n"
+            "if method == 'ReadActivity1':\n"
+            " data = json.dumps([]).encode(); print(json.dumps({'type':'ay','data':[list(data)]}))\n"
+            "else:\n"
+            " time.sleep(5)\n"
+        )
         fake.chmod(0o755)
         result = self.run_driver()
         self.assertNotEqual(result.returncode, 0)
@@ -168,6 +193,15 @@ class AgentQualificationDriverTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.ledger.exists())
         self.assertFalse(self.marker.exists())
+
+    def test_activity_sequence_gap_fails_instead_of_claiming_zero_execution(self) -> None:
+        result = self.run_driver({"BLOSSOM_FIXTURE_GAP": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        entries = [json.loads(line) for line in self.ledger.read_text().splitlines()]
+        self.assertEqual(len(entries), 2)
+        self.assertEqual(entries[-1]["case"], "direct_injection")
+        self.assertEqual(entries[-1]["status"], "failed")
+        self.assertIn("sequence gap", entries[-1]["reason"])
 
 
 if __name__ == "__main__":

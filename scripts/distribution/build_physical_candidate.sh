@@ -46,8 +46,15 @@ runuser -u builder -- env HOME=/home/builder \
   makepkg --nodeps --noconfirm --dir "$build/source/distribution/packages/blossom-core"
 runuser -u builder -- env HOME=/home/builder \
   makepkg --nodeps --noconfirm --dir "$build/source/distribution/packages/blossom-shell"
+if [[ "$mode" == vm-qualification ]]; then
+  runuser -u builder -- env HOME=/home/builder \
+    makepkg --nodeps --noconfirm --dir "$build/source/distribution/packages/blossom-qualification"
+fi
 cp "$build/source"/distribution/packages/blossom-core/blossom-core-*.pkg.tar.zst "$packages/"
 cp "$build/source"/distribution/packages/blossom-shell/blossom-shell-*.pkg.tar.zst "$packages/"
+if [[ "$mode" == vm-qualification ]]; then
+  cp "$build/source"/distribution/packages/blossom-qualification/blossom-qualification-*.pkg.tar.zst "$packages/"
+fi
 
 pacstrap -K -C "$repo/distribution/archiso/pacman.conf" "$rootfs" \
   adwaita-cursors base blueman bluez bluez-utils brightnessctl broadcom-wl-dkms bubblewrap dbus-broker dosfstools foot \

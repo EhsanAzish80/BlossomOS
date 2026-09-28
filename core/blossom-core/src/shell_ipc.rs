@@ -372,6 +372,7 @@ pub enum ShellActivityKind {
     Verification,
     Terminal,
     Context,
+    Effect,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -396,6 +397,9 @@ pub enum ShellActivityCategory {
     ReadStarted,
     ReadFinished,
     ReadFailed,
+    PublicationStarted,
+    PublicationFinished,
+    PublicationFailed,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
