@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import json
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
 SHELL = ROOT / "system" / "shell"
@@ -16,6 +17,8 @@ UI_UNIT = "blossom-shell-ui.service"
 DESKTOP_UNIT = "blossom-desktop-shell.service"
 RECOVERY_UNIT = "blossom-shell-recovery.service"
 RECOVERY = "blossom-shell-recovery"
+POLICY = "org.blossomos.shell.policy"
+MODEL_EFFECT_ACTION = "org.blossomos.shell.approve-model-effect"
 
 
 def require(condition: bool, message: str) -> None:
@@ -146,8 +149,25 @@ def check_recovery() -> None:
         require(value not in script, f"forbidden recovery authority: {value}")
 
 
+def check_policy() -> None:
+    root = ET.parse(PACKAGE / POLICY).getroot()
+    actions = root.findall("action")
+    require(len(actions) == 1, "shell policy action set must remain closed")
+    action = actions[0]
+    require(action.get("id") == MODEL_EFFECT_ACTION, "shell policy action drift")
+    defaults = action.find("defaults")
+    require(defaults is not None, "shell policy defaults missing")
+    require(defaults.findtext("allow_any") == "no", "shell policy must deny remote callers")
+    require(defaults.findtext("allow_inactive") == "no", "shell policy must deny inactive callers")
+    require(defaults.findtext("allow_active") == "auth_self", "each active approval must authenticate")
+    require(
+        "auth_self_keep" not in (PACKAGE / POLICY).read_text(),
+        "shell approval authentication must never be cached",
+    )
+
+
 def main() -> None:
-    expected = {"README.md", UNIT, UI_UNIT, DESKTOP_UNIT, RECOVERY_UNIT, RECOVERY}
+    expected = {"README.md", UNIT, UI_UNIT, DESKTOP_UNIT, RECOVERY_UNIT, RECOVERY, POLICY}
     require({path.name for path in PACKAGE.iterdir()} == expected, "unexpected shell package surface")
     check_lock()
     check_evidence_lock()
@@ -155,6 +175,7 @@ def main() -> None:
     check_ui_unit()
     check_desktop_unit()
     check_recovery()
+    check_policy()
 
 
 if __name__ == "__main__":
