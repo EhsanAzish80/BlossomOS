@@ -91,6 +91,8 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "blossom-model-gateway.service",
             "image-source-commit",
             "blossom-model-runtime-b[0-9]*-aarch64.pkg.tar.*",
+            'userdel blossom 2>/dev/null || true',
+            "useradd --uid 1000 --gid blossom",
         ):
             self.assertIn(required, text)
         self.assertNotIn("blossom-model-runtime-[0-9]*-aarch64", text)

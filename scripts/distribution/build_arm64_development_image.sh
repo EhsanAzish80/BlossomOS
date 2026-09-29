@@ -162,7 +162,12 @@ rm -rf "$work/root/home/alarm"
 chroot "$work/root" userdel alarm 2>/dev/null || true
 chroot "$work/root" userdel --remove builder
 chroot "$work/root" groupadd --force blossom-ai
-chroot "$work/root" useradd --uid 1000 --create-home --groups audio,input,video,wheel,blossom-ai --shell /bin/bash blossom
+# blossom-core's sysusers definition creates a locked service identity while
+# packages are installed. This development image needs the interactive desktop
+# account to own UID 1000 instead, so replace that package-time identity before
+# provisioning the home directory.
+chroot "$work/root" userdel blossom 2>/dev/null || true
+chroot "$work/root" useradd --uid 1000 --gid blossom --create-home --groups audio,input,video,wheel,blossom-ai --shell /bin/bash blossom
 cp -a "$repo/distribution/archiso/airootfs/home/blossom/." "$work/root/home/blossom/"
 chroot "$work/root" chown -R blossom:blossom /home/blossom
 chmod 0700 "$work/root/home/blossom"
