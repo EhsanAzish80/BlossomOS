@@ -82,8 +82,10 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "blossom-model-llama-cpp.service",
             "blossom-model-gateway.service",
             "image-source-commit",
+            "blossom-model-runtime-b[0-9]*-aarch64.pkg.tar.*",
         ):
             self.assertIn(required, text)
+        self.assertNotIn("blossom-model-runtime-[0-9]*-aarch64", text)
 
     def test_launcher_uses_hvf_without_intel_emulation(self):
         text = (

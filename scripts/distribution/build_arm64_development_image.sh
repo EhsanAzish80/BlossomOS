@@ -142,7 +142,7 @@ chroot "$work/root" /bin/bash -lc '
   packages=(
     /opt/blossom-packages/blossom-core-[0-9]*-aarch64.pkg.tar.*
     /opt/blossom-packages/blossom-shell-[0-9]*-aarch64.pkg.tar.*
-    /opt/blossom-packages/blossom-model-runtime-[0-9]*-aarch64.pkg.tar.*
+    /opt/blossom-packages/blossom-model-runtime-b[0-9]*-aarch64.pkg.tar.*
     /opt/blossom-packages/blossom-qualification-[0-9]*-aarch64.pkg.tar.*
   )
   ((${#packages[@]} == 4)) || {
