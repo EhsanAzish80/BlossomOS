@@ -82,6 +82,17 @@ mount "$efi_loop" "$work/root/boot"
 mounted=true
 
 bsdtar -xpf "$rootfs_tarball" -C "$work/root"
+# The upstream rootfs enables only the GeoIP endpoint by default.  Keep that
+# preferred endpoint, but enable the official fallback servers already shipped
+# in the signed rootfs mirror list so one slow redirect cannot abort a local
+# image build.
+mirrorlist="$work/root/etc/pacman.d/mirrorlist"
+[[ -f $mirrorlist ]] || { echo "error: ARM64 rootfs has no pacman mirror list" >&2; exit 1; }
+sed -E -i 's/^[[:space:]]*#[[:space:]]*(Server[[:space:]]*=)/\1/' "$mirrorlist"
+(( $(grep -Ec '^[[:space:]]*Server[[:space:]]*=' "$mirrorlist") >= 2 )) || {
+  echo "error: ARM64 rootfs does not provide a pacman mirror fallback" >&2
+  exit 1
+}
 rm -f "$work/root/etc/resolv.conf"
 cp -L /etc/resolv.conf "$work/root/etc/resolv.conf"
 mount -t proc proc "$work/root/proc"
