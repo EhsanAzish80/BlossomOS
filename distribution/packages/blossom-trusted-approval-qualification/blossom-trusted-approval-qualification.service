@@ -1,0 +1,12 @@
+[Unit]
+Description=Blossom OS production-policy trusted approval qualification
+ConditionPathExists=/dev/virtio-ports/org.blossomos.trusted-approval-qualification
+After=graphical.target NetworkManager-wait-online.service
+Wants=NetworkManager-wait-online.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/blossom-trusted-approval-qualification-probe
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=180

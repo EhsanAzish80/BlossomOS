@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+result_device=/dev/virtio-ports/org.blossomos.trusted-approval-qualification
+exec >"$result_device" 2>&1
+started=${SECONDS}
+runtime=/run/user/1000
+
+fail() {
+  echo "BLOSSOM_ARM64_TRUSTED_APPROVAL_FAILED stage=$1 seconds=$((SECONDS - started))"
+  journalctl -b --no-pager -n 120 || true
+  systemctl poweroff
+  exit 1
+}
+
+as_blossom() {
+  runuser -u blossom -- env \
+    HOME=/home/blossom \
+    XDG_RUNTIME_DIR="$runtime" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=$runtime/bus" \
+    "$@"
+}
+
+user_systemctl() {
+  as_blossom systemctl --user "$@"
+}
+
+for _ in {1..90}; do
+  if systemctl is-active --quiet blossom-shell-broker@1000.service \
+      && user_systemctl is-active --quiet blossom-shell-ui.service \
+      && systemctl is-active --quiet blossom-model-gateway.service; then
+    break
+  fi
+  sleep 2
+done
+systemctl is-active --quiet blossom-shell-broker@1000.service || fail broker
+user_systemctl is-active --quiet blossom-shell-ui.service || fail shell-ui
+systemctl is-active --quiet blossom-model-gateway.service || fail gateway
+
+! pacman -Q blossom-qualification >/dev/null 2>&1 || fail qualification-package-present
+[[ ! -e /usr/share/polkit-1/rules.d/49-blossom-model-effect-qualification.rules ]] \
+  || fail qualification-rule-present
+[[ ! -e /usr/lib/blossom-os/qualify-agent-pipeline ]] || fail qualification-driver-present
+
+target=/home/blossom/Workspace/qualification-note.txt
+rm -f "$target"
+self_result=$(as_blossom /usr/lib/blossom-os/probe-trusted-approval --case self_approval) \
+  || fail self-approval
+[[ ! -e $target ]] || fail self-approval-effect
+
+user_systemctl stop hyprpolkitagent.service || true
+pkill -u blossom -x hyprpolkitagent 2>/dev/null || true
+pgrep -u blossom -x hyprpolkitagent >/dev/null && fail agent-still-running
+rm -f "$target"
+missing_result=$(as_blossom /usr/lib/blossom-os/probe-trusted-approval --case missing_agent) \
+  || fail missing-agent
+[[ ! -e $target ]] || fail missing-agent-effect
+
+echo "$self_result"
+echo "$missing_result"
+echo "BLOSSOM_ARM64_TRUSTED_APPROVAL_READY self_approval=denied missing_agent=denied effects=0 executor_starts=0 bypass=absent seconds=$((SECONDS - started))"
+systemctl poweroff

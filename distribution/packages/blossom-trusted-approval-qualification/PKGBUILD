@@ -1,0 +1,19 @@
+pkgname=blossom-trusted-approval-qualification
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Blossom OS VM-only production-policy approval probe'
+arch=('aarch64')
+license=('Apache-2.0')
+depends=('blossom-core' 'python' 'python-gobject' 'systemd')
+source=()
+sha256sums=()
+
+package() {
+  local repo_root="${BLOSSOM_REPO_ROOT:-$startdir/../../..}"
+  install -Dm0755 "$repo_root/scripts/probe_trusted_approval.py" \
+    "$pkgdir/usr/lib/blossom-os/probe-trusted-approval"
+  install -Dm0755 "$startdir/blossom-trusted-approval-qualification-probe" \
+    "$pkgdir/usr/local/bin/blossom-trusted-approval-qualification-probe"
+  install -Dm0644 "$startdir/blossom-trusted-approval-qualification.service" \
+    "$pkgdir/usr/lib/systemd/system/blossom-trusted-approval-qualification.service"
+}

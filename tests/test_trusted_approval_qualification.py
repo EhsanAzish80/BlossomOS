@@ -1,0 +1,79 @@
+import py_compile
+import tempfile
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+class TrustedApprovalQualificationTests(unittest.TestCase):
+    def test_probe_is_valid_python_and_checks_public_audit(self):
+        probe = ROOT / "scripts/probe_trusted_approval.py"
+        with tempfile.TemporaryDirectory() as directory:
+            py_compile.compile(probe, cfile=str(Path(directory) / "probe.pyc"), doraise=True)
+        source = probe.read_text(encoding="utf-8")
+        for required in (
+            '"StartAgentTurn1"',
+            '"SubmitDecision1"',
+            '"ReadActivity1"',
+            '"authentication_rejected"',
+            'record.get("kind") == "effect"',
+            'record.get("kind") == "execution"',
+            'record.get("category") == "started"',
+            '"AccessDenied"',
+        ):
+            self.assertIn(required, source)
+
+    def test_trusted_approval_image_excludes_the_bypass_package_and_rule(self):
+        builder = (
+            ROOT / "scripts/distribution/build_arm64_development_image.sh"
+        ).read_text(encoding="utf-8")
+        package = (
+            ROOT / "distribution/packages/blossom-trusted-approval-qualification/PKGBUILD"
+        ).read_text(encoding="utf-8")
+        orchestrator = (
+            ROOT
+            / "distribution/packages/blossom-trusted-approval-qualification"
+            / "blossom-trusted-approval-qualification-probe"
+        ).read_text(encoding="utf-8")
+        self.assertIn("trusted-approval", builder)
+        self.assertIn("trusted-approval image contains blossom-qualification", builder)
+        self.assertIn("trusted-approval image contains the qualification polkit bypass", builder)
+        self.assertNotIn("49-blossom-model-effect-qualification.rules", package)
+        self.assertIn("! pacman -Q blossom-qualification", orchestrator)
+        self.assertIn("qualification-rule-present", orchestrator)
+        self.assertIn("qualification-driver-present", orchestrator)
+
+    def test_probe_covers_self_approval_and_missing_agent(self):
+        orchestrator = (
+            ROOT
+            / "distribution/packages/blossom-trusted-approval-qualification"
+            / "blossom-trusted-approval-qualification-probe"
+        ).read_text(encoding="utf-8")
+        for required in (
+            "--case self_approval",
+            "systemctl --user",
+            "stop hyprpolkitagent.service",
+            "--case missing_agent",
+            "effects=0 executor_starts=0 bypass=absent",
+        ):
+            self.assertIn(required, orchestrator)
+
+    def test_test_only_package_is_not_referenced_by_physical_builds(self):
+        package_name = "blossom-trusted-approval-qualification"
+        for relative in (
+            "scripts/distribution/build_physical_candidate.sh",
+            "scripts/distribution/verify_physical_candidate_image.sh",
+            "distribution/manifest.json",
+            "distribution/archiso/packages.x86_64",
+        ):
+            self.assertNotIn(
+                package_name,
+                (ROOT / relative).read_text(encoding="utf-8"),
+                relative,
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()
