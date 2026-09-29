@@ -65,8 +65,17 @@ terminal audit record. Evidence must state that approval was submitted by the
 qualification client and does not prove independent human intent. AT-SPI may
 confirm that the shell presents the preview; screenshots are not evidence.
 
-The deterministic gate is twenty consecutive warm runs with the same output
-digest and no retries. Any variation fails the gate.
+The deterministic gate is twenty consecutive warm runs with the same parsed
+proposal digest, semantic-preview digest, and created-file digest and no
+retries. Any variation fails the gate.
+
+The original design called this an identical raw-output digest. Package-gate
+qualification showed that byte-for-byte SSE transport output is the wrong
+metric: opaque request identity and timestamp metadata legitimately vary per
+request. Qualification therefore hashes the validated proposal and the stable
+approval-preview fields separately. The exact approval-binding digest remains
+unique because it includes request identity and expiry. Transport variation is
+not allowed to change the parsed proposal, semantic preview, or created bytes.
 
 Negative evidence includes:
 
@@ -155,3 +164,7 @@ package and security boundaries intact.
   counts and output-limit enforcement.
 - Indirect-injection evidence is accepted only after a real two-turn result
   feedback test exists.
+- The 2026-09-28 aarch64 package gate at `9b9a029` passed 20 consecutive
+  first-streak suites with stable parsed-proposal, semantic-preview, and
+  created-file digests. Its scoped evidence and limitations are recorded in
+  `docs/ARM64_AGENT_PACKAGE_GATE_EVIDENCE.md`.

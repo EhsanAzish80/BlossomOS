@@ -37,6 +37,8 @@ explicitly labeled future work. A target design is not an implementation claim.
 | 10 | Verified beta-candidate hardening boundary; no public release | [Exit audit](PHASE_10_EXIT_AUDIT.md) · [Baseline](PHASE_10_BASELINE.md) · [Threat review](PHASE_10_THREAT_REVIEW.md) · [Limitations](PHASE_10_LIMITATIONS.md) · [Checklist](PHASE_10_RELEASE_CHECKLIST.md) |
 | 11 | Active physical-device qualification; installation and disk boot observed, revised desktop candidate still requires runtime gates | [Baseline](PHASE_11_BASELINE.md) · [Release audit](PHASE_11_RELEASE_AUDIT.md) · [Preflight evidence](PHASE_11_PHYSICAL_EVIDENCE.md) · [Disposable evidence](PHASE_11_DISPOSABLE_EVIDENCE.md) · [Install guard](PHASE_11_INSTALL_GUARD.md) · [ADR](decisions/0028-phase-11-physical-qualification.md) |
 
+Cross-phase local-agent package evidence: [ARM64 package gate](ARM64_AGENT_PACKAGE_GATE_EVIDENCE.md).
+
 Each phase may have additional design, implementation, and installed-evidence
 records beside its primary document. Filenames use `PHASE_<number>_...` so the
 full record remains discoverable without duplicating it here.
