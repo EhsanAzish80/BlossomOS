@@ -6,6 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/check_shell_broker_runtime.py"
+QUALITY_WORKFLOW = ROOT / ".github/workflows/quality.yml"
 SPEC = importlib.util.spec_from_file_location("check_shell_broker_runtime", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -13,6 +14,17 @@ SPEC.loader.exec_module(MODULE)
 
 
 class ShellBrokerRuntimeTests(unittest.TestCase):
+    def test_quality_gate_verifies_system_managed_broker_template(self):
+        workflow = QUALITY_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(
+            "systemd-analyze verify system/shell/packaging/blossom-shell-broker@.service",
+            workflow,
+        )
+        self.assertNotIn(
+            "systemd-analyze --user verify system/shell/packaging/blossom-shell-service.service",
+            workflow,
+        )
+
     def write_proc(self, uid_map: str, uid: int = 1000) -> tuple[Path, int]:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

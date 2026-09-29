@@ -89,7 +89,7 @@ jobs:
           python3 scripts/ci/check_shell_packaging.py
           sudo install -d -m 0755 /usr/lib/blossom-os
           sudo install -m 0755 /bin/true /usr/lib/blossom-os/blossom-shell-service
-          systemd-analyze --user verify system/shell/packaging/blossom-shell-service.service
+          systemd-analyze verify system/shell/packaging/blossom-shell-broker@.service
 
       - name: Build narrow QML client plugin
         run: |
