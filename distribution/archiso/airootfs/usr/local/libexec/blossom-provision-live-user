@@ -5,6 +5,7 @@ if ! id -u blossom >/dev/null 2>&1; then
   useradd --create-home --groups audio,video --shell /bin/bash blossom
 fi
 
+install -d -m 0700 -o blossom -g blossom /home/blossom/Workspace
 chown -R blossom:blossom /home/blossom
 chmod 0700 /home/blossom /home/blossom/.config /home/blossom/.config/hypr
 test "$(id -u blossom)" = 1000

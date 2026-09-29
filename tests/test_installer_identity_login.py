@@ -63,6 +63,9 @@ class InstallerIdentityLoginTests(unittest.TestCase):
                 class Result: pass
                 return Result()
             provision(root, profile(), "a-long-passphrase-9", "a-long-passphrase-9", run)
+            workspace = root / "home/ehsan/Workspace"
+            self.assertTrue(workspace.is_dir())
+            self.assertEqual(workspace.stat().st_mode & 0o777, 0o700)
             argv = " ".join(part for command, _ in calls for part in command)
             self.assertNotIn("a-long-passphrase-9", argv)
             password_call = next(item for item in calls if item[0][0] == "chpasswd")
@@ -88,6 +91,16 @@ class InstallerIdentityLoginTests(unittest.TestCase):
         repository = Path(__file__).resolve().parents[1]
         qml = (repository / "system/installer/qml/Main.qml").read_text()
         self.assertNotIn("};", qml)
+
+    def test_all_account_provisioners_create_the_broker_workspace(self):
+        repository = Path(__file__).resolve().parents[1]
+        arm64_builder = (repository / "scripts/distribution/build_arm64_development_image.sh").read_text()
+        live_provisioner = (
+            repository
+            / "distribution/archiso/airootfs/usr/local/libexec/blossom-provision-live-user"
+        ).read_text()
+        self.assertIn('"$work/root/home/blossom/Workspace"', arm64_builder)
+        self.assertIn("/home/blossom/Workspace", live_provisioner)
 
 
 if __name__ == "__main__":

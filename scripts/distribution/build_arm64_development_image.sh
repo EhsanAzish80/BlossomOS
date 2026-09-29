@@ -184,6 +184,7 @@ chroot "$work/root" userdel blossom 2>/dev/null || true
 chroot "$work/root" groupadd --force blossom
 chroot "$work/root" useradd --uid 1000 --gid blossom --create-home --groups audio,video,wheel,blossom-ai --shell /bin/bash blossom
 cp -a "$repo/distribution/archiso/airootfs/home/blossom/." "$work/root/home/blossom/"
+install -d -m 0700 "$work/root/home/blossom/Workspace"
 chroot "$work/root" chown -R blossom:blossom /home/blossom
 chmod 0700 "$work/root/home/blossom"
 
