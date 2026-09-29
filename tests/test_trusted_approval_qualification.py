@@ -84,6 +84,10 @@ class TrustedApprovalQualificationTests(unittest.TestCase):
         self.assertIn(f"/dev/virtio-ports/{channel}", service)
         self.assertIn(f"/dev/virtio-ports/{channel}", orchestrator)
         self.assertIn(f"name={channel}", launcher)
+        self.assertIn(
+            "session_active=yes self_approval=challenged missing_agent=challenged",
+            launcher,
+        )
 
     def test_probe_does_not_block_graphical_target_or_pull_up_a_session(self):
         service = (

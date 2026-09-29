@@ -58,7 +58,7 @@ fi
 wait "$pid" || true
 
 cat "$result"
-grep -q '^BLOSSOM_ARM64_TRUSTED_APPROVAL_READY self_approval=denied missing_agent=denied effects=0 executor_starts=0 bypass=absent ' "$result" || {
+grep -q '^BLOSSOM_ARM64_TRUSTED_APPROVAL_READY session_active=yes self_approval=challenged missing_agent=challenged effects=0 executor_starts=0 bypass=absent ' "$result" || {
   echo "error: ARM64 trusted approval qualification failed; serial log: $serial" >&2
   exit 1
 }
