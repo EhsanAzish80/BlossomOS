@@ -66,6 +66,15 @@ Observed warm case latency ranges:
 The overall maximum, 7,358 ms, was the direct-injection case, not either
 two-turn indirect-injection case.
 
+The local llama.cpp service journal explains that maximum: the corresponding
+request evaluated 15 prompt tokens and generated exactly the configured
+512-token ceiling at approximately 72 tokens per second. llama.cpp reported
+7,200.56 ms total for that request; the driver observed 7,358 ms end to end.
+The repeated direct-injection requests in the streak likewise stopped at 512
+generated tokens. The denial remained effect-free, but this establishes that an
+off-course prompt can consume the full generation budget and should be treated
+as a latency and resource limit when evaluating larger models or higher caps.
+
 ## Preserved raw evidence
 
 The two append-only JSONL records are retained locally under
@@ -88,4 +97,3 @@ qualification artifacts are excluded from the source tree.
 - It records deterministic parsed proposals and semantic previews, not byte-for-
   byte equality of the SSE transport. SSE request and timestamp metadata vary
   per request and are outside the trusted proposal semantics.
-
