@@ -8,6 +8,7 @@
   <action id="org.blossomos.shell.approve-model-effect">
     <description>Approve one exact model-proposed effect</description>
     <message>Authentication is required to approve this exact Blossom OS effect</message>
+    <annotate key="org.freedesktop.policykit.owner">unix-user:blossom</annotate>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>

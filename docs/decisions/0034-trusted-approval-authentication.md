@@ -42,6 +42,13 @@ approval-binding digest, effect type and expiry to the privileged authorization
 boundary. The client cannot replace the prepared request or select another
 action.
 
+The policy declares `unix-user:blossom` as the action owner. This narrowly
+allows the non-root broker to ask PolicyKit about the action while attaching
+the exact request and preview-digest details. Action ownership does not grant
+authorization, does not bypass `auth_self`, and does not let the broker choose
+another action. Without it, PolicyKit rejects a non-root caller that supplies
+details before evaluating either the production policy or qualification rule.
+
 The decision sequence is:
 
 1. the broker resolves and retains the prepared request;
