@@ -58,7 +58,10 @@ for package in ("blossom-core", "blossom-shell"):
         fail(f"invalid package identity: {package}")
     if re.search(r"\b(curl|wget|git clone|sudo|systemctl enable)\b", text):
         fail(f"forbidden package side effect: {package}")
-    if '"$startdir/../../.."' not in text:
+    if (
+        '"$startdir/../../.."' not in text
+        and '"${BLOSSOM_REPO_ROOT:-$startdir/../../..}"' not in text
+    ):
         fail(f"package does not use the reviewed checkout: {package}")
 workflow = (ROOT / ".github/workflows/phase9-vm-install-evidence.yml").read_text(encoding="utf-8")
 for required in ("makepkg --nodeps --noconfirm", "pacman --root /evidence/rootfs",

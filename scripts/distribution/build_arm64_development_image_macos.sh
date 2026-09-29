@@ -13,9 +13,34 @@ if [[ $(uname -s) != Darwin || $(uname -m) != arm64 ]]; then
   echo "error: this builder requires an Apple-silicon Mac" >&2
   exit 2
 fi
-for command in colima curl docker qemu-img shasum; do
+for command in colima curl docker git python3 qemu-img shasum; do
   command -v "$command" >/dev/null || { echo "error: missing command: $command" >&2; exit 2; }
 done
+
+if [[ -n $(git -C "$repo" status --porcelain --untracked-files=no) ]]; then
+  echo "error: tracked source changes must be committed before image assembly" >&2
+  exit 2
+fi
+source_commit=$(git -C "$repo" rev-parse HEAD)
+
+registry_value() {
+  python3 -c 'import json,sys; value=json.load(open(sys.argv[1]));
+for key in sys.argv[2:]: value=value[key]
+print(value)' "$@"
+}
+
+fetch_exact() {
+  local url=$1 expected=$2 destination=$3 actual
+  if [[ ! -f $destination ]]; then
+    curl -fL --retry 3 "$url" -o "$destination.part"
+    mv "$destination.part" "$destination"
+  fi
+  actual=$(shasum -a 256 "$destination" | awk '{print $1}')
+  if [[ $actual != "$expected" ]]; then
+    echo "error: pinned input digest mismatch for $destination" >&2
+    exit 1
+  fi
+}
 
 mkdir -p "$output/cache" "$output/image" "$output/work" "$output/diagnostics"
 output=$(cd "$output" && pwd -P)
@@ -24,15 +49,19 @@ case "$output" in
   *) echo "error: output must remain inside the repository" >&2; exit 2 ;;
 esac
 rootfs="$output/cache/$rootfs_name"
-if [[ ! -f "$rootfs" ]]; then
-  curl -fL --retry 3 "$rootfs_url" -o "$rootfs.part"
-  mv "$rootfs.part" "$rootfs"
-fi
-actual=$(shasum -a 256 "$rootfs" | awk '{print $1}')
-if [[ "$actual" != "$rootfs_sha256" ]]; then
-  echo "error: ARM64 rootfs digest mismatch: expected $rootfs_sha256, got $actual" >&2
-  exit 1
-fi
+fetch_exact "$rootfs_url" "$rootfs_sha256" "$rootfs"
+
+runtime_record="$repo/system/model-runtime/registry/llama-cpp-b10775-aarch64.runtime.json"
+model_record="$repo/system/model-runtime/registry/qwen2.5-0.5b-instruct-q4_k_m.model.json"
+runtime_archive="$output/cache/$(registry_value "$runtime_record" archive)"
+model_file="$output/cache/$(registry_value "$model_record" file)"
+model_license="$output/cache/qwen2.5-0.5b-instruct.LICENSE"
+fetch_exact "$(registry_value "$runtime_record" url)" \
+  "$(registry_value "$runtime_record" sha256)" "$runtime_archive"
+fetch_exact "$(registry_value "$model_record" url)" \
+  "$(registry_value "$model_record" sha256)" "$model_file"
+fetch_exact "$(registry_value "$model_record" license url)" \
+  "$(registry_value "$model_record" license sha256)" "$model_license"
 
 if ! colima status "$profile" >/dev/null 2>&1; then
   colima start "$profile" --arch aarch64 --vm-type vz --runtime docker \
@@ -49,6 +78,10 @@ qcow="$output/image/blossom-os-arm64-development.qcow2"
 rm -f "$raw" "$qcow"
 docker --context "$context" run --rm --platform linux/arm64 --privileged \
   --dns 1.1.1.1 \
+  --env BLOSSOM_IMAGE_COMMIT="$source_commit" \
+  --env BLOSSOM_LLAMA_RUNTIME_ARCHIVE="/output/cache/$(basename "$runtime_archive")" \
+  --env BLOSSOM_LLAMA_MODEL="/output/cache/$(basename "$model_file")" \
+  --env BLOSSOM_LLAMA_MODEL_LICENSE="/output/cache/$(basename "$model_license")" \
   --volume "$repo:/workspace:ro" \
   --volume "$output:/output" \
   --workdir /workspace \

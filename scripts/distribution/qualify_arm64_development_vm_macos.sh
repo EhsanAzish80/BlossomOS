@@ -52,7 +52,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-deadline=$((SECONDS + 300))
+deadline=$((SECONDS + 480))
 while kill -0 "$pid" 2>/dev/null && ((SECONDS < deadline)); do sleep 2; done
 if kill -0 "$pid" 2>/dev/null; then
   echo "error: ARM64 qualification timed out" >&2
@@ -63,6 +63,10 @@ wait "$pid" || true
 cat "$result"
 grep -q '^BLOSSOM_ARM64_QUALIFICATION_READY ' "$result" || {
   echo "error: ARM64 runtime qualification failed; serial log: $serial" >&2
+  exit 1
+}
+grep -q '^BLOSSOM_ARM64_AGENT_GATE_READY attempts=20 records=100 effects=20 executor_starts=0 ' "$result" || {
+  echo "error: ARM64 agent image gate failed; serial log: $serial" >&2
   exit 1
 }
 echo "ARM64 runtime qualification passed."

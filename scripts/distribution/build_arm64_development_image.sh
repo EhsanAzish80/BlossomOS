@@ -27,6 +27,16 @@ esac
 for command in bsdtar chroot losetup mkfs.ext4 mkfs.fat sgdisk; do
   command -v "$command" >/dev/null || { echo "error: missing builder command: $command" >&2; exit 2; }
 done
+for input in BLOSSOM_IMAGE_COMMIT BLOSSOM_LLAMA_RUNTIME_ARCHIVE BLOSSOM_LLAMA_MODEL BLOSSOM_LLAMA_MODEL_LICENSE; do
+  [[ -n ${!input:-} ]] || { echo "error: missing image input: $input" >&2; exit 2; }
+done
+[[ $BLOSSOM_IMAGE_COMMIT =~ ^[0-9a-f]{40}$ ]] || {
+  echo "error: invalid image source commit" >&2
+  exit 2
+}
+for input in "$BLOSSOM_LLAMA_RUNTIME_ARCHIVE" "$BLOSSOM_LLAMA_MODEL" "$BLOSSOM_LLAMA_MODEL_LICENSE"; do
+  [[ -f $input ]] || { echo "error: missing image input file: $input" >&2; exit 2; }
+done
 
 rm -rf "$work"
 mkdir -p "$work/root" "$work/source" "$(dirname "$output_raw")"
@@ -83,6 +93,8 @@ mount --rbind /run "$work/root/run"
 mount --make-rslave "$work/root/run"
 mkdir -p /output/cache/pacman/pkg "$work/root/var/cache/pacman/pkg"
 mount --bind /output/cache/pacman/pkg "$work/root/var/cache/pacman/pkg"
+mkdir -p "$work/root/opt/blossom-inputs"
+mount --bind /output/cache "$work/root/opt/blossom-inputs"
 
 chroot "$work/root" pacman-key --init
 chroot "$work/root" pacman-key --populate archlinuxarm
@@ -91,7 +103,7 @@ chroot "$work/root" pacman -Syu --noconfirm --needed "${packages[@]}"
 
 tar -C "$repo" \
   --exclude=.git --exclude='.local-*' --exclude=.worktrees \
-  -cf - Cargo.toml Cargo.lock apps core distribution/packages system |
+  -cf - Cargo.toml Cargo.lock apps core distribution/packages scripts system |
   tar -C "$work/source" -xf -
 cp -a "$work/source/." "$work/root/opt/blossom-source/"
 
@@ -105,17 +117,33 @@ chroot "$work/root" runuser -u builder -- env HOME=/home/builder PKGDEST=/opt/bl
   makepkg --nodeps --noconfirm --dir /opt/blossom-source/distribution/packages/blossom-core
 chroot "$work/root" runuser -u builder -- env HOME=/home/builder PKGDEST=/opt/blossom-packages \
   makepkg --nodeps --noconfirm --dir /opt/blossom-source/distribution/packages/blossom-shell
+chroot "$work/root" runuser -u builder -- env HOME=/home/builder PKGDEST=/opt/blossom-packages \
+  makepkg --nodeps --noconfirm --dir /opt/blossom-source/distribution/packages/blossom-qualification
+chroot "$work/root" runuser -u builder -- env \
+  HOME=/home/builder PKGDEST=/opt/blossom-packages \
+  BLOSSOM_REPO_ROOT=/opt/blossom-source \
+  BLOSSOM_LLAMA_RUNTIME_ARCHIVE="/opt/blossom-inputs/$(basename "$BLOSSOM_LLAMA_RUNTIME_ARCHIVE")" \
+  BLOSSOM_LLAMA_MODEL="/opt/blossom-inputs/$(basename "$BLOSSOM_LLAMA_MODEL")" \
+  BLOSSOM_LLAMA_MODEL_LICENSE="/opt/blossom-inputs/$(basename "$BLOSSOM_LLAMA_MODEL_LICENSE")" \
+  BLOSSOM_MODEL_GATEWAY=/opt/blossom-source/distribution/packages/blossom-core/src/target/release/blossom-model-gateway \
+  makepkg --nodeps --noconfirm --dir /opt/blossom-source/distribution/packages/blossom-model-runtime
 chroot "$work/root" /bin/bash -lc '
   packages=(
     /opt/blossom-packages/blossom-core-[0-9]*-aarch64.pkg.tar.*
     /opt/blossom-packages/blossom-shell-[0-9]*-aarch64.pkg.tar.*
+    /opt/blossom-packages/blossom-model-runtime-[0-9]*-aarch64.pkg.tar.*
+    /opt/blossom-packages/blossom-qualification-[0-9]*-aarch64.pkg.tar.*
   )
-  ((${#packages[@]} == 2)) || {
-    echo "error: expected exactly two Blossom package artifacts" >&2
+  ((${#packages[@]} == 4)) || {
+    echo "error: expected exactly four Blossom package artifacts" >&2
     exit 1
   }
   pacman --noconfirm -U "${packages[@]}"
 '
+chroot "$work/root" python3 /opt/blossom-source/scripts/package_llama_cpp_runtime.py \
+  --architecture aarch64 \
+  --verify-installed-root / \
+  --gateway-binary /usr/lib/blossom-os/blossom-model-gateway
 
 cp -a "$repo/distribution/physical-rootfs/." "$work/root/"
 chmod 0440 "$work/root/etc/sudoers.d/10-blossom-wheel"
@@ -149,6 +177,12 @@ ln -sf /usr/lib/systemd/system/bluetooth.service \
   "$work/root/etc/systemd/system/dbus-org.bluez.service"
 ln -sf /usr/lib/systemd/system/blossom-privileged-helper.service \
   "$work/root/etc/systemd/system/multi-user.target.wants/blossom-privileged-helper.service"
+ln -sf /usr/lib/systemd/system/blossom-model-netns.service \
+  "$work/root/etc/systemd/system/multi-user.target.wants/blossom-model-netns.service"
+ln -sf /usr/lib/systemd/system/blossom-model-llama-cpp.service \
+  "$work/root/etc/systemd/system/multi-user.target.wants/blossom-model-llama-cpp.service"
+ln -sf /usr/lib/systemd/system/blossom-model-gateway.service \
+  "$work/root/etc/systemd/system/multi-user.target.wants/blossom-model-gateway.service"
 ln -sf /usr/lib/systemd/system/greetd.service \
   "$work/root/etc/systemd/system/graphical.target.wants/greetd.service"
 ln -sf /usr/lib/systemd/system/blossom-arm64-qualification.service \
@@ -198,6 +232,7 @@ LABEL=BLOSSOM_EFI /boot vfat umask=0077 0 2
 EOF
 printf 'blossom-arm64-dev\n' >"$work/root/etc/hostname"
 printf 'Blossom OS ARM64 Development Image\n' >"$work/root/etc/issue"
+printf '%s\n' "$BLOSSOM_IMAGE_COMMIT" >"$work/root/usr/share/blossom-os/image-source-commit"
 rm -rf "$work/root/opt/blossom-source"
 sync
 

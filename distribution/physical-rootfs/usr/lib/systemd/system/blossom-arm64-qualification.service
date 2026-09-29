@@ -9,4 +9,4 @@ Type=oneshot
 ExecStart=/usr/local/bin/blossom-arm64-qualification-probe
 StandardOutput=journal+console
 StandardError=journal+console
-TimeoutStartSec=300
+TimeoutStartSec=480

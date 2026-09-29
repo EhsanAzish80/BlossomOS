@@ -10,6 +10,8 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
         for relative in (
             "distribution/packages/blossom-core/PKGBUILD",
             "distribution/packages/blossom-shell/PKGBUILD",
+            "distribution/packages/blossom-model-runtime/PKGBUILD",
+            "distribution/packages/blossom-qualification/PKGBUILD",
         ):
             text = (ROOT / relative).read_text(encoding="utf-8")
             self.assertIn("arch=('x86_64' 'aarch64')", text)
@@ -47,6 +49,9 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "--disk 30",
             "ArchLinuxARM-aarch64-latest.tar.gz",
             "qemu-img check",
+            "BLOSSOM_LLAMA_RUNTIME_ARCHIVE",
+            "BLOSSOM_LLAMA_MODEL",
+            "BLOSSOM_LLAMA_MODEL_LICENSE",
         ):
             self.assertIn(required, text)
         self.assertNotIn("github", text.lower())
@@ -71,6 +76,12 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "virtio_console",
             'gpgconf --kill all',
             'umount -R "$work/root"',
+            "blossom-model-runtime-",
+            "blossom-qualification-",
+            "--verify-installed-root /",
+            "blossom-model-llama-cpp.service",
+            "blossom-model-gateway.service",
+            "image-source-commit",
         ):
             self.assertIn(required, text)
 
@@ -110,7 +121,8 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "org.qemu.guest_agent.0",
             "-display none",
             "BLOSSOM_ARM64_QUALIFICATION_READY",
-            "300",
+            "480",
+            "BLOSSOM_ARM64_AGENT_GATE_READY",
         ):
             self.assertIn(required, launcher)
         for required in (
@@ -123,6 +135,10 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "BLOSSOM_ARM64_QUALIFICATION_READY",
             "hyprctl monitors -j",
             "display=$display",
+            "qualify-agent-pipeline",
+            "--qualification-provider /run/blossom-no-fixture-receipt.json",
+            "for attempt in {1..20}",
+            'len(entries) == 100',
         ):
             self.assertIn(required, probe)
         self.assertIn(
