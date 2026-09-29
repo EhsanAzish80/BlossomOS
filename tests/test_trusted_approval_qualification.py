@@ -60,6 +60,25 @@ class TrustedApprovalQualificationTests(unittest.TestCase):
         ):
             self.assertIn(required, orchestrator)
 
+    def test_vm_uses_the_proven_arm64_qualification_channel(self):
+        service = (
+            ROOT
+            / "distribution/packages/blossom-trusted-approval-qualification"
+            / "blossom-trusted-approval-qualification.service"
+        ).read_text(encoding="utf-8")
+        orchestrator = (
+            ROOT
+            / "distribution/packages/blossom-trusted-approval-qualification"
+            / "blossom-trusted-approval-qualification-probe"
+        ).read_text(encoding="utf-8")
+        launcher = (
+            ROOT / "scripts/distribution/qualify_arm64_trusted_approval_macos.sh"
+        ).read_text(encoding="utf-8")
+        channel = "org.blossomos.qualification"
+        self.assertIn(f"/dev/virtio-ports/{channel}", service)
+        self.assertIn(f"/dev/virtio-ports/{channel}", orchestrator)
+        self.assertIn(f"name={channel}", launcher)
+
     def test_test_only_package_is_not_referenced_by_physical_builds(self):
         package_name = "blossom-trusted-approval-qualification"
         for relative in (

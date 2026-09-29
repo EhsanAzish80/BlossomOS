@@ -1,6 +1,6 @@
 [Unit]
 Description=Blossom OS production-policy trusted approval qualification
-ConditionPathExists=/dev/virtio-ports/org.blossomos.trusted-approval-qualification
+ConditionPathExists=/dev/virtio-ports/org.blossomos.qualification
 After=graphical.target NetworkManager-wait-online.service
 Wants=NetworkManager-wait-online.service
 

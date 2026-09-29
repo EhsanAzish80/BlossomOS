@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-result_device=/dev/virtio-ports/org.blossomos.trusted-approval-qualification
+result_device=/dev/virtio-ports/org.blossomos.qualification
 exec >"$result_device" 2>&1
 started=${SECONDS}
 runtime=/run/user/1000
