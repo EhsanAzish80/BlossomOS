@@ -179,9 +179,38 @@ class Arm64AgentContractTests(unittest.TestCase):
             ROOT / "docs/decisions/0017-private-gateway-admission-and-cancellation.md"
         ).read_text()
         self.assertIn("m blossom blossom-ai", sysusers)
-        self.assertIn('groups = "audio,input,video,blossom-ai"', provision)
+        self.assertIn('groups = "audio,video,blossom-ai"', provision)
         self.assertIn("every process running under that same desktop UID", adr)
         self.assertIn("unexpected-owner", adr)
+
+    def test_desktop_users_never_receive_raw_input_group(self):
+        provisioning_sources = (
+            ROOT / "scripts/distribution/provision_installed_identity.py",
+            ROOT / "scripts/distribution/build_arm64_development_image.sh",
+            ROOT / "distribution/archiso/airootfs/usr/local/libexec/blossom-provision-live-user",
+            ROOT / "scripts/alpine-setup.sh",
+        )
+        for path in provisioning_sources:
+            source = path.read_text(encoding="utf-8")
+            self.assertNotIn("audio,input", source, path)
+            self.assertNotIn("addgroup blossom input", source, path)
+
+    def test_adr_0034_closes_the_first_trusted_approval_boundary(self):
+        adr = (
+            ROOT / "docs/decisions/0034-trusted-approval-authentication.md"
+        ).read_text(encoding="utf-8")
+        for required in (
+            "`auth_self`",
+            "approval-binding digest",
+            "Authentication is never cached",
+            "sole source of preview data",
+            "does not create trusted pixels",
+            "lookalike overlay",
+            "must never fall back",
+        ):
+            self.assertIn(required, adr)
+        index = (ROOT / "docs/decisions/README.md").read_text(encoding="utf-8")
+        self.assertIn("ADR-0034", index)
 
 
 if __name__ == "__main__":

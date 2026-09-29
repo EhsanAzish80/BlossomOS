@@ -62,7 +62,6 @@ echo "blossom:blossom" | chpasswd
 addgroup blossom wheel
 addgroup blossom audio
 addgroup blossom video
-addgroup blossom input
 
 # Enable sudo
 echo "%wheel ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers

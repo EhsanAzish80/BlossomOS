@@ -71,6 +71,9 @@ compatibility, packaging, or contributor obligations.
 - System-managed session broker: ADR-0033 moves the broker's existing sandbox
   to a system-manager template that still runs as the desktop user, preserving
   host UID visibility for exact private-gateway `SO_PEERCRED` checks.
+- Trusted approval authentication: ADR-0034 requires password-backed polkit
+  authentication for model-proposed effects, removes raw input-device access
+  from the desktop user, and records overlay phishing as a remaining risk.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if ! id -u blossom >/dev/null 2>&1; then
-  useradd --create-home --groups audio,input,video --shell /bin/bash blossom
+  useradd --create-home --groups audio,video --shell /bin/bash blossom
 fi
 
 chown -R blossom:blossom /home/blossom
