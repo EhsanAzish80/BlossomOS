@@ -243,9 +243,19 @@ class Arm64AgentContractTests(unittest.TestCase):
             ROOT / "scripts/distribution/build_physical_candidate.sh"
         ).read_text(encoding="utf-8")
         rule_name = "49-blossom-model-effect-qualification.rules"
+        qualification_rule = (
+            ROOT / "distribution/packages/blossom-qualification" / rule_name
+        ).read_text(encoding="utf-8")
         self.assertIn(rule_name, qualification_package)
         self.assertNotIn(rule_name, core_package)
         self.assertNotIn(rule_name, physical_verifier)
+        self.assertIn(
+            'action.id == "org.blossomos.shell.approve-model-effect"',
+            qualification_rule,
+        )
+        self.assertIn('subject.user == "blossom"', qualification_rule)
+        self.assertNotIn("subject.active", qualification_rule)
+        self.assertNotIn("subject.local", qualification_rule)
         self.assertIn("physical root must never contain the qualification polkit bypass", physical_builder)
         self.assertIn("VM qualification root is missing its closed polkit bypass", physical_builder)
         driver = (ROOT / "scripts/qualify_agent_pipeline.py").read_text(encoding="utf-8")
