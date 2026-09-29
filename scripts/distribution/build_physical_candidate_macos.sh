@@ -13,6 +13,18 @@ case "$mode" in
   *) echo "error: BLOSSOM_CANDIDATE_MODE must be physical or vm-qualification" >&2; exit 2 ;;
 esac
 
+extra_inputs=()
+model_root=${BLOSSOM_LLAMA_CPP_RUNTIME_ROOT:-}
+if [[ -z "$model_root" || ! -d "$model_root" || -L "$model_root" ]]; then
+  echo "error: candidate build requires BLOSSOM_LLAMA_CPP_RUNTIME_ROOT" >&2
+  exit 2
+fi
+model_root=$(cd "$model_root" && pwd -P)
+extra_inputs=(
+  --env BLOSSOM_LLAMA_CPP_RUNTIME_ROOT=/closed-input/model-runtime
+  --volume "$model_root:/closed-input/model-runtime:ro"
+)
+
 if [[ $(uname -s) != Darwin ]]; then
   echo "error: this entrypoint is for macOS" >&2
   exit 2
@@ -47,20 +59,44 @@ case "$output" in
   *) echo "error: output must be inside the BlossomOS repository" >&2; exit 2 ;;
 esac
 rm -rf "$output/build" "$output/iso"
-mkdir -p "$output/iso"
+mkdir -p "$output/iso" "$output/diagnostics"
 
 container="blossom-candidate-build-$$"
 volume="blossom-candidate-build-$$"
+build_log="$output/diagnostics/build.log"
+state_file="$output/diagnostics/build-state.env"
+build_succeeded=false
 cleanup() {
-  docker --context "$context" rm -f "$container" >/dev/null 2>&1 || true
-  docker --context "$context" volume rm "$volume" >/dev/null 2>&1 || true
+  local status=$?
+  if [[ "$build_succeeded" == true ]]; then
+    docker --context "$context" rm -f "$container" >/dev/null 2>&1 || true
+    docker --context "$context" volume rm "$volume" >/dev/null 2>&1 || true
+    rm -f "$state_file"
+  else
+    {
+      printf 'BLOSSOM_BUILD_STATUS=failed_or_interrupted\n'
+      printf 'BLOSSOM_BUILD_EXIT=%q\n' "$status"
+      printf 'BLOSSOM_BUILD_CONTEXT=%q\n' "$context"
+      printf 'BLOSSOM_BUILD_CONTAINER=%q\n' "$container"
+      printf 'BLOSSOM_BUILD_VOLUME=%q\n' "$volume"
+      printf 'BLOSSOM_BUILD_LOG=%q\n' "$build_log"
+    } >"$state_file"
+    echo "Build did not complete; preserving diagnostics and Docker state:" >&2
+    echo "  log: $build_log" >&2
+    echo "  state: $state_file" >&2
+    echo "  container: $container" >&2
+    echo "  volume: $volume" >&2
+  fi
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 docker --context "$context" volume create "$volume" >/dev/null
 
-docker --context "$context" run --name "$container" --platform linux/amd64 --privileged \
+docker --context "$context" run --detach --name "$container" --platform linux/amd64 --privileged \
   --dns 1.1.1.1 \
   --env "BLOSSOM_CANDIDATE_MODE=$mode" \
+  "${extra_inputs[@]}" \
   --volume "$repo:/workspace:ro" \
   --mount "type=volume,source=$volume,target=/candidate" \
   --workdir /workspace \
@@ -70,7 +106,21 @@ docker --context "$context" run --name "$container" --platform linux/amd64 --pri
     pacman -Syu --noconfirm arch-install-scripts archiso base-devel cmake dosfstools \
       gptfdisk ninja python qt6-base qt6-declarative rust zstd
     scripts/distribution/build_physical_candidate.sh /candidate
-  '
+  ' >/dev/null
+
+# Follow a detached build so an interrupted terminal cannot silently erase the
+# container, volume, and only useful failure evidence. The EXIT trap preserves
+# all three unless the candidate is copied and verified successfully.
+set +e
+docker --context "$context" logs --follow "$container" 2>&1 | tee "$build_log"
+logs_status=${PIPESTATUS[0]}
+container_status=$(docker --context "$context" wait "$container" 2>/dev/null)
+wait_status=$?
+set -e
+if [[ $logs_status -ne 0 || $wait_status -ne 0 || ! "$container_status" =~ ^[0-9]+$ || $container_status -ne 0 ]]; then
+  echo "error: candidate build container failed (logs=$logs_status wait=$wait_status container=${container_status:-unknown})" >&2
+  exit 1
+fi
 
 docker --context "$context" cp "$container:/candidate/iso/." "$output/iso"
 
@@ -80,4 +130,5 @@ docker --context "$context" cp "$container:/candidate/iso/." "$output/iso"
   shasum -a 256 -c SHA256SUMS
 )
 
+build_succeeded=true
 echo "Candidate ready ($mode): $output/iso"

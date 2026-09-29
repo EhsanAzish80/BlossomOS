@@ -16,6 +16,7 @@ pub mod network_connectivity;
 pub mod orchestration;
 pub mod os_identity;
 pub mod policy;
+pub mod prepared_request;
 pub mod privileged;
 pub mod process_list;
 pub mod process_self;
@@ -30,7 +31,7 @@ pub mod uptime;
 pub mod verification;
 pub mod workspace_create;
 
-pub use approval::{ApprovalError, ApprovalStore, ApprovalToken};
+pub use approval::{ApprovalError, ApprovalToken};
 pub use audit::{AuditEvent, AuditLog, AuditRecord, BatteryAuditStatus};
 pub use battery_summary::{
     BATTERY_READ_TIMEOUT_MS, BatteryObservation, BatteryObservationError, BatteryReadError,
@@ -77,30 +78,30 @@ pub use memory_summary::{
 #[cfg(all(unix, debug_assertions))]
 pub use model_runtime::serve_synthetic_gateway_via_adapter_once;
 pub use model_runtime::{
-    AuthorizedGatewayClient, ConversationMessage, ConversationRole, GATEWAY_PROTOCOL_VERSION,
-    GatewayEventValidator, GatewayFrame, GatewayFrameDecoder, GatewayMessageKind,
-    GatewayPeerCredentials, GatewayProfile, GatewayProtocolError, InferenceAuditOutcome,
-    InferenceAuditProjection, InferenceCancellation, InferenceOutputMode, InferenceRequest,
-    InferenceRequestId, LLAMA_CPP_ENDPOINT, LlamaCppAdapter, LlamaCppAdapterError,
-    MAX_GATEWAY_FRAME_BYTES, MAX_PROVIDER_MANIFEST_BYTES, MODEL_PROTOCOL_VERSION,
-    ModelContractError, ModelIntentDefinition, ModelIntentKind, ModelProfile, ModelProviderKind,
-    ModelStreamState, NormalizedCompletion, NormalizedStreamEvent, NormalizedStreamKind,
-    OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError, ProposedToolIntent, ProviderArtifact,
-    ProviderFailureCategory, ProviderFilesystemPolicy, ProviderProfileError,
-    ProviderProfileManifest, ProviderProfileResources, ProviderProfileSpec,
-    ProviderServiceIdentity, ProviderStreamInput, TurnIntentCatalogue, ValidatedProviderProfile,
-    decode_gateway_cancel, decode_gateway_event, decode_gateway_hello,
-    decode_gateway_private_request, decode_gateway_synthetic_request, encode_gateway_cancel,
-    encode_gateway_event, encode_gateway_hello, encode_gateway_private_request,
-    encode_gateway_synthetic_request, load_installed_provider_profile,
-    load_installed_provider_profile_from_set, load_installed_runtime_readiness,
-    load_installed_runtime_readiness_from_set, production_provider_profile, validate_gateway_peer,
-    validate_provider_completion,
+    ACTIVE_MODEL_PROFILE_PATH, AuthorizedGatewayClient, ConversationMessage, ConversationRole,
+    GATEWAY_PROTOCOL_VERSION, GatewayEventValidator, GatewayFrame, GatewayFrameDecoder,
+    GatewayMessageKind, GatewayPeerCredentials, GatewayProfile, GatewayProtocolError,
+    InferenceAuditOutcome, InferenceAuditProjection, InferenceCancellation, InferenceOutputMode,
+    InferenceRequest, InferenceRequestId, LLAMA_CPP_ENDPOINT, LlamaCppAdapter,
+    LlamaCppAdapterError, MAX_GATEWAY_FRAME_BYTES, MAX_PROVIDER_MANIFEST_BYTES,
+    MODEL_PROTOCOL_VERSION, ModelContractError, ModelIntentDefinition, ModelIntentKind,
+    ModelProfile, ModelProviderKind, ModelStreamState, NormalizedCompletion, NormalizedStreamEvent,
+    NormalizedStreamKind, OLLAMA_ENDPOINT, OllamaAdapter, OllamaAdapterError,
+    PRIVATE_GATEWAY_SOCKET_PATH, ProposedToolIntent, ProviderArtifact, ProviderFailureCategory,
+    ProviderFilesystemPolicy, ProviderProfileError, ProviderProfileManifest,
+    ProviderProfileResources, ProviderProfileSpec, ProviderServiceIdentity, ProviderStreamInput,
+    TurnIntentCatalogue, ValidatedProviderProfile, decode_gateway_cancel, decode_gateway_event,
+    decode_gateway_hello, decode_gateway_private_request, decode_gateway_synthetic_request,
+    encode_gateway_cancel, encode_gateway_event, encode_gateway_hello,
+    encode_gateway_private_request, encode_gateway_synthetic_request,
+    load_installed_provider_profile, load_installed_provider_profile_from_set,
+    load_installed_runtime_readiness, load_installed_runtime_readiness_from_set,
+    production_provider_profile, validate_gateway_peer, validate_provider_completion,
 };
 #[cfg(unix)]
 pub use model_runtime::{
-    GatewayFixtureError, SyntheticGatewayClient, fixed_synthetic_gateway_request,
-    serve_synthetic_gateway_once,
+    GatewayFixtureError, PrivateGatewayClient, PrivateGatewayClientError, SyntheticGatewayClient,
+    fixed_synthetic_gateway_request, serve_synthetic_gateway_once,
 };
 #[cfg(debug_assertions)]
 pub use model_runtime::{SyntheticProviderPackage, fixed_synthetic_provider_package};
@@ -124,6 +125,11 @@ pub use os_identity::{
     UnavailableOsIdentityProvider, parse_os_release,
 };
 pub use policy::{Capability, PolicyDecision, PolicyEngine, PolicyRule};
+pub use prepared_request::{
+    ApprovalCapacity, CapacityError, CapacityReservation, PreparedApprovalStore,
+    PreparedToolRequest, RequestOrigin, RequestResolver, ResolveError, SessionContext,
+    ToolRequestWire,
+};
 pub use process_list::{
     MAX_PROCESS_DIRECTORY_ENTRIES, MAX_PROCESS_NAME_BYTES, MAX_PROCESS_RESULTS,
     MAX_PROCESS_STATUS_BYTES, MAX_PROCESS_STATUS_LINES, PROC_ROOT, ProcProcessListReader,
@@ -145,15 +151,17 @@ pub use shell_activity::{ShellActivityError, project_shell_activity};
 #[cfg(unix)]
 pub use shell_ipc::ShellMemoryApprovalProjection;
 pub use shell_ipc::{
-    MAX_ACTIVITY_BATCH, MAX_SHELL_MESSAGE_BYTES, SHELL_BUS_NAME, SHELL_INTERFACE,
-    SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellActivityCategory, ShellActivityKind,
-    ShellActivityProjection, ShellApprovalPreview, ShellBatteryProjection, ShellBatteryStatus,
-    ShellClientRequest, ShellDecision, ShellMemoryRecordProjection, ShellMemoryStatus,
-    ShellMemorySummaryProjection, ShellNetworkProjection, ShellProtocolError,
+    MAX_ACTIVITY_BATCH, MAX_AGENT_PROMPT_BYTES, MAX_SHELL_MESSAGE_BYTES, SHELL_BUS_NAME,
+    SHELL_INTERFACE, SHELL_OBJECT_PATH, SHELL_PROTOCOL_VERSION, ShellActivityCategory,
+    ShellActivityKind, ShellActivityProjection, ShellAgentTurnRequest, ShellApprovalPreview,
+    ShellBatteryProjection, ShellBatteryStatus, ShellClientRequest, ShellDecision,
+    ShellMemoryRecordProjection, ShellMemoryStatus, ShellMemorySummaryProjection,
+    ShellNetworkProjection, ShellProtocolError, decode_shell_agent_turn_request,
     decode_shell_client_request,
 };
 pub use shell_service::{
-    SHELL_APPROVAL_TTL_MS, ShellDiagnosticService, ShellServiceError, ShellServiceOutcome,
+    AgentTurnError, AgentTurnProvider, DEFAULT_AGENT_WORKSPACE, SHELL_APPROVAL_TTL_MS,
+    ShellDiagnosticService, ShellServiceError, ShellServiceOutcome,
 };
 pub use shell_session::{
     MAX_SHELL_PEER_NAME_BYTES, ShellCancellationReason, ShellCancelledApproval, ShellPeerId,
@@ -174,8 +182,12 @@ pub use verification::{
     verify_workspace_file_created,
 };
 pub use workspace_create::{
-    AtomicWorkspaceFileCreator, DirectoryIdentity, UnavailableWorkspaceCreateProvider,
-    WORKSPACE_FILE_MODE, WorkspaceCreateError, WorkspaceCreateProvider, WorkspaceCreateSelection,
-    WorkspaceCreateState, WorkspaceFileCreated, validate_relative_destination,
-    validate_workspace_selection,
+    AtomicWorkspaceFileCreator, DirectoryIdentity, MAX_MODEL_WORKSPACE_CONTENT_BYTES,
+    MODEL_WORKSPACE_NAME_PATTERN, ModelWorkspaceCreateProposal, ModelWorkspaceProposalError,
+    UnavailableWorkspaceCreateProvider, WORKSPACE_FILE_MODE, WorkspaceCreateError,
+    WorkspaceCreateProvider, WorkspaceCreateSelection, WorkspaceCreateState, WorkspaceFileCreated,
+    model_workspace_constraint_digests, model_workspace_proposal_grammar,
+    model_workspace_proposal_schema, model_workspace_proposal_schema_bytes,
+    resolve_model_workspace_proposal, validate_model_workspace_proposal,
+    validate_relative_destination, validate_workspace_selection,
 };

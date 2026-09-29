@@ -14,6 +14,7 @@ def valid_observation():
         "memory_mib": 8192,
         "drm_present": True,
         "internal_disk_present": True,
+        "wifi_pci_id": "14e4:43a0",
     }
 
 
@@ -32,6 +33,7 @@ class Phase11PhysicalPreflightTests(unittest.TestCase):
             ("memory_mib", 2048),
             ("drm_present", False),
             ("internal_disk_present", False),
+            ("wifi_pci_id", "8086:1234"),
         ):
             observation = valid_observation()
             observation[field] = value
@@ -61,6 +63,10 @@ class Phase11PhysicalPreflightTests(unittest.TestCase):
             (root / "sys/firmware/efi").mkdir(parents=True)
             (root / "sys/class/dmi/id").mkdir(parents=True)
             (root / "sys/class/dmi/id/product_name").write_text("MacBookPro11,1\n")
+            pci = root / "sys/bus/pci/devices/0000:03:00.0"
+            pci.mkdir(parents=True)
+            (pci / "vendor").write_text("0x14e4\n")
+            (pci / "device").write_text("0x43a0\n")
             (root / "dev/dri").mkdir(parents=True)
             (root / "dev/dri/card1").touch()
             disk = root / "sys/block/sda"

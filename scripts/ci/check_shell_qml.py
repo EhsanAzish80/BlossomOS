@@ -13,7 +13,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
-    expected = {"shell.qml", "quickshell.qml", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "README.md"}
+    expected = {"shell.qml", "quickshell.qml", "SecurityHost.qml", "wallpaper.svg", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "BlossomButton.qml", "BlossomIconButton.qml", "BlossomDockItem.qml", "icon-apps.svg", "icon-files.svg", "icon-browser.svg", "icon-terminal.svg", "icon-agent.svg", "README.md"}
     require({path.name for path in QML.iterdir()} == expected, "unexpected QML surface")
     qml = "\n".join((QML / name).read_text() for name in expected if name.endswith(".qml"))
     for field in [
@@ -71,8 +71,23 @@ def main() -> None:
     require("Qt.ApplicationModal" in qml, "approval must request application-modal keyboard focus")
     require("onClosing:" in qml,
             "standard Qt window close must cancel pending approval")
-    require("PanelWindow" not in qml,
+    security_qml = "\n".join((QML / name).read_text() for name in ("SecurityHost.qml", "ApprovalPanel.qml", "SecurityField.qml"))
+    require("PanelWindow" not in security_qml,
             "security controls must not use the inaccessible proxy-window hierarchy")
+    shell = (QML / "shell.qml").read_text()
+    require("};" not in shell,
+            "shell QML must not terminate grouped properties, child objects, or handlers with semicolons")
+    for required in (
+        "WlrLayer.Background",
+        'WlrLayershell.namespace: "blossom-background"',
+        'WlrLayershell.namespace: "blossom-top-bar"',
+        'WlrLayershell.namespace: "blossom-dock"',
+        'source: "wallpaper.svg"',
+        'text: "Continue to desktop"',
+        'text: "Agent"',
+        "visible: BlossomBroker.liveEnvironment",
+    ):
+        require(required in shell, f"desktop foundation surface missing: {required}")
     require('ShellRoot {}' in (QML / "quickshell.qml").read_text(),
             "the pinned Quickshell runtime must remain independently loadable")
     require("Accessible.defaultButton: true" in qml,
@@ -126,11 +141,11 @@ def main() -> None:
             "installed evidence must isolate standard Qt from the shell runtime")
     require('/usr/lib/blossom-os/blossom-shell-ui' in workflow,
             "installed evidence must launch the dedicated accessible UI host")
-    shell = (QML / "shell.qml").read_text()
+    security_host = (QML / "SecurityHost.qml").read_text()
     for state in ["requesting", "waiting", "submitting", "cancelling"]:
         require(f'"{state}"' in shell,
                 f"request control must be disabled while {state}")
-    require("Qt.callLater(shellBar.restoreRequestFocus)" in shell,
+    require("Qt.callLater(securityHost.restoreRequestFocus)" in security_host,
             "command focus must wait for the approval surface to unmap")
 
 

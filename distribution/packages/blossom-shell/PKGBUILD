@@ -2,9 +2,12 @@ pkgname=blossom-shell
 pkgver=0.9.0
 pkgrel=1
 pkgdesc='Blossom OS narrow desktop shell surface'
-arch=('x86_64')
+arch=('x86_64' 'aarch64')
 license=('Apache-2.0')
-depends=('blossom-core' 'hyprland' 'quickshell' 'qt6-base' 'qt6-declarative')
+depends=('blossom-core' 'grim' 'hyprland' 'hyprpolkitagent' 'libnotify' 'mako'
+         'quickshell' 'qt6-base' 'qt6-declarative' 'qt6-wayland'
+         'xdg-desktop-portal' 'xdg-desktop-portal-gtk'
+         'xdg-desktop-portal-hyprland')
 makedepends=('cmake' 'ninja')
 source=()
 sha256sums=()
@@ -17,6 +20,9 @@ build() {
   cmake -S "$repo_root/system/desktop-launcher" -B "$srcdir/launcher-build" \
     -G Ninja -DCMAKE_BUILD_TYPE=Release
   cmake --build "$srcdir/launcher-build"
+  cmake -S "$repo_root/system/installer" -B "$srcdir/installer-build" \
+    -G Ninja -DCMAKE_BUILD_TYPE=Release
+  cmake --build "$srcdir/installer-build"
 }
 
 package() {
@@ -28,6 +34,11 @@ package() {
     "$pkgdir/usr/lib/blossom-os/blossom-shell-ui"
   install -Dm0755 "$srcdir/launcher-build/blossom-desktop-launcher" \
     "$pkgdir/usr/lib/blossom-os/blossom-desktop-launcher"
+  install -Dm0755 "$srcdir/installer-build/blossom-installer" \
+    "$pkgdir/usr/lib/blossom-os/blossom-installer"
+  install -d "$pkgdir/usr/share/blossom-os/installer"
+  cp -a "$repo_root/system/installer/qml/." \
+    "$pkgdir/usr/share/blossom-os/installer/"
   install -d "$pkgdir/usr/lib/qt6/qml/Blossom/Shell"
   cp -a "$srcdir/client-build/qml/Blossom/Shell/." \
     "$pkgdir/usr/lib/qt6/qml/Blossom/Shell/"
@@ -36,6 +47,8 @@ package() {
   find "$pkgdir/usr/lib/qt6/qml/Blossom/Shell" -type f -name '*.so' -exec chmod 0755 {} +
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-ui.service" \
     "$pkgdir/usr/lib/systemd/user/blossom-shell-ui.service"
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-desktop-shell.service" \
+    "$pkgdir/usr/lib/systemd/user/blossom-desktop-shell.service"
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-recovery.service" \
     "$pkgdir/usr/lib/systemd/user/blossom-shell-recovery.service"
   install -Dm0644 "$repo_root/system/desktop-launcher/blossom-desktop-launcher.service" \
@@ -46,5 +59,8 @@ package() {
     "$pkgdir/usr/local/bin/blossom-shell-recovery"
   install -Dm0755 "$repo_root/system/shell/runtime/blossom-start-session" \
     "$pkgdir/usr/local/bin/blossom-start-session"
+  install -Dm0755 "$repo_root/system/shell/runtime/blossom-screenshot" \
+    "$pkgdir/usr/local/bin/blossom-screenshot"
   find "$pkgdir/usr/share/blossom-os/shell" -type f -exec chmod 0644 {} +
+  find "$pkgdir/usr/share/blossom-os/installer" -type f -exec chmod 0644 {} +
 }

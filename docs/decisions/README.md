@@ -54,6 +54,23 @@ compatibility, packaging, or contributor obligations.
 - Phase 11 first physical-device qualification: accepted in ADR-0028 for one
   expected MacBookPro11,1, beginning with a read-only minimized preflight and
   requiring a separate reviewed disk-safety increment before physical writes.
+- Bootable physical A/B layout: ADR-0029 accepts two real ext4 root slots, a
+  separate persistent state partition, per-slot UKIs, and systemd-boot trial
+  selection. It replaces the non-bootable file-backed slot implementation only
+  after explicit acceptance and qualifying evidence.
+- Cross-architecture local-agent qualification: ADR-0030 accepts one shared
+  model record, architecture-specific llama.cpp runtimes, schema-derived and
+  receipt-bound constrained output, package-path ARM qualification, and honest
+  positive and adversarial evidence gates.
+- Model-proposed workspace creation: ADR-0031 permits only a constrained ASCII
+  basename and bounded safe UTF-8 content, resolved by trusted code into the
+  existing create-only selection and always-ask approval path.
+- Prepared request ownership: ADR-0032 separates untrusted wire requests from
+  domain requests and moves retained descriptors through preview, approval and
+  execution without cloning, reopening or client resubmission.
+- System-managed session broker: ADR-0033 moves the broker's existing sandbox
+  to a system-manager template that still runs as the desktop user, preserving
+  host UID visibility for exact private-gateway `SO_PEERCRED` checks.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and

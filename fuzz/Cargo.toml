@@ -7,6 +7,10 @@ edition = "2024"
 [package.metadata]
 cargo-fuzz = true
 
+# This checkout lives inside a managed worktree under the parent repository.
+# Keep the fuzz crate standalone so Cargo never binds it to that outer workspace.
+[workspace]
+
 [dependencies]
 blossom-core = { path = "../core/blossom-core" }
 libfuzzer-sys = "0.4"

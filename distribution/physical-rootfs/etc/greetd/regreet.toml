@@ -1,0 +1,12 @@
+[background]
+path = "/usr/share/blossom-os/shell/wallpaper.svg"
+fit = "Cover"
+
+[GTK]
+application_prefer_dark_theme = true
+cursor_theme_name = "Adwaita"
+font_name = "Noto Sans 11"
+
+[commands]
+reboot = ["systemctl", "reboot"]
+poweroff = ["systemctl", "poweroff"]

@@ -1,6 +1,6 @@
 polkit.addRule(function(action, subject) {
     if (action.id == "org.freedesktop.policykit.exec" &&
-        action.lookup("program") == "/usr/local/bin/blossom-physical-install" &&
+        action.lookup("program") == "/usr/local/libexec/blossom-graphical-install-backend" &&
         subject.user == "blossom" && subject.local && subject.active) {
         return polkit.Result.YES;
     }

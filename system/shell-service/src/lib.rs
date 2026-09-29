@@ -10,6 +10,7 @@ pub use session_bus::{ShellBusService, ShellRequestHandler, run_production};
 pub enum ShellProcessError {
     InactiveBuild,
     RandomnessUnavailable,
+    AccountUnavailable,
     SessionBusUnavailable,
 }
 
@@ -18,6 +19,7 @@ impl ShellProcessError {
         match self {
             Self::InactiveBuild => 78,
             Self::RandomnessUnavailable => 70,
+            Self::AccountUnavailable => 70,
             Self::SessionBusUnavailable => 69,
         }
     }
@@ -28,6 +30,7 @@ impl std::fmt::Display for ShellProcessError {
         formatter.write_str(match self {
             Self::InactiveBuild => "Blossom shell D-Bus service is inactive in this build",
             Self::RandomnessUnavailable => "Blossom shell service randomness is unavailable",
+            Self::AccountUnavailable => "Blossom shell service account is unavailable",
             Self::SessionBusUnavailable => "Blossom shell session bus is unavailable",
         })
     }

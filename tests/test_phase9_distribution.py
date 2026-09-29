@@ -57,13 +57,13 @@ class Phase9LifecycleTests(unittest.TestCase):
         user.write_text("private")
         _, metadata, signature, public, payload = self.signed_update()
         update = verify_update(metadata, signature, public, payload, 1_900_000_000, 0, active_slot(self.root))
-        stage(self.root, update, payload)
+        stage(self.root, update)
         self.assertEqual(active_slot(self.root), "b")
         boot_result(self.root, False)
         self.assertEqual(active_slot(self.root), "a")
         self.assertEqual(user.read_text(), "private")
         update = verify_update(metadata, signature, public, payload, 1_900_000_000, 0, active_slot(self.root))
-        stage(self.root, update, payload)
+        stage(self.root, update)
         boot_result(self.root, True)
         self.assertEqual(active_slot(self.root), "b")
         self.assertEqual(user.read_text(), "private")
@@ -81,11 +81,22 @@ class Phase9LifecycleTests(unittest.TestCase):
         _, metadata, signature, public, payload = self.signed_update(target="a")
         with self.assertRaises(LifecycleError): verify_update(metadata, signature, public, payload, 1, 0, "a")
 
+    def test_staging_uses_the_exact_metadata_and_payload_bytes_that_were_verified(self):
+        _, metadata, signature, public, payload = self.signed_update()
+        verified = verify_update(metadata, signature, public, payload, 1, 0, "a")
+        metadata.write_bytes(b'{}')
+        payload.write_bytes(b"substituted-after-verification")
+        stage(self.root, verified)
+        self.assertEqual(
+            (self.root / "slots/b/payload").read_bytes(),
+            b"verified-blossom-slot-v2",
+        )
+
     def test_recovery_requires_exact_marker_and_verified_populated_slot(self):
         with self.assertRaises(LifecycleError): recover(self.root, "b")
         _, metadata, signature, public, payload = self.signed_update()
         update = verify_update(metadata, signature, public, payload, 1, 0, "a")
-        stage(self.root, update, payload)
+        stage(self.root, update)
         recover(self.root, "b")
         self.assertEqual(active_slot(self.root), "b")
         (self.root / "slots/b/payload").write_bytes(b"tampered")

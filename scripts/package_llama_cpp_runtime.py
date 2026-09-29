@@ -13,8 +13,16 @@ import stat
 import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCK_PATH = ROOT / "system/model-runtime/registry/llama-cpp-cpu-x86_64.lock.json"
-REGISTRY_PATH = ROOT / "system/model-runtime/registry/llama-cpp-cpu-x86_64.profile.json"
+REGISTRY_ROOT = ROOT / "system/model-runtime/registry"
+MODEL_PATH_RECORD = REGISTRY_ROOT / "qwen2.5-0.5b-instruct-q4_k_m.model.json"
+RUNTIME_PATHS = {
+    "x86_64": REGISTRY_ROOT / "llama-cpp-b10775-x86_64.runtime.json",
+    "aarch64": REGISTRY_ROOT / "llama-cpp-b10775-aarch64.runtime.json",
+}
+PROFILE_PATHS = {
+    architecture: REGISTRY_ROOT / f"llama-cpp-cpu-{architecture}.profile.json"
+    for architecture in RUNTIME_PATHS
+}
 PACKAGE = ROOT / "system/model-runtime/packaging"
 RUNTIME_ROOT = PurePosixPath("/usr/lib/blossom-os/providers/llama-cpp")
 MODEL_PATH = PurePosixPath(
@@ -26,6 +34,8 @@ PROFILE_PATH = PurePosixPath(
 LOGICAL_MODEL = "qwen2.5-0.5b-instruct:q4_k_m"
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 MAX_GATEWAY_BYTES = 64 * 1024 * 1024
+MAX_MODEL_WORKSPACE_CONTENT_BYTES = 4096
+MODEL_WORKSPACE_NAME_PATTERN = "^[a-z0-9][a-z0-9._-]{0,63}$"
 
 
 def fail(message: str) -> None:
@@ -34,6 +44,36 @@ def fail(message: str) -> None:
 
 def digest_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def constraint_bytes() -> tuple[bytes, bytes]:
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["name", "content"],
+        "properties": {
+            "name": {
+                "type": "string",
+                "pattern": MODEL_WORKSPACE_NAME_PATTERN,
+                "maxLength": 64,
+            },
+            "content": {
+                "type": "string",
+                "maxLength": MAX_MODEL_WORKSPACE_CONTENT_BYTES,
+            },
+        },
+    }
+    grammar = (
+        "root ::= proposal\n"
+        'proposal ::= "{\\"name\\":\\"" name "\\",\\"content\\":\\"" content "\\"}"\n'
+        "name ::= [a-z0-9] [a-z0-9._-]{0,63}\n"
+        f"content ::= content-char{{0,{MAX_MODEL_WORKSPACE_CONTENT_BYTES}}}\n"
+        'content-char ::= [ -!#-Z\\[\\]-~] | "\\\\\\\"" | "\\\\\\\\" | "\\\\n"\n'
+    )
+    return (
+        json.dumps(schema, separators=(",", ":"), sort_keys=True).encode(),
+        grammar.encode(),
+    )
 
 
 def digest_file(path: Path, maximum: int) -> tuple[str, int]:
@@ -49,22 +89,30 @@ def digest_file(path: Path, maximum: int) -> tuple[str, int]:
     return digest.hexdigest(), size
 
 
-def load_lock() -> dict:
-    lock = json.loads(LOCK_PATH.read_text(encoding="utf-8"))
-    if set(lock) != {"schema_version", "profile", "architecture", "runtime", "model"}:
-        fail("lock schema drift")
-    if (lock["schema_version"], lock["profile"], lock["architecture"]) != (
+def load_lock(architecture: str) -> dict:
+    runtime_path = RUNTIME_PATHS[architecture]
+    runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
+    model = json.loads(MODEL_PATH_RECORD.read_text(encoding="utf-8"))
+    expected_runtime_keys = {
+        "schema_version", "profile", "architecture", "project", "version", "archive",
+        "url", "sha256", "bytes", "license", "members",
+    }
+    if architecture == "aarch64":
+        expected_runtime_keys.add("attestation")
+    if set(runtime) != expected_runtime_keys:
+        fail("runtime record schema drift")
+    if set(model) != {
+        "schema_version", "project", "revision", "file", "url", "sha256", "bytes", "license"
+    }:
+        fail("model record schema drift")
+    if (runtime["schema_version"], runtime["profile"], runtime["architecture"]) != (
         1,
         "llama_cpp_cpu_v1",
-        "x86_64",
+        architecture,
     ):
-        fail("lock identity drift")
-    runtime = lock["runtime"]
-    model = lock["model"]
-    if set(runtime) != {"project", "version", "archive", "url", "sha256", "bytes", "license", "members"}:
-        fail("runtime lock schema drift")
-    if set(model) != {"project", "revision", "file", "url", "sha256", "bytes", "license"}:
-        fail("model lock schema drift")
+        fail("runtime record identity drift")
+    if model["schema_version"] != 1:
+        fail("model record identity drift")
     if runtime["project"] != "ggml-org/llama.cpp" or runtime["version"] != "b10775":
         fail("runtime pin drift")
     if model["project"] != "Qwen/Qwen2.5-0.5B-Instruct-GGUF":
@@ -111,7 +159,18 @@ def load_lock() -> dict:
             seen_installs.add(installed)
     if "llama-server" not in seen_installs:
         fail("runtime does not bind llama-server")
-    return lock
+    if architecture == "aarch64":
+        attestation = runtime["attestation"]
+        if set(attestation) != {"id", "url"} or attestation["id"] not in attestation["url"]:
+            fail("runtime attestation drift")
+    return {
+        "schema_version": 1,
+        "profile": runtime["profile"],
+        "architecture": architecture,
+        "runtime": runtime,
+        "model": model,
+        "runtime_record_path": runtime_path,
+    }
 
 
 def artifact(path: PurePosixPath, sha256: str, size: int) -> dict:
@@ -162,6 +221,7 @@ def render_gateway_unit() -> bytes:
 
 
 def registry_bytes(lock: dict) -> bytes:
+    schema, grammar = constraint_bytes()
     runtime_files = []
     for member in lock["runtime"]["members"]:
         for installed in member["installs"]:
@@ -175,6 +235,9 @@ def registry_bytes(lock: dict) -> bytes:
     manifest = {
         "profile_version": 5,
         "profile": "llama_cpp_cpu_v1",
+        "architecture": lock["architecture"],
+        "constraint_schema_sha256": digest_bytes(schema),
+        "constraint_grammar_sha256": digest_bytes(grammar),
         "provider": "llama_cpp",
         "logical_model": LOGICAL_MODEL,
         "gateway_protocol_version": 1,
@@ -193,6 +256,10 @@ def registry_bytes(lock: dict) -> bytes:
             str(MODEL_PATH),
             "--alias",
             LOGICAL_MODEL,
+            "--ctx-size",
+            "4096",
+            "--threads",
+            "2",
             "--no-webui",
         ],
         "environment_names": ["HOME"],
@@ -227,6 +294,18 @@ def registry_bytes(lock: dict) -> bytes:
     return json.dumps(manifest, separators=(",", ":")).encode()
 
 
+def receipt(lock: dict, gateway_digest: str) -> dict:
+    return {
+        "schema_version": 1,
+        "architecture": lock["architecture"],
+        "profile_sha256": digest_bytes(registry_bytes(lock)),
+        "gateway_sha256": gateway_digest,
+        "model_record_sha256": digest_file(MODEL_PATH_RECORD, 1024 * 1024)[0],
+        "runtime_record_sha256": digest_file(lock["runtime_record_path"], 1024 * 1024)[0],
+        "services_enabled": False,
+    }
+
+
 def copy_exact(source: Path, destination: Path, mode: int) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with source.open("rb") as input_file, destination.open("xb") as output_file:
@@ -234,6 +313,44 @@ def copy_exact(source: Path, destination: Path, mode: int) -> None:
         output_file.flush()
         os.fsync(output_file.fileno())
     destination.chmod(mode)
+
+
+def verify_package_root(lock: dict, root: Path, gateway: Path, installed: bool = False) -> None:
+    if not root.is_absolute() or root.is_symlink() or not root.is_dir():
+        fail("package root must be an absolute non-symlink directory")
+    expected_profile = registry_bytes(lock)
+    profile = root / str(PROFILE_PATH).lstrip("/")
+    if profile.is_symlink() or not profile.is_file() or profile.read_bytes() != expected_profile:
+        fail("packaged model profile does not match the immutable registry")
+    receipt_path = root / "usr/share/blossom-os/model-runtime-package.json"
+    if receipt_path.is_symlink() or not receipt_path.is_file() or receipt_path.stat().st_size > 4096:
+        fail("package receipt is missing or outside the closed bound")
+    try:
+        parsed_receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        fail(f"invalid package receipt: {error}")
+    if set(parsed_receipt) != {
+        "schema_version", "architecture", "profile_sha256", "gateway_sha256",
+        "model_record_sha256", "runtime_record_sha256", "services_enabled",
+    }:
+        fail("package receipt schema drift")
+    gateway_digest = digest_file(gateway, MAX_GATEWAY_BYTES)[0]
+    if parsed_receipt != receipt(lock, gateway_digest):
+        fail("package receipt does not match the immutable inputs")
+    packaged_gateway = root / "usr/lib/blossom-os/blossom-model-gateway"
+    if installed:
+        if digest_file(packaged_gateway, MAX_GATEWAY_BYTES)[0] != gateway_digest:
+            fail("installed gateway does not match the reviewed binary")
+    elif packaged_gateway.exists() or packaged_gateway.is_symlink():
+        fail("runtime package must not own the blossom-core gateway")
+    manifest = json.loads(expected_profile)
+    for item in manifest["runtime_files"] + manifest["model_files"]:
+        path = root / item["path"].lstrip("/")
+        if digest_file(path, item["bytes"]) != (item["sha256"], item["bytes"]):
+            fail(f"packaged artifact does not match the immutable registry: {item['path']}")
+    provider_unit = root / "usr/lib/systemd/system/blossom-model-llama-cpp.service"
+    if digest_file(provider_unit, 1024 * 1024)[0] != manifest["unit_sha256"]:
+        fail("packaged provider unit does not match the immutable registry")
 
 
 def build(
@@ -305,7 +422,6 @@ def build(
         llama_license.write_bytes(runtime_license_bytes)
         llama_license.chmod(0o644)
         copy_exact(model_license, license_root / "Qwen2.5-0.5B-Instruct-LICENSE", 0o644)
-        copy_exact(gateway, output / "usr/lib/blossom-os/blossom-model-gateway", 0o755)
         fixed_files = {
             "usr/lib/systemd/system/blossom-model-netns.service": PACKAGE / "blossom-model-netns.service",
             "usr/lib/sysusers.d/blossom-model-runtime.conf": PACKAGE / "blossom-model-runtime.sysusers",
@@ -324,16 +440,10 @@ def build(
         profile_path.parent.mkdir(parents=True, exist_ok=True)
         profile_path.write_bytes(registry_bytes(lock))
         profile_path.chmod(0o644)
-        receipt = {
-            "schema_version": 1,
-            "profile_sha256": digest_bytes(registry_bytes(lock)),
-            "gateway_sha256": digest_file(gateway, MAX_GATEWAY_BYTES)[0],
-            "source_lock_sha256": digest_file(LOCK_PATH, 1024 * 1024)[0],
-            "services_enabled": False,
-        }
+        package_receipt = receipt(lock, digest_file(gateway, MAX_GATEWAY_BYTES)[0])
         receipt_path = output / "usr/share/blossom-os/model-runtime-package.json"
         receipt_path.parent.mkdir(parents=True, exist_ok=True)
-        receipt_path.write_bytes(json.dumps(receipt, separators=(",", ":")).encode())
+        receipt_path.write_bytes(json.dumps(package_receipt, separators=(",", ":")).encode())
         receipt_path.chmod(0o644)
         for directory in sorted(
             (path for path in output.rglob("*") if path.is_dir()),
@@ -348,22 +458,31 @@ def build(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--architecture", choices=sorted(RUNTIME_PATHS), required=True)
     parser.add_argument("--verify-lock", action="store_true")
     parser.add_argument("--emit-registry", action="store_true")
     parser.add_argument("--refresh-registry", action="store_true")
+    parser.add_argument("--verify-package-root", type=Path)
+    parser.add_argument("--verify-installed-root", type=Path)
     parser.add_argument("--runtime-archive", type=Path)
     parser.add_argument("--model", type=Path)
     parser.add_argument("--model-license", type=Path)
     parser.add_argument("--gateway-binary", type=Path)
     parser.add_argument("--output", type=Path)
     arguments = parser.parse_args()
-    if sum((arguments.verify_lock, arguments.emit_registry, arguments.refresh_registry)) > 1:
+    if sum((
+        arguments.verify_lock,
+        arguments.emit_registry,
+        arguments.refresh_registry,
+        arguments.verify_package_root is not None,
+        arguments.verify_installed_root is not None,
+    )) > 1:
         fail("select exactly one registry operation")
-    lock = load_lock()
+    lock = load_lock(arguments.architecture)
     if arguments.verify_lock:
         if any([arguments.runtime_archive, arguments.model, arguments.model_license, arguments.gateway_binary, arguments.output]):
             fail("verification mode accepts no package paths")
-        if REGISTRY_PATH.read_bytes().removesuffix(b"\n") != registry_bytes(lock):
+        if PROFILE_PATHS[arguments.architecture].read_bytes().removesuffix(b"\n") != registry_bytes(lock):
             fail("embedded registry drift")
         return
     if arguments.emit_registry:
@@ -374,7 +493,22 @@ def main() -> None:
     if arguments.refresh_registry:
         if any([arguments.runtime_archive, arguments.model, arguments.model_license, arguments.gateway_binary, arguments.output]):
             fail("registry refresh accepts no package paths")
-        REGISTRY_PATH.write_bytes(registry_bytes(lock) + b"\n")
+        PROFILE_PATHS[arguments.architecture].write_bytes(registry_bytes(lock) + b"\n")
+        return
+    if arguments.verify_package_root is not None:
+        if any([arguments.runtime_archive, arguments.model, arguments.model_license, arguments.output]) or arguments.gateway_binary is None:
+            fail("package verification requires only --verify-package-root and --gateway-binary")
+        verify_package_root(lock, arguments.verify_package_root, arguments.gateway_binary)
+        return
+    if arguments.verify_installed_root is not None:
+        if any([arguments.runtime_archive, arguments.model, arguments.model_license, arguments.output]) or arguments.gateway_binary is None:
+            fail("installed verification requires only --verify-installed-root and --gateway-binary")
+        verify_package_root(
+            lock,
+            arguments.verify_installed_root,
+            arguments.gateway_binary,
+            installed=True,
+        )
         return
     if None in (
         arguments.runtime_archive,

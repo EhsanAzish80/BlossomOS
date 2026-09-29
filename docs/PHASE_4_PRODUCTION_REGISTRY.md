@@ -1,25 +1,45 @@
 # Phase 4 pinned llama.cpp registry and package checkpoint
 
-Status: one x86-64 llama.cpp profile is release-constructible, has a
-deterministic offline package-tree recipe and has passing installed-service
-real-inference evidence. The production gateway remains disabled by default.
+Status: x86-64 and aarch64 llama.cpp profiles are release-constructible from
+one shared model record and architecture-specific runtime records. The
+aarch64 package has passed an installed-root receipt check through `pacman -U`;
+the earlier x86-64 profile retains installed-service real-inference evidence.
+The production gateway remains disabled by default.
 
 ## Implemented
 
-- `system/model-runtime/registry/llama-cpp-cpu-x86_64.lock.json` pins immutable
-  upstream runtime, model and license inputs by URL/revision, size and SHA-256.
-- Its canonical profile binds schema v4, the complete normalized runtime set,
+- `system/model-runtime/registry/qwen2.5-0.5b-instruct-q4_k_m.model.json` pins
+  the shared model and license. Separate `llama-cpp-b10775-x86_64.runtime.json`
+  and `llama-cpp-b10775-aarch64.runtime.json` records pin the executable runtime;
+  the aarch64 record also binds the upstream attestation ID and URL.
+- Each canonical profile binds schema v5, its architecture, the complete runtime set,
   Qwen GGUF, rendered unit, identities, endpoint, arguments, filesystem scope
   and resource limits.
 - `production_provider_profile` parses only compile-time embedded canonical
-  bytes. It exposes this profile only on x86-64 and returns unavailable for
-  Ollama or unsupported architectures.
-- `scripts/package_llama_cpp_runtime.py` performs no download. It verifies all
+  bytes selected for the compiling architecture. Ollama remains x86-64-only.
+- `scripts/package_llama_cpp_runtime.py` requires an explicit architecture and
+  performs no download. It verifies all
   inputs before output creation, selects only pinned regular archive members,
   replaces archive aliases with measured regular copies, includes exact
   upstream licenses, renders the fixed unit and creates no enablement links.
 - The package receipt binds the canonical profile, supplied gateway build and
-  source lock, and records that services are not enabled.
+  the separate model and runtime records, and records that services are not
+  enabled. `blossom-core` owns the gateway binary; the runtime package depends
+  on it and verifies its digest without claiming the same filesystem path.
+
+## Aarch64 package evidence recorded on 2026-09-28
+
+The official 13,362,143-byte aarch64 archive matched SHA-256
+`263d4995214ae1cf9cfb19f07b9d995b8192ab82d4dbe9734332e9348459290d`
+and upstream attestation ID `44875193`. The shared Qwen model retained the
+same bytes and digest as the x86-64 profile.
+
+The first package was truthfully rejected by pacman because it duplicated the
+gateway path already owned by `blossom-core`. After correcting ownership, fresh
+aarch64 `blossom-core` and `blossom-model-runtime` packages installed together
+with `pacman -U`. Installed-root receipt verification passed, pacman reported
+0 altered files for both packages, and the gateway remained owned only by
+`blossom-core`. This is package and receipt evidence, not inference evidence.
 
 ## Evidence recorded on 2026-09-03
 

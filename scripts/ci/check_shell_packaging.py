@@ -2,7 +2,6 @@
 """Fail closed if the broker, desktop UI, or recovery package boundary drifts."""
 
 from pathlib import Path
-import configparser
 import json
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -12,8 +11,9 @@ LOCK = SHELL / "registry" / "arch-x86_64.lock.json"
 EVIDENCE_LOCK = SHELL / "evidence" / "parent-compositors-arch-x86_64.lock.json"
 BUS_NAME = "org.blossomos.Shell1"
 BINARY = "/usr/lib/blossom-os/blossom-shell-service"
-UNIT = "blossom-shell-service.service"
+UNIT = "blossom-shell-broker@.service"
 UI_UNIT = "blossom-shell-ui.service"
+DESKTOP_UNIT = "blossom-desktop-shell.service"
 RECOVERY_UNIT = "blossom-shell-recovery.service"
 RECOVERY = "blossom-shell-recovery"
 
@@ -58,26 +58,15 @@ def check_evidence_lock() -> None:
     require(item["source"] == "https://archlinux.org/packages/extra/x86_64/niri/", "evidence source drift")
 
 
-def check_activation() -> None:
-    parser = configparser.ConfigParser()
-    parser.optionxform = str
-    parser.read(PACKAGE / f"{BUS_NAME}.service")
-    section = parser["D-BUS Service"]
-    require(section.get("Name") == BUS_NAME, "activation bus name drift")
-    require(section.get("Exec") == BINARY, "activation executable drift")
-    require(section.get("SystemdService") == UNIT, "activation unit drift")
-    require("User" not in section, "session activation must not select an identity")
-
-
 def check_unit() -> None:
     text = (PACKAGE / UNIT).read_text()
-    required = ["Type=dbus", f"BusName={BUS_NAME}", f"ExecStart={BINARY}", "Restart=no", "NoNewPrivileges=yes", "CapabilityBoundingSet=\n", "AmbientCapabilities=\n", "PrivateDevices=yes", "ProtectSystem=strict", "ProtectHome=tmpfs", "RestrictAddressFamilies=AF_UNIX AF_NETLINK", "MemoryDenyWriteExecute=yes", "IPAddressDeny=any"]
+    required = ["BindsTo=user@%i.service", "After=user@%i.service", "RequiresMountsFor=/run/user/%i", "Type=simple", "ExecCondition=/usr/bin/test %i = 1000", "User=%i", "Group=%i", "SupplementaryGroups=blossom-ai", "Environment=HOME=/home/blossom", "Environment=XDG_RUNTIME_DIR=/run/user/%i", "Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%i/bus", f"ExecStart={BINARY}", "Restart=no", "NoNewPrivileges=yes", "CapabilityBoundingSet=\n", "AmbientCapabilities=\n", "PrivateDevices=yes", "ProtectSystem=strict", "ProtectHome=tmpfs", "RestrictAddressFamilies=AF_UNIX AF_NETLINK", "MemoryDenyWriteExecute=yes", "IPAddressDeny=any"]
     for value in required:
         require(value in text, f"missing shell unit boundary: {value.strip()}")
     exposure = [line.strip() for line in text.splitlines()
                 if line.strip().startswith(("BindPaths=", "BindReadOnlyPaths=", "ReadWritePaths=", "ReadOnlyPaths=", "ProtectHome="))]
-    require(exposure == ["ProtectHome=tmpfs", "BindReadOnlyPaths=%t/bus"],
-            "shell may expose only the required user bus socket through hidden homes")
+    require(exposure == ["ProtectHome=tmpfs", "BindReadOnlyPaths=/run/user/%i/bus", "BindPaths=/home/blossom/Workspace"],
+            "shell may expose only the session bus and bounded workspace through hidden homes")
     require("[Install]" not in text, "checkpoint must not be enableable")
     families = [line.strip() for line in text.splitlines()
                 if line.strip().startswith("RestrictAddressFamilies=")]
@@ -85,7 +74,7 @@ def check_unit() -> None:
             "shell service address-family boundary drift")
     require("RestrictSUIDSGID=" not in text,
             "RestrictSUIDSGID blocks Bubblewrap's required openat2 syscall")
-    for value in ["User=root", "sudo", "pkexec", "/bin/sh", "sh -c", "bash", "systemctl", "RestrictNamespaces="]:
+    for value in ["User=root", "User=blossom-model-gateway", "sudo", "pkexec", "/bin/sh", "sh -c", "bash", "systemctl", "RestrictNamespaces=", "PrivateUsers="]:
         require(value not in text, f"forbidden shell package surface: {value}")
 
 
@@ -93,7 +82,7 @@ def check_ui_unit() -> None:
     text = (PACKAGE / UI_UNIT).read_text()
     for value in [
         "PartOf=graphical-session.target",
-        "After=graphical-session.target blossom-shell-service.service",
+        "After=graphical-session.target",
         f"OnFailure={RECOVERY_UNIT}",
         "StartLimitIntervalSec=30",
         "StartLimitBurst=3",
@@ -112,6 +101,26 @@ def check_ui_unit() -> None:
         require(value not in text, f"forbidden shell UI surface: {value}")
 
 
+def check_desktop_unit() -> None:
+    text = (PACKAGE / DESKTOP_UNIT).read_text()
+    for value in [
+        "PartOf=graphical-session.target",
+        "After=graphical-session.target",
+        "RuntimeDirectory=quickshell",
+        "RuntimeDirectoryMode=0700",
+        f"OnFailure={RECOVERY_UNIT}",
+        "ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/shell",
+        "Restart=on-failure",
+        "NoNewPrivileges=yes",
+        "ProtectSystem=strict",
+        "ProtectHome=read-only",
+        "RestrictSUIDSGID=yes",
+    ]:
+        require(value in text, f"missing desktop shell boundary: {value}")
+    for value in ["User=root", "sudo", "pkexec", "/bin/sh", "sh -c", "bash -c"]:
+        require(value not in text, f"forbidden desktop shell surface: {value}")
+
+
 def check_recovery() -> None:
     unit = (PACKAGE / RECOVERY_UNIT).read_text()
     for value in [
@@ -126,9 +135,10 @@ def check_recovery() -> None:
     script = (PACKAGE / RECOVERY).read_text()
     for value in [
         "set -euo pipefail",
-        "systemctl --user --no-pager --full status blossom-shell-ui.service",
-        "systemctl --user reset-failed blossom-shell-ui.service",
-        "systemctl --user restart blossom-shell-ui.service",
+        "blossom-desktop-shell.service",
+        "blossom-shell-ui.service",
+        "systemctl --user reset-failed",
+        "systemctl --user restart",
         "exec bash --noprofile --norc",
     ]:
         require(value in script, f"missing bounded recovery behavior: {value}")
@@ -137,13 +147,13 @@ def check_recovery() -> None:
 
 
 def main() -> None:
-    expected = {"README.md", UNIT, f"{BUS_NAME}.service", UI_UNIT, RECOVERY_UNIT, RECOVERY}
+    expected = {"README.md", UNIT, UI_UNIT, DESKTOP_UNIT, RECOVERY_UNIT, RECOVERY}
     require({path.name for path in PACKAGE.iterdir()} == expected, "unexpected shell package surface")
     check_lock()
     check_evidence_lock()
-    check_activation()
     check_unit()
     check_ui_unit()
+    check_desktop_unit()
     check_recovery()
 
 

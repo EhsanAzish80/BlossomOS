@@ -4,9 +4,118 @@ use sha2::{Digest, Sha256};
 use std::fmt;
 
 pub const WORKSPACE_FILE_MODE: u32 = 0o600;
+pub const MAX_MODEL_WORKSPACE_CONTENT_BYTES: usize = 4096;
+pub const MODEL_WORKSPACE_NAME_PATTERN: &str = "^[a-z0-9][a-z0-9._-]{0,63}$";
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct ModelWorkspaceCreateProposal {
+    pub name: String,
+    pub content: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModelWorkspaceProposalError {
+    InvalidName,
+    InvalidContent,
+    ResolutionFailed,
+}
+
+fn safe_model_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    (1..=64).contains(&bytes.len())
+        && bytes
+            .first()
+            .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+        && bytes[1..].iter().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'_' | b'-')
+        })
+}
+
+fn unsafe_display_character(character: char) -> bool {
+    character == '\0'
+        || character == '\u{001b}'
+        || matches!(
+            character,
+            '\u{061c}'
+                | '\u{200b}'..='\u{200f}'
+                | '\u{202a}'..='\u{202e}'
+                | '\u{2060}'..='\u{206f}'
+                | '\u{feff}'
+        )
+}
+
+pub fn validate_model_workspace_proposal(
+    proposal: &ModelWorkspaceCreateProposal,
+) -> Result<(), ModelWorkspaceProposalError> {
+    if !safe_model_name(&proposal.name) {
+        return Err(ModelWorkspaceProposalError::InvalidName);
+    }
+    if proposal.content.len() > MAX_MODEL_WORKSPACE_CONTENT_BYTES
+        || proposal.content.chars().any(unsafe_display_character)
+    {
+        return Err(ModelWorkspaceProposalError::InvalidContent);
+    }
+    Ok(())
+}
+
+pub fn model_workspace_proposal_schema() -> serde_json::Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "content"],
+        "properties": {
+            "name": {"type": "string", "pattern": MODEL_WORKSPACE_NAME_PATTERN, "maxLength": 64},
+            "content": {"type": "string", "maxLength": MAX_MODEL_WORKSPACE_CONTENT_BYTES}
+        }
+    })
+}
+
+pub fn model_workspace_proposal_schema_bytes() -> Vec<u8> {
+    serde_json::to_vec(&model_workspace_proposal_schema())
+        .expect("closed workspace proposal schema must serialize")
+}
+
+pub fn model_workspace_constraint_digests() -> (String, String) {
+    (
+        digest(&model_workspace_proposal_schema_bytes()),
+        digest(model_workspace_proposal_grammar().as_bytes()),
+    )
+}
+
+pub fn model_workspace_proposal_grammar() -> String {
+    format!(
+        concat!(
+            "root ::= proposal\n",
+            "proposal ::= \"{{\\\"name\\\":\\\"\" name \"\\\",\\\"content\\\":\\\"\" content \"\\\"}}\"\n",
+            "name ::= [a-z0-9] [a-z0-9._-]{{0,63}}\n",
+            "content ::= content-char{{0,{}}}\n",
+            "content-char ::= [ -!#-Z\\[\\]-~] | \"\\\\\\\"\" | \"\\\\\\\\\" | \"\\\\n\"\n"
+        ),
+        MAX_MODEL_WORKSPACE_CONTENT_BYTES
+    )
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+pub fn resolve_model_workspace_proposal(
+    session_workspace_root: &str,
+    proposal: &ModelWorkspaceCreateProposal,
+) -> Result<AtomicWorkspaceFileCreator, ModelWorkspaceProposalError> {
+    validate_model_workspace_proposal(proposal)?;
+    AtomicWorkspaceFileCreator::select(session_workspace_root, &proposal.name, &proposal.content)
+        .map_err(|_| ModelWorkspaceProposalError::ResolutionFailed)
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+pub fn resolve_model_workspace_proposal(
+    _: &str,
+    proposal: &ModelWorkspaceCreateProposal,
+) -> Result<AtomicWorkspaceFileCreator, ModelWorkspaceProposalError> {
+    validate_model_workspace_proposal(proposal)?;
+    Err(ModelWorkspaceProposalError::ResolutionFailed)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct DirectoryIdentity {
     pub device: u64,
     pub inode: u64,
@@ -18,8 +127,7 @@ impl DirectoryIdentity {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct WorkspaceCreateSelection {
     pub workspace_root: String,
     pub root_identity: DirectoryIdentity,
@@ -440,6 +548,91 @@ mod tests {
             assert_eq!(
                 validate_relative_destination(invalid),
                 Err(WorkspaceCreateError::InvalidDestination)
+            );
+        }
+    }
+
+    #[test]
+    fn model_workspace_proposal_is_one_safe_component_with_visible_content() {
+        let valid = ModelWorkspaceCreateProposal {
+            name: "agent-note_1.txt".into(),
+            content: "bounded printable content\n".into(),
+        };
+        assert_eq!(validate_model_workspace_proposal(&valid), Ok(()));
+        let invalid_names = vec![
+            "".to_string(),
+            "../x".into(),
+            "/x".into(),
+            "a/b".into(),
+            "Ä.txt".into(),
+            "-hidden".into(),
+            "a".repeat(65),
+        ];
+        for name in invalid_names {
+            let proposal = ModelWorkspaceCreateProposal {
+                name,
+                content: "safe".into(),
+            };
+            assert_eq!(
+                validate_model_workspace_proposal(&proposal),
+                Err(ModelWorkspaceProposalError::InvalidName)
+            );
+        }
+        for content in [
+            "nul\0byte",
+            "escape\u{1b}[2J",
+            "bidi\u{202e}txt",
+            "zero\u{200b}width",
+        ] {
+            let proposal = ModelWorkspaceCreateProposal {
+                name: "note.txt".into(),
+                content: content.into(),
+            };
+            assert_eq!(
+                validate_model_workspace_proposal(&proposal),
+                Err(ModelWorkspaceProposalError::InvalidContent)
+            );
+        }
+        let oversized = ModelWorkspaceCreateProposal {
+            name: "note.txt".into(),
+            content: "x".repeat(MAX_MODEL_WORKSPACE_CONTENT_BYTES + 1),
+        };
+        assert_eq!(
+            validate_model_workspace_proposal(&oversized),
+            Err(ModelWorkspaceProposalError::InvalidContent)
+        );
+
+        let escaped_bidi: ModelWorkspaceCreateProposal =
+            serde_json::from_str(r#"{"name":"note.txt","content":"hidden\u202eexe"}"#)
+                .expect("valid JSON decodes the escape");
+        assert_eq!(
+            validate_model_workspace_proposal(&escaped_bidi),
+            Err(ModelWorkspaceProposalError::InvalidContent)
+        );
+    }
+
+    #[test]
+    fn proposal_grammar_is_a_single_object_subset_of_the_validator() {
+        let grammar = model_workspace_proposal_grammar();
+        assert!(grammar.starts_with("root ::= proposal\n"));
+        assert!(!grammar.contains("\\\\u"));
+        assert!(grammar.contains("content-char{0,4096}"));
+        assert_eq!(
+            model_workspace_proposal_schema()["properties"]["name"]["pattern"],
+            MODEL_WORKSPACE_NAME_PATTERN
+        );
+        for (name, content) in [
+            ("a", ""),
+            ("note.txt", "printable ASCII"),
+            ("agent_1.md", "line one\nline two"),
+            ("x-2", "quotes \" and slash \\"),
+        ] {
+            assert_eq!(
+                validate_model_workspace_proposal(&ModelWorkspaceCreateProposal {
+                    name: name.into(),
+                    content: content.into(),
+                }),
+                Ok(())
             );
         }
     }

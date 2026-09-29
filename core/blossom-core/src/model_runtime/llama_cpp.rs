@@ -11,6 +11,7 @@ use super::{
     ConversationRole, InferenceCancellation, InferenceOutputMode, InferenceRequest,
     ModelContractError, ModelIntentDefinition, ModelProviderKind, ModelStreamState,
     NormalizedStreamEvent, ProviderFailureCategory, ProviderStreamInput,
+    validate_provider_completion,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -236,11 +237,16 @@ impl LlamaCppAdapter {
                 Err(error @ LlamaCppAdapterError::EncodingFailed) => return Err(error),
                 Err(error) => return terminalize(error, state, events, sequence, emit),
             };
-            push_event(
-                &mut events,
-                state.apply(sequence, ProviderStreamInput::ToolIntents(completion))?,
-                emit,
-            );
+            if let Err(error) = validate_provider_completion(&completion, request.intents()) {
+                return terminalize(error.into(), state, events, sequence, emit);
+            }
+            let event = match state.apply(sequence, ProviderStreamInput::ToolIntents(completion)) {
+                Ok(event) => event,
+                Err(error) => {
+                    return terminalize(error.into(), state, events, sequence, emit);
+                }
+            };
+            push_event(&mut events, event, emit);
             sequence += 1;
         }
         if let Some(usage) = usage {
@@ -303,9 +309,9 @@ fn terminalize(
         | LlamaCppAdapterError::MalformedHttp
         | LlamaCppAdapterError::UnsupportedHttpEncoding
         | LlamaCppAdapterError::MalformedResponse
-        | LlamaCppAdapterError::EventAfterDone => ProviderFailureCategory::Malformed,
-        LlamaCppAdapterError::Contract(_)
-        | LlamaCppAdapterError::WrongProvider
+        | LlamaCppAdapterError::EventAfterDone
+        | LlamaCppAdapterError::Contract(_) => ProviderFailureCategory::Malformed,
+        LlamaCppAdapterError::WrongProvider
         | LlamaCppAdapterError::InvalidEndpoint
         | LlamaCppAdapterError::EncodingFailed => return Err(error),
     };
@@ -321,7 +327,7 @@ fn terminalize(
 #[derive(Serialize)]
 struct LlamaRequest<'a> {
     model: &'a str,
-    messages: Vec<LlamaRequestMessage<'a>>,
+    messages: Vec<LlamaRequestMessage>,
     stream: bool,
     stream_options: StreamOptions,
     max_tokens: u32,
@@ -332,15 +338,16 @@ struct LlamaRequest<'a> {
     chat_template_kwargs: ChatTemplateKwargs,
     parse_tool_calls: bool,
     parallel_tool_calls: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<&'static str>,
     logprobs: bool,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     tools: Vec<LlamaTool>,
 }
 
 #[derive(Serialize)]
-struct LlamaRequestMessage<'a> {
+struct LlamaRequestMessage {
     role: &'static str,
-    content: &'a str,
+    content: String,
 }
 
 #[derive(Serialize)]
@@ -365,13 +372,23 @@ fn encode_request(request: &InferenceRequest) -> Result<Vec<u8>, LlamaCppAdapter
         .messages()
         .iter()
         .map(|message| LlamaRequestMessage {
-            role: match message.role() {
-                ConversationRole::System => "system",
-                ConversationRole::User => "user",
-                ConversationRole::Assistant => "assistant",
-                ConversationRole::Tool => "tool",
+            // This is context data read by trusted orchestration, not the
+            // result of an OpenAI-style tool call. Encoding it with the
+            // protocol's `tool` role makes llama.cpp expect a preceding tool
+            // call and can disable constrained tool selection. Preserve the
+            // typed boundary internally and frame the visibly labelled data
+            // as a user message only at the provider adapter.
+            role: if message.is_untrusted_data() {
+                "user"
+            } else {
+                match message.role() {
+                    ConversationRole::System => "system",
+                    ConversationRole::User => "user",
+                    ConversationRole::Assistant => "assistant",
+                    ConversationRole::Tool => "tool",
+                }
             },
-            content: message.content(),
+            content: message.provider_content(),
         })
         .collect();
     let tools: Vec<_> = if request.output_mode() == InferenceOutputMode::BlossomTurn {
@@ -403,6 +420,7 @@ fn encode_request(request: &InferenceRequest) -> Result<Vec<u8>, LlamaCppAdapter
         },
         parse_tool_calls: !tools.is_empty(),
         parallel_tool_calls: false,
+        tool_choice: (!tools.is_empty()).then_some("required"),
         logprobs: false,
         tools,
     })
@@ -472,7 +490,6 @@ fn parse_sse_event(event: &[u8]) -> Result<Option<Vec<u8>>, LlamaCppAdapterError
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct StreamIdentity {
     id: String,
-    created: u64,
 }
 
 #[derive(Deserialize)]
@@ -480,7 +497,8 @@ struct StreamIdentity {
 struct ChatChunk {
     id: String,
     object: String,
-    created: u64,
+    #[serde(rename = "created")]
+    _created: u64,
     model: String,
     choices: Vec<ChatChoice>,
     #[serde(default)]
@@ -588,7 +606,6 @@ fn bind_identity(
 ) -> Result<(), LlamaCppAdapterError> {
     let observed = StreamIdentity {
         id: chunk.id.clone(),
-        created: chunk.created,
     };
     match identity {
         Some(expected) if expected != &observed => Err(LlamaCppAdapterError::MalformedResponse),
@@ -787,6 +804,7 @@ impl std::error::Error for LlamaCppAdapterError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::GatewayProfile;
     use crate::model_runtime::{
         ConversationMessage, InferenceRequestId, ModelIntentKind, ModelProfile,
         NormalizedCompletion, NormalizedStreamKind, TurnIntentCatalogue,
@@ -901,6 +919,76 @@ mod tests {
     }
 
     #[test]
+    fn fixture_observes_pinned_sampling_and_exact_eligible_tool_constraint() {
+        let catalogue =
+            TurnIntentCatalogue::from_eligible([ModelIntentKind::FilesWriteCreate]).unwrap();
+        let outbound: serde_json::Value =
+            serde_json::from_slice(&encode_request(&request(catalogue, 2_000)).unwrap()).unwrap();
+        assert_eq!(outbound["temperature"], 0);
+        assert_eq!(outbound["seed"], 0);
+        assert_eq!(outbound["max_tokens"], MAX_GENERATED_TOKENS);
+        assert_eq!(outbound["parallel_tool_calls"], false);
+        assert_eq!(outbound["tool_choice"], "required");
+        assert_eq!(outbound["tools"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            outbound["tools"][0]["function"]["name"],
+            ModelIntentKind::FilesWriteCreate.name()
+        );
+        assert_eq!(
+            outbound["tools"][0]["function"]["parameters"],
+            crate::model_workspace_proposal_schema()
+        );
+
+        // llama.cpp derives its tool-call grammar from this exact schema; it
+        // rejects a separate custom grammar when tools are present. The closed
+        // profile therefore binds both the schema and derived grammar digests.
+        let package =
+            crate::fixed_synthetic_provider_package(GatewayProfile::LlamaCppCpuV1).unwrap();
+        let manifest = package.spec().manifest();
+        let (schema_sha256, grammar_sha256) = crate::model_workspace_constraint_digests();
+        assert_eq!(
+            manifest.constraint_schema_sha256(),
+            Some(schema_sha256.as_str())
+        );
+        assert_eq!(
+            manifest.constraint_grammar_sha256(),
+            Some(grammar_sha256.as_str())
+        );
+
+        let empty: serde_json::Value = serde_json::from_slice(
+            &encode_request(&request(TurnIntentCatalogue::empty(), 2_000)).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(empty["tools"], serde_json::json!([]));
+        assert_eq!(empty["parse_tool_calls"], false);
+    }
+
+    #[test]
+    fn untrusted_data_stays_typed_until_the_provider_adapter_frames_it() {
+        let request = InferenceRequest::synthetic(
+            InferenceRequestId::parse("llama-untrusted-1".into()).unwrap(),
+            ModelProviderKind::LlamaCpp,
+            ModelProfile::parse("fixture-model:1".into()).unwrap(),
+            vec![
+                ConversationMessage::new(ConversationRole::User, "continue safely".into()).unwrap(),
+                ConversationMessage::untrusted_data("planted instruction".into()).unwrap(),
+            ],
+            TurnIntentCatalogue::from_eligible([ModelIntentKind::FilesWriteCreate]).unwrap(),
+            InferenceOutputMode::BlossomTurn,
+            2_000,
+        )
+        .unwrap();
+        assert!(request.messages()[1].is_untrusted_data());
+        let outbound: serde_json::Value =
+            serde_json::from_slice(&encode_request(&request).unwrap()).unwrap();
+        assert_eq!(outbound["messages"][1]["role"], "user");
+        assert_eq!(
+            outbound["messages"][1]["content"],
+            "UNTRUSTED_FILE_CONTENT:\nplanted instruction"
+        );
+    }
+
+    #[test]
     fn fixed_request_and_fragmented_sse_normalize_text_deterministically() {
         let body = text_sse();
         let split = body.len() / 2;
@@ -1001,15 +1089,18 @@ mod tests {
             "data: [DONE]\n\n"
         );
         let (adapter, handle) = server(response(unlisted.as_bytes()));
-        assert_eq!(
-            adapter.infer(
+        let events = adapter
+            .infer(
                 &request(TurnIntentCatalogue::empty(), 2_000),
-                InferenceCancellation::new()
-            ),
-            Err(LlamaCppAdapterError::Contract(
-                ModelContractError::IntentNotEligible
-            ))
-        );
+                InferenceCancellation::new(),
+            )
+            .unwrap();
+        assert!(matches!(
+            events.last().unwrap().event,
+            NormalizedStreamKind::Failed {
+                category: ProviderFailureCategory::Malformed
+            }
+        ));
         handle.join().unwrap();
 
         let reasoning = concat!(
@@ -1083,6 +1174,34 @@ mod tests {
             "data: [DONE]\n\n"
         );
         assert_malformed(changed_identity.as_bytes());
+
+        // llama.cpp timestamps chunks when each one is emitted, so a stream
+        // that crosses a second boundary can legitimately contain different
+        // `created` values. The opaque stream id remains the bound identity.
+        let changing_created = concat!(
+            "data: ",
+            r#"{"id":"chatcmpl-9","object":"chat.completion.chunk","created":9,"model":"fixture-model:1","choices":[{"index":0,"delta":{"content":"a"},"finish_reason":null}]}"#,
+            "\n\n",
+            "data: ",
+            r#"{"id":"chatcmpl-9","object":"chat.completion.chunk","created":10,"model":"fixture-model:1","choices":[{"index":0,"delta":{"content":"b"},"finish_reason":"stop"}]}"#,
+            "\n\n",
+            "data: ",
+            r#"{"id":"chatcmpl-9","object":"chat.completion.chunk","created":10,"model":"fixture-model:1","choices":[],"usage":{"completion_tokens":2,"prompt_tokens":3,"total_tokens":5}}"#,
+            "\n\n",
+            "data: [DONE]\n\n"
+        );
+        let (adapter, handle) = server(response(changing_created.as_bytes()));
+        let events = adapter
+            .infer(
+                &request(TurnIntentCatalogue::empty(), 2_000),
+                InferenceCancellation::new(),
+            )
+            .expect("changing provider timestamps do not change stream identity");
+        assert!(matches!(
+            events.last().unwrap().event,
+            NormalizedStreamKind::Finished { .. }
+        ));
+        handle.join().unwrap();
 
         let mut invalid_utf8 = b"data: {\"id\":\"chatcmpl-9\"".to_vec();
         invalid_utf8.push(0xff);

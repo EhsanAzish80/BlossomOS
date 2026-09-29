@@ -1,0 +1,31 @@
+pkgname=blossom-model-runtime
+pkgver=b10775
+pkgrel=1
+pkgdesc='Blossom OS pinned local llama.cpp runtime and shared Qwen model'
+arch=('x86_64' 'aarch64')
+license=('MIT' 'Apache-2.0')
+depends=('blossom-core' 'glibc' 'systemd')
+options=('!strip')
+source=()
+sha256sums=()
+
+package() {
+  local repo_root="${BLOSSOM_REPO_ROOT:-$startdir/../../..}"
+  local package_root="$srcdir/package-root-$CARCH"
+  for input in \
+    BLOSSOM_LLAMA_RUNTIME_ARCHIVE \
+    BLOSSOM_LLAMA_MODEL \
+    BLOSSOM_LLAMA_MODEL_LICENSE \
+    BLOSSOM_MODEL_GATEWAY; do
+    [[ -f ${!input:-} ]] || { error "missing package input: $input"; return 1; }
+  done
+  [[ ! -e $package_root ]] || { error "stale package root: $package_root"; return 1; }
+  python3 "$repo_root/scripts/package_llama_cpp_runtime.py" \
+    --architecture "$CARCH" \
+    --runtime-archive "$BLOSSOM_LLAMA_RUNTIME_ARCHIVE" \
+    --model "$BLOSSOM_LLAMA_MODEL" \
+    --model-license "$BLOSSOM_LLAMA_MODEL_LICENSE" \
+    --gateway-binary "$BLOSSOM_MODEL_GATEWAY" \
+    --output "$package_root"
+  cp -a "$package_root/." "$pkgdir/"
+}

@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
+import secrets
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -21,7 +24,41 @@ TARGET = {
 }
 BLKGETSIZE64 = 0x80081272
 ROOTFS = Path("/root/blossom-rootfs.tar.zst")
+ROOTFS_DIGEST = Path("/root/blossom-rootfs.tar.zst.sha256")
+ROOTFS_MANIFEST = Path("/root/blossom-rootfs.manifest.json")
 MOUNT = Path("/mnt/blossom-install")
+MOUNT_B = Path("/mnt/blossom-install-b")
+STATE_DIRECTORIES = {
+    "home": "home",
+    "var/lib/blossom": "blossom",
+    "var/log": "log",
+    "etc/NetworkManager/system-connections": "networkmanager-connections",
+    "var/lib/bluetooth": "bluetooth",
+}
+SLOT_SYNC_PATHS = (
+    "etc/passwd",
+    "etc/shadow",
+    "etc/group",
+    "etc/gshadow",
+    "etc/hostname",
+    "etc/machine-id",
+    "etc/locale.conf",
+    "etc/locale.gen",
+    "etc/vconsole.conf",
+    "etc/localtime",
+    "usr/lib/locale/locale-archive",
+)
+ROOTFS_REQUIRED_PATHS = (
+    "etc/machine-id",
+    "etc/passwd",
+    "etc/shadow",
+    "etc/group",
+    "etc/gshadow",
+    "boot/vmlinuz-linux-lts",
+    "boot/initramfs-linux-lts.img",
+    "boot/intel-ucode.img",
+    "usr/bin/locale-gen",
+)
 LSBLK_TARGET = (
     "lsblk",
     "--json",
@@ -79,22 +116,195 @@ def validate_target(target: dict[str, Any], inventory: dict[str, Any]) -> None:
             raise BackendError("target or target partition is mounted")
 
 
-def command_plan() -> list[list[str]]:
-    disk = TARGET["path"]
+def _stable_disk_path(device: str) -> str:
+    expected = os.path.realpath(device)
+    by_id = Path("/dev/disk/by-id")
+    try:
+        candidates = sorted(by_id.iterdir())
+    except OSError as error:
+        raise BackendError("stable disk identity is unavailable") from error
+    preferred = sorted(
+        (entry for entry in candidates if os.path.realpath(entry) == expected),
+        key=lambda entry: (not entry.name.startswith("wwn-"), entry.name),
+    )
+    if not preferred:
+        raise BackendError("target has no stable /dev/disk/by-id identity")
+    return str(preferred[0])
+
+
+def _verify_rootfs() -> None:
+    try:
+        checksum_text = ROOTFS_DIGEST.read_text(encoding="ascii")
+    except (OSError, UnicodeError) as error:
+        raise BackendError("reviewed root filesystem digest is missing") from error
+    expected_names = {
+        "blossom-rootfs.tar.zst": ROOTFS,
+        "blossom-rootfs.manifest.json": ROOTFS_MANIFEST,
+    }
+    expected: dict[str, str] = {}
+    for line in checksum_text.splitlines():
+        fields = line.split("  ", 1)
+        if (
+            len(fields) != 2
+            or fields[1] not in expected_names
+            or fields[1] in expected
+            or len(fields[0]) != 64
+            or any(character not in "0123456789abcdef" for character in fields[0])
+        ):
+            raise BackendError("reviewed root filesystem digest manifest is invalid")
+        expected[fields[1]] = fields[0]
+    if set(expected) != set(expected_names):
+        raise BackendError("reviewed root filesystem digest manifest is incomplete")
+    for name, path in expected_names.items():
+        digest = hashlib.sha256()
+        try:
+            with path.open("rb") as source:
+                for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                    digest.update(chunk)
+        except OSError as error:
+            raise BackendError(f"reviewed root filesystem input cannot be read: {name}") from error
+        if digest.hexdigest() != expected[name]:
+            raise BackendError(f"reviewed root filesystem digest does not match: {name}")
+
+
+def _preflight_rootfs(
+    provision: Callable[[Path], None] | None,
+) -> None:
+    """Reject known content failures before the first destructive command."""
+    if provision is None:
+        raise BackendError("graphical account provisioning is required")
+    try:
+        descriptor = os.open(ROOTFS_MANIFEST, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    except OSError as error:
+        raise BackendError("reviewed root filesystem manifest cannot be opened safely") from error
+    try:
+        status = os.fstat(descriptor)
+        if not stat.S_ISREG(status.st_mode) or not 0 < status.st_size <= 64 * 1024:
+            raise BackendError("reviewed root filesystem manifest is outside the closed bound")
+        encoded = os.read(descriptor, status.st_size + 1)
+    finally:
+        os.close(descriptor)
+    try:
+        manifest = json.loads(encoded)
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise BackendError("reviewed root filesystem manifest is invalid") from error
+    if manifest != {
+        "schema": 1,
+        "required_paths": list(ROOTFS_REQUIRED_PATHS),
+        "machine_id_bytes": 0,
+    }:
+        raise BackendError("reviewed root filesystem manifest does not match the closed contract")
+
+
+def _install_machine_id(root: Path) -> None:
+    destination = root / "etc/machine-id"
+    temporary = destination.with_name(".machine-id.blossom-install")
+    temporary.unlink(missing_ok=True)
+    encoded = f"{secrets.token_hex(16)}\n".encode("ascii")
+    descriptor = os.open(
+        temporary,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW,
+        0o444,
+    )
+    try:
+        written = 0
+        while written < len(encoded):
+            written += os.write(descriptor, encoded[written:])
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    os.replace(temporary, destination)
+    destination.chmod(0o444)
+
+
+def _recheck_disk_identity(fd: int, disk: str, expected_rdev: int) -> None:
+    retained = os.fstat(fd)
+    try:
+        current = os.stat(disk, follow_symlinks=True)
+    except OSError as error:
+        raise BackendError("stable disk identity disappeared") from error
+    if (
+        not stat.S_ISBLK(retained.st_mode)
+        or not stat.S_ISBLK(current.st_mode)
+        or retained.st_rdev != expected_rdev
+        or current.st_rdev != expected_rdev
+    ):
+        raise BackendError("stable disk identity changed")
+
+
+def sync_slot_state(source_root: Path, destination_root: Path) -> None:
+    """Copy the closed slot-local identity set into an inactive root.
+
+    These paths must remain ordinary files or symlinks. Account and hostname
+    tools atomically replace them, which is incompatible with single-file bind
+    mounts. The physical updater must call this after writing an inactive root
+    and before selecting its trial UKI.
+    """
+    if source_root == destination_root or not source_root.is_dir() or not destination_root.is_dir():
+        raise BackendError("slot synchronization roots are invalid")
+    for relative in SLOT_SYNC_PATHS:
+        source = source_root / relative
+        destination = destination_root / relative
+        try:
+            source_status = source.lstat()
+        except FileNotFoundError:
+            try:
+                destination_status = destination.lstat()
+            except FileNotFoundError:
+                continue
+            if stat.S_ISDIR(destination_status.st_mode):
+                raise BackendError(f"slot synchronization destination has invalid type: {relative}")
+            destination.unlink()
+            continue
+        except OSError as error:
+            raise BackendError(f"slot synchronization source cannot be inspected: {relative}") from error
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        if stat.S_ISLNK(source_status.st_mode):
+            link_target = os.readlink(source)
+            destination.unlink(missing_ok=True)
+            destination.symlink_to(link_target)
+        elif stat.S_ISREG(source_status.st_mode):
+            temporary = destination.with_name(f".{destination.name}.blossom-sync")
+            temporary.unlink(missing_ok=True)
+            try:
+                shutil.copy2(source, temporary, follow_symlinks=False)
+                os.replace(temporary, destination)
+            finally:
+                temporary.unlink(missing_ok=True)
+        else:
+            raise BackendError(f"slot synchronization source has invalid type: {relative}")
+
+
+def command_plan(disk: str | None = None) -> list[list[str]]:
+    disk = disk or TARGET["path"]
     return [
         ["sgdisk", "--zap-all", disk],
-        ["sgdisk", "--new=1:2048:+512M", "--typecode=1:ef00", "--change-name=1:BLOSSOM_EFI", disk],
-        ["sgdisk", "--new=2:0:0", "--typecode=2:8300", "--change-name=2:BLOSSOM_SYSTEM", disk],
+        ["sgdisk", "--new=1:2048:+1G", "--typecode=1:ef00", "--change-name=1:BLOSSOM_EFI", disk],
+        ["sgdisk", "--new=2:0:+24G", "--typecode=2:8300", "--change-name=2:BLOSSOM_ROOT_A", disk],
+        ["sgdisk", "--new=3:0:+24G", "--typecode=3:8300", "--change-name=3:BLOSSOM_ROOT_B", disk],
+        ["sgdisk", "--new=4:0:0", "--typecode=4:8300", "--change-name=4:BLOSSOM_STATE", disk],
         ["partprobe", disk],
         ["udevadm", "settle"],
-        ["mkfs.fat", "-F", "32", "-n", "BLOSSOM_EFI", "/dev/sda1"],
-        ["mkfs.ext4", "-F", "-L", "BLOSSOM_SYSTEM", "/dev/sda2"],
-        ["mount", "/dev/sda2", str(MOUNT)],
-        ["mkdir", "-p", str(MOUNT / "boot")],
-        ["mount", "/dev/sda1", str(MOUNT / "boot")],
-        ["tar", "--xattrs", "--numeric-owner", "-I", "zstd", "-xf", str(ROOTFS), "-C", str(MOUNT)],
-        ["bootctl", f"--esp-path={MOUNT / 'boot'}", "install"],
     ]
+
+
+def _partitions(run: Callable[..., subprocess.CompletedProcess[Any]], disk: str) -> dict[str, str]:
+    result = run(
+        ["lsblk", "--raw", "--noheadings", "--paths", "--output", "PATH,PARTLABEL", disk],
+        check=True, capture_output=True, text=True, timeout=5,
+    )
+    found: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        fields = line.split(None, 1)
+        if len(fields) == 2 and fields[1] in {
+            "BLOSSOM_EFI", "BLOSSOM_ROOT_A", "BLOSSOM_ROOT_B", "BLOSSOM_STATE"
+        }:
+            if fields[1] in found:
+                raise BackendError("duplicate installed partition label")
+            found[fields[1]] = fields[0]
+    if set(found) != {"BLOSSOM_EFI", "BLOSSOM_ROOT_A", "BLOSSOM_ROOT_B", "BLOSSOM_STATE"}:
+        raise BackendError("installed partition identity is incomplete")
+    return found
 
 
 def _inventory() -> dict[str, Any]:
@@ -112,35 +322,80 @@ def _inventory() -> dict[str, Any]:
 def install(
     target: dict[str, Any],
     run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+    provision: Callable[[Path], None] | None = None,
 ) -> None:
     if os.geteuid() != 0:
         raise BackendError("installer backend requires root")
     if not ROOTFS.is_file():
         raise BackendError("reviewed root filesystem archive is missing")
+    _verify_rootfs()
+    _preflight_rootfs(provision)
     validate_target(target, _inventory())
-    fd = os.open(TARGET["path"], os.O_RDONLY | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW)
+    disk = _stable_disk_path(TARGET["path"])
+    exclusive_fd = os.open(disk, os.O_RDONLY | os.O_EXCL | os.O_CLOEXEC)
     try:
-        status = os.fstat(fd)
+        status = os.fstat(exclusive_fd)
         if not stat.S_ISBLK(status.st_mode):
             raise BackendError("frozen target is not a block device")
-        live_size = int.from_bytes(fcntl.ioctl(fd, BLKGETSIZE64, bytes(8)), "little")
+        live_size = int.from_bytes(fcntl.ioctl(exclusive_fd, BLKGETSIZE64, bytes(8)), "little")
         if live_size != TARGET["size_bytes"]:
             raise BackendError("live block size does not match frozen target")
+        expected_rdev = status.st_rdev
     finally:
-        os.close(fd)
-
-    MOUNT.mkdir(parents=True, exist_ok=True)
-    mounted_root = False
-    mounted_boot = False
+        os.close(exclusive_fd)
+    # The exclusive descriptor is intentionally released before partition
+    # rescans, mkfs, and mounts. Retain a non-exclusive identity descriptor and
+    # compare st_rdev through the stable by-id path before destructive phases.
+    fd = os.open(disk, os.O_RDONLY | os.O_CLOEXEC)
     try:
-        for command in command_plan():
+        _recheck_disk_identity(fd, disk, expected_rdev)
+        MOUNT.mkdir(parents=True, exist_ok=True)
+        MOUNT_B.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        os.close(fd)
+        raise
+    mounted: list[Path] = []
+    try:
+        for command in command_plan(disk):
+            _recheck_disk_identity(fd, disk, expected_rdev)
             run(command, check=True, timeout=900)
-            mounted_root = mounted_root or command[:2] == ["mount", "/dev/sda2"]
-            mounted_boot = mounted_boot or command[:2] == ["mount", "/dev/sda1"]
-        uuids = {}
-        for name, device in (("efi", "/dev/sda1"), ("root", "/dev/sda2")):
+        _recheck_disk_identity(fd, disk, expected_rdev)
+        parts = _partitions(run, disk)
+        _recheck_disk_identity(fd, disk, expected_rdev)
+        run(["mkfs.fat", "-F", "32", "-n", "BLOSSOM_EFI", parts["BLOSSOM_EFI"]], check=True, timeout=900)
+        for label in ("BLOSSOM_ROOT_A", "BLOSSOM_ROOT_B", "BLOSSOM_STATE"):
+            _recheck_disk_identity(fd, disk, expected_rdev)
+            run(["mkfs.ext4", "-F", "-L", label, parts[label]], check=True, timeout=900)
+        for device, destination in (
+            (parts["BLOSSOM_ROOT_A"], MOUNT),
+            (parts["BLOSSOM_ROOT_B"], MOUNT_B),
+            (parts["BLOSSOM_STATE"], MOUNT / "state"),
+            (parts["BLOSSOM_EFI"], MOUNT / "efi"),
+        ):
+            destination.mkdir(parents=True, exist_ok=True)
+            run(["mount", device, str(destination)], check=True, timeout=60)
+            mounted.append(destination)
+        for destination in (MOUNT, MOUNT_B):
+            run(["tar", "--xattrs", "--numeric-owner", "-I", "zstd", "-xf", str(ROOTFS), "-C", str(destination)], check=True, timeout=900)
+        state = MOUNT / "state"
+        for root_relative, state_relative in STATE_DIRECTORIES.items():
+            source = MOUNT / root_relative
+            persistent = state / state_relative
+            persistent.parent.mkdir(parents=True, exist_ok=True)
+            if source.is_dir() and not persistent.exists():
+                shutil.copytree(source, persistent, symlinks=True)
+            else:
+                persistent.mkdir(parents=True, exist_ok=True)
+        for root_relative, state_relative in STATE_DIRECTORIES.items():
+            destination = MOUNT / root_relative
+            persistent = state / state_relative
+            run(["mount", "--bind", str(persistent), str(destination)], check=True, timeout=60)
+            mounted.append(destination)
+
+        uuids: dict[str, str] = {}
+        for name, label in (("efi", "BLOSSOM_EFI"), ("a", "BLOSSOM_ROOT_A"), ("b", "BLOSSOM_ROOT_B"), ("state", "BLOSSOM_STATE")):
             value = run(
-                ["blkid", "-s", "UUID", "-o", "value", device],
+                ["blkid", "-s", "UUID", "-o", "value", parts[label]],
                 check=True,
                 capture_output=True,
                 timeout=5,
@@ -149,27 +404,57 @@ def install(
             if not value or len(value) > 64 or any(character.isspace() for character in value):
                 raise BackendError(f"installed {name} UUID is invalid")
             uuids[name] = value
-        entries = MOUNT / "boot/loader/entries"
+        run(["bootctl", f"--esp-path={MOUNT / 'efi'}", "install"], check=True, timeout=60)
+        assets = MOUNT / "efi/EFI/Linux"
+        assets.mkdir(parents=True, exist_ok=True)
+        for slot, source in (("a", MOUNT), ("b", MOUNT_B)):
+            kernel = source / "boot/vmlinuz-linux-lts"
+            initramfs = source / "boot/initramfs-linux-lts.img"
+            microcode = source / "boot/intel-ucode.img"
+            if not all(path.is_file() for path in (kernel, initramfs, microcode)):
+                raise BackendError("installed UKI input is missing")
+            uki = assets / f"blossom-{slot}.efi"
+            run(
+                [
+                    "ukify", "build", f"--linux={kernel}",
+                    f"--initrd={microcode}", f"--initrd={initramfs}",
+                    f"--cmdline=root=UUID={uuids[slot]} rw blossom.slot={slot.upper()} systemd.show_status=yes",
+                    f"--output={uki}",
+                ],
+                check=True, timeout=300,
+            )
+        entries = MOUNT / "efi/loader/entries"
         entries.mkdir(parents=True, exist_ok=True)
-        (MOUNT / "boot/loader/loader.conf").write_text(
-            "default blossom.conf\ntimeout 3\nconsole-mode keep\n", encoding="utf-8"
+        (MOUNT / "efi/loader/loader.conf").write_text(
+            "default blossom-a.conf\ntimeout 3\nconsole-mode keep\neditor no\nauto-entries no\n", encoding="utf-8"
         )
-        (entries / "blossom.conf").write_text(
-            "title Blossom OS physical qualification\n"
-            "linux /vmlinuz-linux-lts\n"
-            "initrd /intel-ucode.img\n"
-            "initrd /initramfs-linux-lts.img\n"
-            f"options root=UUID={uuids['root']} rw systemd.show_status=yes\n",
-            encoding="utf-8",
-        )
-        (MOUNT / "etc/fstab").write_text(
-            f"UUID={uuids['root']} / ext4 rw,relatime 0 1\n"
-            f"UUID={uuids['efi']} /boot vfat umask=0077 0 2\n",
-            encoding="utf-8",
-        )
+        for slot in ("a", "b"):
+            (entries / f"blossom-{slot}.conf").write_text(
+                f"title Blossom OS ({slot.upper()})\n"
+                f"efi /EFI/Linux/blossom-{slot}.efi\n",
+                encoding="utf-8",
+            )
+        for slot, root in (("a", MOUNT), ("b", MOUNT_B)):
+            (root / "efi").mkdir(parents=True, exist_ok=True)
+            (root / "state").mkdir(parents=True, exist_ok=True)
+            for root_relative in STATE_DIRECTORIES:
+                (root / root_relative).mkdir(parents=True, exist_ok=True)
+            (root / "etc/fstab").write_text(
+                f"UUID={uuids[slot]} / ext4 rw,relatime 0 1\n"
+                f"UUID={uuids['efi']} /efi vfat umask=0077 0 2\n"
+                f"UUID={uuids['state']} /state ext4 rw,relatime 0 2\n"
+                + "".join(
+                    f"/state/{state_relative} /{root_relative} none bind,x-systemd.requires-mounts-for=/state 0 0\n"
+                    for root_relative, state_relative in STATE_DIRECTORIES.items()
+                ),
+                encoding="utf-8",
+            )
+        if provision is not None:
+            provision(MOUNT)
+        _install_machine_id(MOUNT)
+        sync_slot_state(MOUNT, MOUNT_B)
         run(["sync"], check=True, timeout=60)
     finally:
-        if mounted_boot:
-            run(["umount", str(MOUNT / "boot")], check=False, timeout=60)
-        if mounted_root:
-            run(["umount", str(MOUNT)], check=False, timeout=60)
+        for destination in reversed(mounted):
+            run(["umount", str(destination)], check=False, timeout=60)
+        os.close(fd)

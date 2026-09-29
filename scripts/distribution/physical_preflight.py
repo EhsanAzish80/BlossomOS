@@ -21,8 +21,10 @@ INPUT_FIELDS = {
     "memory_mib",
     "drm_present",
     "internal_disk_present",
+    "wifi_pci_id",
 }
 TARGET_PRODUCT = "MacBookPro11,1"
+TARGET_WIFI_PCI_ID = "14e4:43a0"
 
 
 def _read_text(path: Path) -> str:
@@ -58,6 +60,19 @@ def observe_host(root: Path = Path("/"), architecture: str | None = None) -> dic
             internal_disk_present = True
             break
 
+    wifi_pci_id = ""
+    pci = root / "sys/bus/pci/devices"
+    try:
+        pci_devices = tuple(pci.iterdir())
+    except OSError:
+        pci_devices = ()
+    for device in pci_devices:
+        vendor = _read_text(device / "vendor").removeprefix("0x").lower()
+        product = _read_text(device / "device").removeprefix("0x").lower()
+        if vendor == "14e4" and product:
+            wifi_pci_id = f"{vendor}:{product}"
+            break
+
     return {
         "architecture": architecture if architecture is not None else platform.machine(),
         "firmware": "uefi" if (root / "sys/firmware/efi").is_dir() else "unknown",
@@ -65,6 +80,7 @@ def observe_host(root: Path = Path("/"), architecture: str | None = None) -> dic
         "memory_mib": memory_kib // 1024,
         "drm_present": drm_present,
         "internal_disk_present": internal_disk_present,
+        "wifi_pci_id": wifi_pci_id,
     }
 
 
@@ -80,6 +96,8 @@ def classify(observation: dict[str, Any]) -> dict[str, Any]:
     for field in ("drm_present", "internal_disk_present"):
         if type(observation[field]) is not bool:
             raise PreflightError(f"{field} must be a boolean")
+    if not isinstance(observation["wifi_pci_id"], str):
+        raise PreflightError("wifi_pci_id must be a string")
 
     checks = {
         "architecture": observation["architecture"] == "x86_64",
@@ -88,6 +106,7 @@ def classify(observation: dict[str, Any]) -> dict[str, Any]:
         "memory": observation["memory_mib"] >= 4096,
         "drm": observation["drm_present"],
         "internal_disk": observation["internal_disk_present"],
+        "wifi": observation["wifi_pci_id"] == TARGET_WIFI_PCI_ID,
     }
     return {
         "schema": 1,

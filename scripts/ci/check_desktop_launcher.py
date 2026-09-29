@@ -39,6 +39,9 @@ def main() -> None:
         "NoNewPrivileges=yes",
         "ProtectSystem=strict",
         "ProtectHome=read-only",
+        "StateDirectory=blossom-os",
+        "StateDirectoryMode=0700",
+        "UMask=0077",
         "RestrictSUIDSGID=yes",
         "RestrictAddressFamilies=AF_UNIX",
     ]:
@@ -50,21 +53,45 @@ def main() -> None:
         f'"{BUS_NAME}"',
         f'"{OBJECT}"',
         "bool Launch1(const QString &action)",
-        'QStringLiteral("/usr/bin/hyprctl")',
-        'QStringLiteral("dispatch")',
-        'QStringLiteral("exec")',
-        'QStringLiteral("--")',
+        "QByteArray QuickStatus1() const",
+        "bool OnboardingRequired1() const",
+        "bool CompleteOnboarding1()",
+        'QStringLiteral("/onboarding-complete")',
+        'marker.write("schema=1\\n")',
+        "const QFileInfo executable(targetProgram)",
+        "executable.isFile()",
+        "executable.isExecutable()",
+        'QStringLiteral("/usr/bin/systemd-run")',
+        'QStringLiteral("--user")',
+        'QStringLiteral("--collect")',
+        'QStringLiteral("--wait")',
+        'QStringLiteral("--unit=blossom-installer")',
+        'QStringLiteral("/usr/bin/nmcli")',
+        'QStringLiteral("/usr/bin/wpctl")',
+        'QStringLiteral("/usr/bin/bluetoothctl")',
+        'output.size() > 16 * 1024',
     ]:
         require(value in source, f"missing fixed desktop launcher binding: {value}")
     actions = ["terminal", "files", "browser", "editor", "network", "audio",
-               "installer", "restart", "poweroff"]
+               "bluetooth", "audio-mute", "audio-down", "audio-up", "notifications",
+               "logout", "installer", "restart", "poweroff"]
     for action in actions:
         require(source.count(f'action == QStringLiteral("{action}")') == 1,
                 f"desktop action drift: {action}")
     require(source.count("QProcess::startDetached") == 1,
             "desktop launcher must have exactly one process boundary")
+    require("QProcess::startDetached(program, launchArguments)" in source,
+            "desktop launcher must report whether the selected executable started")
+    for value in ["m_installerProcess", "waitForStarted(2000)", "waitForFinished(1500)",
+                  "Blossom installer exited during startup"]:
+        require(value in source, f"installer launch observation is incomplete: {value}")
+    require(source.count("QProcess process;") == 1 and
+            "process.waitForStarted(500)" in source and "process.waitForFinished(1000)" in source,
+            "desktop status probes must use one bounded process boundary")
     require("else return false;" in source,
             "unknown desktop actions must fail closed")
+    require(source.count("STATE_DIRECTORY") == 2,
+            "onboarding state must use only the systemd-owned state directory")
     for value in ["system(", "popen(", "/bin/sh", "sh -c", "bash -c", "QDBusMessage"]:
         require(value not in source, f"forbidden desktop launcher authority: {value}")
 

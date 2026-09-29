@@ -52,11 +52,16 @@ if "$(" in profile or "`" in profile:
 for package in ("blossom-core", "blossom-shell"):
     pkgbuild = DIST / "packages" / package / "PKGBUILD"
     text = pkgbuild.read_text(encoding="utf-8")
-    if f"pkgname={package}" not in text or "arch=('x86_64')" not in text or "license=('Apache-2.0')" not in text:
+    if (f"pkgname={package}" not in text or
+            "arch=('x86_64' 'aarch64')" not in text or
+            "license=('Apache-2.0')" not in text):
         fail(f"invalid package identity: {package}")
     if re.search(r"\b(curl|wget|git clone|sudo|systemctl enable)\b", text):
         fail(f"forbidden package side effect: {package}")
-    if '"$startdir/../../.."' not in text:
+    if (
+        '"$startdir/../../.."' not in text
+        and '"${BLOSSOM_REPO_ROOT:-$startdir/../../..}"' not in text
+    ):
         fail(f"package does not use the reviewed checkout: {package}")
 workflow = (ROOT / ".github/workflows/phase9-vm-install-evidence.yml").read_text(encoding="utf-8")
 for required in ("makepkg --nodeps --noconfirm", "pacman --root /evidence/rootfs",
@@ -72,6 +77,9 @@ for forbidden in ("PermitRootLogin yes", "PasswordAuthentication yes", "NOPASSWD
 snapshot_config = (DIST / "evidence/pacman-snapshot.conf").read_text(encoding="utf-8")
 if f"archive.archlinux.org/repos/{manifest['snapshot']}" not in snapshot_config:
     fail("evidence userspace does not use the fixed Arch snapshot")
+candidate_config = (DIST / "archiso/pacman.conf").read_text(encoding="utf-8")
+if candidate_config != snapshot_config:
+    fail("candidate and evidence userspace must use the same fixed Arch snapshot")
 installer_unit = (DIST / "evidence/blossom-evidence-install.service").read_text(encoding="utf-8")
 if "Before=multi-user.target" not in installer_unit or "After=multi-user.target" in installer_unit:
     fail("installer service has an unsafe multi-user target ordering")

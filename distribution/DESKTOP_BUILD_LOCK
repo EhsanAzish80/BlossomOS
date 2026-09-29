@@ -1,0 +1,4 @@
+Blossom Desktop Foundation is under graphical runtime review.
+Physical candidates remain blocked. A disposable image may be built only with
+BLOSSOM_CANDIDATE_MODE=vm-qualification for the documented graphical smoke gate.
+Remove this file only after that gate passes and physical release is reviewed.

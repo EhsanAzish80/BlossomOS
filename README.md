@@ -47,6 +47,66 @@ claims.
 See the [roadmap](ROADMAP.md) for completion gates and the
 [documentation hub](docs/README.md) for evidence and architecture decisions.
 
+## What it can do today
+
+Blossom's agent currently performs exactly one action end to end: **creating a
+new file inside a workspace folder**. The model proposes a file name and its
+content; you see the exact name and content, approve once, and Blossom writes
+the file, verifies it, and records the outcome.
+
+That loop passes automated tests with a stand-in (fixture) model provider. It
+also passed 20 consecutive real-model runs from a freshly built ARM64 image:
+all 20 intended file creations were verified, while the 80 adversarial cases
+produced no effects and started no command executor. See the
+[ARM64 image-gate evidence](docs/ARM64_AGENT_IMAGE_GATE_EVIDENCE.md) for the
+exact boundary and limitations. Everything else the agent might do in future
+is out of scope until it has the same end-to-end evidence.
+
+## How an action happens
+
+1. **The model can only propose.** A local model returns at most one proposal
+   in a fixed, closed format: a file name and its content. It has no shell, no
+   free-form commands, and no way to approve or run anything itself.
+2. **Trusted code checks the proposal.** Names are limited to one lowercase
+   ASCII path component (at most 64 bytes). Content is limited to 4 KiB, with
+   NUL bytes, terminal escapes, and invisible or direction-changing Unicode
+   characters rejected. The destination is resolved inside the workspace
+   folder; traversal, absolute paths, symlink tricks, and files swapped after
+   checking are rejected. Existing files are never overwritten.
+3. **You see the exact action.** The approval preview shows the exact name and
+   content that will be written.
+4. **Approval covers only that action.** An approval is bound to that exact
+   preview, can be used once, and expires after 30 seconds. Changing the
+   request after approval invalidates it.
+5. **It runs without root and is verified.** The file is created with mode
+   `0600` through the already-open, checked workspace directory, then verified
+   by digest.
+6. **It is logged without the content.** The activity record keeps the origin,
+   outcome, content digest, and length, never the file content itself.
+
+The model runs as an isolated system service with no network access, reached
+only through a local gateway. Model output is always treated as untrusted
+input, and model-proposed actions can never be allowed automatically.
+
+## What has been tested, and what that does not prove
+
+- Adversarial tests cover path traversal, symlinks, file swaps between checking
+  and writing, prompt injection in the request, replayed or changed approvals,
+  and approval-capacity exhaustion.
+- The request parser and resolver were fuzzed with about 33 million malformed
+  inputs on macOS and Linux with no crashes. That shows malformed input does
+  not crash this boundary; it does **not** show that the system is secure.
+- There has been **no independent security review**.
+- **Known limitation:** an approval proves that the decision came from the same
+  session connection that started the request, not that a human made it. Any
+  program running as the same user could start and approve its own request.
+  This is acceptable for the single low-impact action available today and must
+  be solved with a trusted approval path before any sensitive capability is
+  added. See [ADR-0021](docs/decisions/0021-shell-ipc-and-approval-surfaces.md).
+
+Security researchers are welcome to try to break these boundaries. Please
+report findings through the [security policy](SECURITY.md).
+
 ## Security model
 
 Blossom treats model output, prompts, files, tool output, remembered data, and

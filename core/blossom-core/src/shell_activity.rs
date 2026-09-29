@@ -34,6 +34,16 @@ pub fn project_shell_activity(
                 request_id,
                 kind,
                 category,
+                content_sha256: match &record.event {
+                    AuditEvent::WorkspaceCreateFinished { source_sha256, .. } => {
+                        Some(source_sha256.clone())
+                    }
+                    _ => None,
+                },
+                content_bytes: match &record.event {
+                    AuditEvent::WorkspaceCreateFinished { source_bytes, .. } => Some(*source_bytes),
+                    _ => None,
+                },
             })
         })
         .collect()
@@ -43,12 +53,37 @@ fn project_event(
     event: &AuditEvent,
 ) -> Result<(RequestId, ShellActivityKind, ShellActivityCategory), ShellActivityError> {
     let (id, kind, category) = match event {
-        AuditEvent::RequestAccepted { request_id, tool } if tool == "system.uname" => (
+        AuditEvent::RequestAccepted {
+            request_id, tool, ..
+        } if tool == "system.uname" => (
             request_id,
             ShellActivityKind::Request,
             ShellActivityCategory::Accepted,
         ),
-        AuditEvent::RequestAccepted { request_id, tool } if tool == "system.battery.summary" => (
+        AuditEvent::RequestAccepted {
+            request_id, tool, ..
+        } if tool == "system.battery.summary" => (
+            request_id,
+            ShellActivityKind::Request,
+            ShellActivityCategory::Accepted,
+        ),
+        AuditEvent::RequestAccepted {
+            request_id, tool, ..
+        } if tool == "system.network.connectivity" => (
+            request_id,
+            ShellActivityKind::Request,
+            ShellActivityCategory::Accepted,
+        ),
+        AuditEvent::RequestAccepted {
+            request_id, tool, ..
+        } if tool == "files.write.create" => (
+            request_id,
+            ShellActivityKind::Request,
+            ShellActivityCategory::Accepted,
+        ),
+        AuditEvent::RequestAccepted {
+            request_id, tool, ..
+        } if tool == "files.read.content" => (
             request_id,
             ShellActivityKind::Request,
             ShellActivityCategory::Accepted,
@@ -71,10 +106,62 @@ fn project_event(
             ShellActivityKind::Policy,
             ShellActivityCategory::PolicyAllow,
         ),
+        AuditEvent::PolicyEvaluated {
+            request_id,
+            capability: Capability::SystemReadNetworkConnectivity,
+            decision: PolicyDecision::Allow,
+        } => (
+            request_id,
+            ShellActivityKind::Policy,
+            ShellActivityCategory::PolicyAllow,
+        ),
+        AuditEvent::PolicyEvaluated {
+            request_id,
+            capability: Capability::FilesWriteCreate,
+            decision: PolicyDecision::Ask,
+        } => (
+            request_id,
+            ShellActivityKind::Policy,
+            ShellActivityCategory::PolicyAsk,
+        ),
+        AuditEvent::PolicyEvaluated {
+            request_id,
+            capability: Capability::FilesReadContent,
+            decision: PolicyDecision::Allow,
+        } => (
+            request_id,
+            ShellActivityKind::Policy,
+            ShellActivityCategory::PolicyAllow,
+        ),
+        AuditEvent::PolicyEvaluated {
+            request_id,
+            decision: PolicyDecision::Deny,
+            ..
+        } => (
+            request_id,
+            ShellActivityKind::Policy,
+            ShellActivityCategory::PolicyDenied,
+        ),
         AuditEvent::NativeReadStarted {
             request_id,
             resource,
         } if resource == "system.battery.summary" => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadStarted,
+        ),
+        AuditEvent::NativeReadStarted {
+            request_id,
+            resource,
+        } if resource == "system.network.connectivity" => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadStarted,
+        ),
+        AuditEvent::NativeReadStarted {
+            request_id,
+            resource,
+        } if resource.starts_with("file.content:sha256:") => (
             request_id,
             ShellActivityKind::Context,
             ShellActivityCategory::ReadStarted,
@@ -85,6 +172,26 @@ fn project_event(
             ShellActivityCategory::ReadFinished,
         ),
         AuditEvent::BatterySummaryReadFailed { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadFailed,
+        ),
+        AuditEvent::NetworkConnectivityReadFinished { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadFinished,
+        ),
+        AuditEvent::NetworkConnectivityReadFailed { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadFailed,
+        ),
+        AuditEvent::FileContentReadFinished { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadFinished,
+        ),
+        AuditEvent::FileContentReadFailed { request_id, .. } => (
             request_id,
             ShellActivityKind::Context,
             ShellActivityCategory::ReadFailed,
@@ -121,6 +228,21 @@ fn project_event(
             request_id,
             ShellActivityKind::Terminal,
             ShellActivityCategory::Cancelled,
+        ),
+        AuditEvent::WorkspaceCreateStarted { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Request,
+            ShellActivityCategory::PublicationStarted,
+        ),
+        AuditEvent::WorkspaceCreateFinished { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Effect,
+            ShellActivityCategory::PublicationFinished,
+        ),
+        AuditEvent::WorkspaceCreateFailed { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Terminal,
+            ShellActivityCategory::PublicationFailed,
         ),
         AuditEvent::ExecutionStarted {
             request_id,
@@ -197,6 +319,7 @@ mod tests {
         audit.append(AuditEvent::RequestAccepted {
             request_id: "shell-0000000000000007-1".into(),
             tool: "system.uname".into(),
+            origin: crate::RequestOrigin::InternalFixed,
         });
         audit.append(AuditEvent::PolicyEvaluated {
             request_id: "shell-0000000000000007-1".into(),
@@ -267,5 +390,95 @@ mod tests {
             project_shell_activity(&audit, None, 1),
             Err(ShellActivityError::UnexpectedAuditEvent)
         );
+    }
+
+    #[test]
+    fn workspace_publication_is_visible_without_becoming_an_executor_event() {
+        let request_id = "shell-0000000000000007-2";
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::RequestAccepted {
+            request_id: request_id.into(),
+            tool: "files.write.create".into(),
+            origin: crate::RequestOrigin::ModelProposed,
+        });
+        audit.append(AuditEvent::PolicyEvaluated {
+            request_id: request_id.into(),
+            capability: Capability::FilesWriteCreate,
+            decision: PolicyDecision::Ask,
+        });
+        audit.append(AuditEvent::WorkspaceCreateStarted {
+            request_id: request_id.into(),
+            workspace_sha256: "1".repeat(64),
+            destination_sha256: "2".repeat(64),
+            root_device: 1,
+            root_inode: 2,
+            parent_device: 1,
+            parent_inode: 2,
+            source_bytes: 7,
+            source_sha256: "3".repeat(64),
+        });
+        audit.append(AuditEvent::WorkspaceCreateFinished {
+            request_id: request_id.into(),
+            workspace_sha256: "1".repeat(64),
+            destination_sha256: "2".repeat(64),
+            created_device: 1,
+            created_inode: 3,
+            source_bytes: 7,
+            source_sha256: "3".repeat(64),
+            state: crate::WorkspaceCreateState::DurableCreated,
+        });
+        let projected = project_shell_activity(&audit, None, 16).expect("projection");
+        assert_eq!(projected.len(), 4);
+        assert_eq!(projected[2].kind, ShellActivityKind::Request);
+        assert_eq!(
+            projected[2].category,
+            ShellActivityCategory::PublicationStarted
+        );
+        assert_eq!(projected[3].kind, ShellActivityKind::Effect);
+        assert_eq!(projected[3].content_sha256, Some("3".repeat(64)));
+        assert_eq!(projected[3].content_bytes, Some(7));
+        assert!(
+            projected
+                .iter()
+                .all(|item| item.kind != ShellActivityKind::Execution)
+        );
+    }
+
+    #[test]
+    fn projects_desktop_network_probe_without_poisoning_activity() {
+        let request_id = "shell-0000000000000007-3";
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::RequestAccepted {
+            request_id: request_id.into(),
+            tool: "system.network.connectivity".into(),
+            origin: crate::RequestOrigin::InternalFixed,
+        });
+        audit.append(AuditEvent::PolicyEvaluated {
+            request_id: request_id.into(),
+            capability: Capability::SystemReadNetworkConnectivity,
+            decision: PolicyDecision::Allow,
+        });
+        audit.append(AuditEvent::NativeReadStarted {
+            request_id: request_id.into(),
+            resource: "system.network.connectivity".into(),
+        });
+        audit.append(AuditEvent::NetworkConnectivityReadFinished {
+            request_id: request_id.into(),
+            source: crate::ContextSource::SystemNetworkConnectivity,
+            schema_version: 1,
+        });
+        audit.append(AuditEvent::VerificationFinished {
+            request_id: request_id.into(),
+            verification: Verification {
+                succeeded: true,
+                reason: VerificationReason::ValidNetworkConnectivity,
+            },
+        });
+
+        let projected = project_shell_activity(&audit, None, 16).expect("projection");
+        assert_eq!(projected.len(), 5);
+        assert_eq!(projected[2].category, ShellActivityCategory::ReadStarted);
+        assert_eq!(projected[3].category, ShellActivityCategory::ReadFinished);
+        assert_eq!(projected[4].category, ShellActivityCategory::Verified);
     }
 }

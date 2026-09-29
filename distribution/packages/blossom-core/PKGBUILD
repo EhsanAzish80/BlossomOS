@@ -2,7 +2,7 @@ pkgname=blossom-core
 pkgver=0.9.0
 pkgrel=1
 pkgdesc='Blossom OS reviewed service boundaries'
-arch=('x86_64')
+arch=('x86_64' 'aarch64')
 license=('Apache-2.0')
 depends=('bubblewrap' 'dbus-broker' 'systemd')
 options=('!strip')
@@ -10,7 +10,7 @@ source=()
 sha256sums=()
 
 build() {
-  local repo_root="$startdir/../../.."
+  local repo_root="${BLOSSOM_REPO_ROOT:-$startdir/../../..}"
   CARGO_TARGET_DIR="$srcdir/target" \
     cargo build --locked --offline --release --manifest-path "$repo_root/Cargo.toml"
   # The workspace default intentionally builds the shell broker inert. Release
@@ -20,20 +20,28 @@ build() {
       --manifest-path "$repo_root/Cargo.toml" \
       --package blossom-shell-service \
       --features production-dbus-service
+  # The workspace default gateway is intentionally inert. Installed systems
+  # must receive the reviewed private Unix-socket transport from ADR-0017.
+  CARGO_TARGET_DIR="$srcdir/target" \
+    cargo build --locked --offline --release \
+      --manifest-path "$repo_root/Cargo.toml" \
+      --package blossom-model-gateway \
+      --features production-private-inference
 }
 
 package() {
-  local repo_root="$startdir/../../.."
+  local repo_root="${BLOSSOM_REPO_ROOT:-$startdir/../../..}"
   install -Dm0755 "$srcdir/target/release/blossom-shell-service" \
     "$pkgdir/usr/lib/blossom-os/blossom-shell-service"
   install -Dm0755 "$srcdir/target/release/blossom-model-gateway" \
     "$pkgdir/usr/lib/blossom-os/blossom-model-gateway"
   install -Dm0755 "$srcdir/target/release/blossom-privileged-helper" \
     "$pkgdir/usr/lib/blossom-os/blossom-privileged-helper"
-  install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-service.service" \
-    "$pkgdir/usr/lib/systemd/user/blossom-shell-service.service"
-  install -Dm0644 "$repo_root/system/shell/packaging/org.blossomos.Shell1.service" \
-    "$pkgdir/usr/share/dbus-1/services/org.blossomos.Shell1.service"
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-broker@.service" \
+    "$pkgdir/usr/lib/systemd/system/blossom-shell-broker@.service"
+  install -d "$pkgdir/usr/lib/systemd/system/user@1000.service.wants"
+  ln -s ../blossom-shell-broker@.service \
+    "$pkgdir/usr/lib/systemd/system/user@1000.service.wants/blossom-shell-broker@1000.service"
   install -Dm0644 "$repo_root/system/privileged-helper/packaging/blossom-privileged-helper.service" \
     "$pkgdir/usr/lib/systemd/system/blossom-privileged-helper.service"
   install -Dm0644 "$repo_root/system/privileged-helper/packaging/org.blossomos.Privileged1.service" \

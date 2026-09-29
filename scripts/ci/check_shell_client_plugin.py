@@ -28,6 +28,7 @@ def main() -> None:
         '"org.blossomos.Desktop1"',
         '"/org/blossomos/Desktop1"',
         'QStringLiteral("Launch1")',
+        'QStringLiteral("QuickStatus1")',
         'constexpr quint16 ProtocolVersion = 1',
         'constexpr quint16 ActivityLimit = 64',
     ]:
@@ -47,7 +48,9 @@ def main() -> None:
     ]:
         require(forbidden not in text, f"forbidden client authority: {forbidden}")
     header = (PLUGIN / "blossombroker.h").read_text()
-    require(header.count("Q_INVOKABLE") == 16, "client invokable surface drift")
+    require(header.count("Q_INVOKABLE") == 25, "client invokable surface drift")
+    require("onboardingRequired" in header and "dismissOnboarding" in header,
+            "fixed onboarding surface is missing")
     client = (PLUGIN / "blossombroker.cpp").read_text()
     require(client.count("QVariant::fromValue(ProtocolVersion)") == 4,
             "all version arguments must preserve unsigned 16-bit wire type")
@@ -69,6 +72,9 @@ def main() -> None:
             "network projection must enforce fixed lifetime and exact schema")
     require("&BlossomBroker::refreshNetwork" in client,
             "network projection must refresh only on its code-owned expiry timer")
+    require("m_quickStatusTimer.setInterval(5000)" in client and
+            "object.size() != 5" in client and "volume < -1 || volume > 150" in client,
+            "desktop quick status must be bounded and exact-schema validated")
     require("QDBusServiceWatcher::WatchForUnregistration" in client,
             "native client must watch for loss of the fixed service owner")
     require("QDBusServiceWatcher::serviceUnregistered" in client,
@@ -88,8 +94,8 @@ def main() -> None:
     ]:
         require(setting in cmake, f"missing relocatable plugin packaging: {setting}")
     host = (PLUGIN / "shellmain.cpp").read_text()
-    require('file:///usr/share/blossom-os/shell/shell.qml' in host,
-            "UI host must load only the fixed installed QML entrypoint")
+    require('file:///usr/share/blossom-os/shell/SecurityHost.qml' in host,
+            "security host must load only the fixed installed accessibility entrypoint")
     require("QApplication application" in host,
             "UI host must provide the standard Qt accessibility runtime")
     require("argc" in host and "argv" in host,

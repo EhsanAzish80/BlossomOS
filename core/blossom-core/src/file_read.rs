@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 #[cfg(target_os = "linux")]
 use sha2::{Digest, Sha256};
 use std::fmt;
@@ -6,8 +6,7 @@ use std::fmt;
 pub const MAX_SELECTED_PATH_BYTES: usize = 4096;
 pub const MAX_FILE_CONTENT_BYTES: usize = 64 * 1024;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct FileIdentity {
     pub device: u64,
     pub inode: u64,
@@ -28,8 +27,7 @@ impl FileIdentity {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
 pub struct FileSelection {
     pub absolute_path: String,
     pub identity: FileIdentity,

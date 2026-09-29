@@ -9,7 +9,8 @@ pacman -Q blossom-core blossom-shell
 for binary in blossom-shell-service blossom-model-gateway blossom-privileged-helper; do
   test -x "/usr/lib/blossom-os/$binary"
 done
-test -f /usr/lib/systemd/user/blossom-shell-service.service
+test -f /usr/lib/systemd/system/blossom-shell-broker@.service
+test -L /usr/lib/systemd/system/user@1000.service.wants/blossom-shell-broker@1000.service
 test -f /usr/lib/systemd/system/blossom-privileged-helper.service
 test -f /usr/share/blossom-os/shell/shell.qml
 cd /opt/blossom

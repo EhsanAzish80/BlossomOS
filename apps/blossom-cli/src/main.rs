@@ -2,15 +2,14 @@
 
 use blossom_cli::{
     ApprovalChoice, Clock, Interaction, SystemBluetoothRestartTransport, exact_preview,
-    file_read_preview, process_list_preview, run_bluetooth_restart, run_file_read,
-    run_fixed_diagnostic, run_memory_summary, run_os_identity, run_process_list, run_process_self,
-    run_service_status, run_storage_summary, run_uptime, run_workspace_create,
-    service_status_preview, workspace_create_preview,
+    process_list_preview, run_bluetooth_restart, run_file_read, run_fixed_diagnostic,
+    run_memory_summary, run_os_identity, run_process_list, run_process_self, run_service_status,
+    run_storage_summary, run_uptime, run_workspace_create,
 };
 use blossom_core::{
-    AtomicWorkspaceFileCreator, NativeProcessSelfReader, Openat2FileReader, OsReleaseReader,
-    ProcMeminfoReader, ProcProcessListReader, ProcUptimeReader, RequestId, RootStorageReader,
-    SystemdServiceStatusProvider, ToolRequest, executor::bubblewrap::BubblewrapExecutor,
+    NativeProcessSelfReader, OsReleaseReader, ProcMeminfoReader, ProcProcessListReader,
+    ProcUptimeReader, RequestId, RootStorageReader, SystemdServiceStatusProvider, ToolRequest,
+    executor::bubblewrap::BubblewrapExecutor,
 };
 use std::io::{self, IsTerminal, Write};
 use std::sync::mpsc;
@@ -263,24 +262,9 @@ fn main() {
     }
 
     if let Some(path) = file_read_path {
-        let reader = match Openat2FileReader::select(path) {
-            Ok(reader) => reader,
-            Err(error) => {
-                eprintln!("File selection failed: {error}");
-                std::process::exit(1);
-            }
-        };
-        if !interaction.is_interactive() {
-            let request = ToolRequest::FilesReadContent {
-                request_id: request_id.clone(),
-                selection: blossom_core::FileContentProvider::selection(&reader).clone(),
-            };
-            println!("{}\n", file_read_preview(&request));
-            println!("Non-interactive input is denied by default.\n");
-        }
         let outcome = run_file_read(
             BubblewrapExecutor::phase1_default(),
-            reader,
+            path,
             &mut interaction,
             &mut clock,
             request_id,
@@ -293,24 +277,11 @@ fn main() {
     }
 
     if let Some((root, destination, content)) = workspace_create_input {
-        let creator = match AtomicWorkspaceFileCreator::select(root, destination, content) {
-            Ok(creator) => creator,
-            Err(error) => {
-                eprintln!("Workspace selection failed: {error}");
-                std::process::exit(1);
-            }
-        };
-        if !interaction.is_interactive() {
-            let request = ToolRequest::FilesWriteCreate {
-                request_id: request_id.clone(),
-                selection: blossom_core::WorkspaceCreateProvider::selection(&creator).clone(),
-            };
-            println!("{}\n", workspace_create_preview(&request));
-            println!("Non-interactive input is denied by default.\n");
-        }
         let outcome = run_workspace_create(
             BubblewrapExecutor::phase1_default(),
-            creator,
+            root,
+            destination,
+            content,
             &mut interaction,
             &mut clock,
             request_id,
@@ -323,14 +294,6 @@ fn main() {
     }
 
     if let Some(unit) = service_status_unit {
-        let request = ToolRequest::ServicesReadStatus {
-            request_id: request_id.clone(),
-            selection: blossom_core::ServiceSelection { unit: unit.into() },
-        };
-        if !interaction.is_interactive() {
-            println!("{}\n", service_status_preview(&request));
-            println!("Non-interactive input is denied by default.\n");
-        }
         let outcome = run_service_status(
             BubblewrapExecutor::phase1_default(),
             SystemdServiceStatusProvider,

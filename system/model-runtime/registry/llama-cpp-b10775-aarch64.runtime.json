@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "profile": "llama_cpp_cpu_v1",
+  "architecture": "aarch64",
+  "project": "ggml-org/llama.cpp",
+  "version": "b10775",
+  "archive": "llama-b10775-bin-ubuntu-arm64.tar.gz",
+  "url": "https://github.com/ggml-org/llama.cpp/releases/download/b10775/llama-b10775-bin-ubuntu-arm64.tar.gz",
+  "sha256": "263d4995214ae1cf9cfb19f07b9d995b8192ab82d4dbe9734332e9348459290d",
+  "bytes": 13362143,
+  "attestation": {
+    "id": "44875193",
+    "url": "https://github.com/ggml-org/llama.cpp/attestations/44875193"
+  },
+  "license": {"source":"LICENSE","sha256":"94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d","bytes":1078,"spdx":"MIT"},
+  "members": [
+    {"source":"libggml-base.so.0.22.0","installs":["libggml-base.so","libggml-base.so.0","libggml-base.so.0.22.0"],"sha256":"8b5d2b20a0b04e3ca217a88f651d26f73888e52809a3b77c3afc569fceadd907","bytes":866600},
+    {"source":"libggml-cpu-armv8.0_1.so","installs":["libggml-cpu-armv8.0_1.so"],"sha256":"373cde06e53b2dc3c5c0348889bc1798a173ea446be8ae1976fa940ff4fc79d3","bytes":995760},
+    {"source":"libggml-cpu-armv8.2_1.so","installs":["libggml-cpu-armv8.2_1.so"],"sha256":"81c310f0ab707e4a7b6d0c4c1816c75fdc253f45247e16957f2023e425c275bf","bytes":1062680},
+    {"source":"libggml-cpu-armv8.2_2.so","installs":["libggml-cpu-armv8.2_2.so"],"sha256":"3ba29208aeba83bd26178d14a721fb866af2d4ce3ab2554546186de77acc114c","bytes":1062656},
+    {"source":"libggml-cpu-armv8.2_3.so","installs":["libggml-cpu-armv8.2_3.so"],"sha256":"103229db24e195e21f721cf86573b08a065a2786fc22bba8a46e6c3396083d68","bytes":997544},
+    {"source":"libggml-cpu-armv8.6_1.so","installs":["libggml-cpu-armv8.6_1.so"],"sha256":"cb8f97f801887df04674b7e39911fb9fcb0487787e66d69266fd9d700f584338","bytes":1063384},
+    {"source":"libggml-cpu-armv8.6_2.so","installs":["libggml-cpu-armv8.6_2.so"],"sha256":"a534f5859f4bd29858d735765683335922102140f92e7e1bbb3b9f261aa52495","bytes":1063384},
+    {"source":"libggml-cpu-armv9.2_1.so","installs":["libggml-cpu-armv9.2_1.so"],"sha256":"cd047fd2983ef64ece2373aa57f260bd454ba1816c0e11c6edf5f5f07aa419bf","bytes":1063408},
+    {"source":"libggml-cpu-armv9.2_2.so","installs":["libggml-cpu-armv9.2_2.so"],"sha256":"dca7c15a059d71568b5654ba855a09524b6db565e1106ba9ba6652b0ca2df306","bytes":1063408},
+    {"source":"libggml.so.0.22.0","installs":["libggml.so","libggml.so.0","libggml.so.0.22.0"],"sha256":"ca4ba3566a9b858dbd6fa60f195a4e0d332d0703d47ebb6b6384ae8e315be45c","bytes":77400},
+    {"source":"libllama-common.so.0.3.0","installs":["libllama-common.so","libllama-common.so.0","libllama-common.so.0.3.0"],"sha256":"d998dcd50fc90cf40ab09df31a2982aeaae1f4b7477f813b1cf9f79e65b2fe90","bytes":5290576},
+    {"source":"libllama-server-impl.so","installs":["libllama-server-impl.so"],"sha256":"f4f7c411773f319e75e89bf669b855abeed097f32d97587742ff096cfd937f42","bytes":6613504},
+    {"source":"libllama.so.0.3.0","installs":["libllama.so","libllama.so.0","libllama.so.0.3.0"],"sha256":"bdf4b5bba96a1ae288430861f4ede3396d5301f88f89922d088c0fe102cffb06","bytes":4428696},
+    {"source":"libmtmd.so.0.3.0","installs":["libmtmd.so","libmtmd.so.0","libmtmd.so.0.3.0"],"sha256":"a841aebf7cd5995fe69d5cb32e2c5d8d486b5cd151d5cbb4942b159fb4433635","bytes":1820760},
+    {"source":"llama-server","installs":["llama-server"],"sha256":"d84469a3139ee7bc71ba240d93b60a53cc76070f298bbdec3fe2f6e2016cd9a5","bytes":72480}
+  ]
+}

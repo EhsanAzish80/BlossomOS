@@ -19,6 +19,7 @@ MAX_OUTPUT_BYTES = 64 * 1024
 MAX_DEVICES = 8
 MAX_CMDLINE_BYTES = 4 * 1024
 CMDLINE = Path("/proc/cmdline")
+POWER_SUPPLY = Path("/sys/class/power_supply")
 LSBLK = (
     "/usr/bin/lsblk",
     "--bytes",
@@ -160,6 +161,30 @@ def observe() -> tuple[str, list[dict[str, Any]]]:
     return parse_lsblk(result.stdout, parse_archiso_search_uuid(cmdline))
 
 
+def observe_ac_power(root: Path = POWER_SUPPLY) -> bool:
+    """Return true only when the kernel reports an online external supply."""
+    try:
+        supplies = tuple(root.iterdir())
+    except OSError as error:
+        raise ObservationError("AC-power inventory failed") from error
+    recognized = False
+    for supply in supplies:
+        try:
+            supply_type = (supply / "type").read_text(encoding="ascii").strip()
+            online = (supply / "online").read_text(encoding="ascii").strip()
+        except (OSError, UnicodeError):
+            continue
+        if supply_type in {"Mains", "USB", "USB_C", "USB_PD"}:
+            recognized = True
+            if online == "1":
+                return True
+            if online not in {"0", "1"}:
+                raise ObservationError("invalid AC-power state")
+    if not recognized:
+        raise ObservationError("no observable external power supply")
+    return False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Create a read-only Phase 11 guard observation"
@@ -174,8 +199,6 @@ def main() -> None:
         required=True,
         choices=("eligible_for_qualification",),
     )
-    parser.add_argument("--ac-power", required=True, choices=("ready",))
-    parser.add_argument("--recovery-media", required=True, choices=("ready",))
     parser.add_argument("--challenge", required=True)
     args = parser.parse_args()
     live_device, devices = observe()
@@ -185,8 +208,12 @@ def main() -> None:
                 "schema": 1,
                 "purpose": args.purpose,
                 "host_preflight_result": args.host_preflight_result,
-                "ac_power": True,
-                "recovery_media_ready": True,
+                "ac_power": observe_ac_power(),
+                # The uniquely identified ArchISO device is the recovery
+                # medium. Presence is observable; future bootability is not.
+                "live_media_present": any(
+                    device["path"] == live_device for device in devices
+                ),
                 "live_device": live_device,
                 "challenge": args.challenge,
                 "devices": devices,

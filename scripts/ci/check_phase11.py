@@ -27,14 +27,10 @@ harness = read("scripts/distribution/physical_write_harness.py")
 probe = read("scripts/distribution/disposable_media_probe.py")
 probe_runner = read("scripts/distribution/run_disposable_media_test.py")
 install_harness = read("scripts/distribution/physical_install_harness.py")
-install_runner = read("scripts/distribution/run_physical_install.py")
 install_backend = read("scripts/distribution/physical_install_backend.py")
-install_backend_entrypoint = read("distribution/archiso/airootfs/usr/local/libexec/blossom-physical-install-backend")
 observer = read("scripts/distribution/physical_device_observer.py")
 observation_workflow = read(".github/workflows/phase11-device-observation.yml")
 disposable_evidence = read("docs/PHASE_11_DISPOSABLE_EVIDENCE.md")
-candidate = read("scripts/distribution/physical_candidate_install.py")
-candidate_entrypoint = read("distribution/archiso/airootfs/usr/local/bin/blossom-physical-install")
 candidate_builder = read("scripts/distribution/build_physical_candidate.sh")
 candidate_image_verifier = read("scripts/distribution/verify_physical_candidate_image.sh")
 macos_candidate_builder = read("scripts/distribution/build_physical_candidate_macos.sh")
@@ -52,6 +48,14 @@ shell_qml = read("system/shell/qml/shell.qml")
 broker_header = read("system/shell/client-plugin/blossombroker.h")
 broker_source = read("system/shell/client-plugin/blossombroker.cpp")
 installer_rule = read("distribution/archiso/airootfs/etc/polkit-1/rules.d/49-blossom-live-installer.rules")
+installer_qml = read("system/installer/qml/Main.qml")
+graphical_installer = read("system/installer/main.cpp")
+graphical_backend = read("scripts/distribution/graphical_install_backend.py")
+graphical_observer = read("scripts/distribution/graphical_install_observe.py")
+install_context = read("scripts/distribution/physical_install_context.py")
+installed_greetd = read("distribution/physical-rootfs/etc/greetd/config.toml")
+installed_session = read("distribution/physical-rootfs/usr/share/wayland-sessions/blossom.desktop")
+installed_sudoers = read("distribution/physical-rootfs/etc/sudoers.d/10-blossom-wheel")
 desktop_probe = read("distribution/archiso/airootfs/usr/local/bin/blossom-desktop-probe")
 desktop_probe_unit = read("distribution/archiso/airootfs/etc/systemd/system/blossom-desktop-probe.service")
 desktop_probe_link = ROOT / "distribution/archiso/airootfs/etc/systemd/system/multi-user.target.wants/blossom-desktop-probe.service"
@@ -156,29 +160,24 @@ for forbidden in ("subprocess", "sgdisk", "mkfs", "wipefs", "parted"):
     if forbidden in install_harness:
         fail(f"physical install harness embeds a writer: {forbidden}")
 for required in (
-    "MAX_INPUT_BYTES",
-    'Path("/usr/local/libexec/blossom-physical-install-backend")',
-    "input=json.dumps(target",
-    "text=True",
-    "timeout=1800",
-):
-    if required not in install_runner:
-        fail(f"physical install runner is incomplete: {required}")
-for forbidden in ("sgdisk", "mkfs", "wipefs", "parted", "shell=True"):
-    if forbidden in install_runner:
-        fail(f"physical install runner gained inline destructive authority: {forbidden}")
-for required in (
     '"path": "/dev/sda"',
     '"model": "APPLE SSD SM0128F"',
     '"size_bytes": 121332826112',
     '"transport": "sata"',
     '"purpose": "physical_install"',
     "O_EXCL",
-    "O_NOFOLLOW",
+    "stable /dev/disk/by-id identity",
     "BLKGETSIZE64",
     '["sgdisk", "--zap-all", disk]',
-    '["mkfs.fat", "-F", "32", "-n", "BLOSSOM_EFI", "/dev/sda1"]',
-    '["mkfs.ext4", "-F", "-L", "BLOSSOM_SYSTEM", "/dev/sda2"]',
+    '"BLOSSOM_ROOT_A"',
+    '"BLOSSOM_ROOT_B"',
+    '"BLOSSOM_STATE"',
+    "_verify_rootfs()",
+    "_preflight_rootfs(provision)",
+    "graphical account provisioning is required",
+    'secrets.token_hex(16)',
+    '"machine_id_bytes": 0',
+    '"ukify", "build"',
     "installer backend requires root",
 ):
     if required not in install_backend:
@@ -186,9 +185,6 @@ for required in (
 for forbidden in ("shell=True", "os.system", '"/dev/sdb"', '"/dev/vda"'):
     if forbidden in install_backend:
         fail(f"physical install backend gained forbidden behavior: {forbidden}")
-for required in ("#!/usr/bin/env bash", "set -euo pipefail", "physical_install_backend import install"):
-    if required not in install_backend_entrypoint:
-        fail(f"physical install backend entrypoint is incomplete: {required}")
 for required in (
     "workflow_dispatch:",
     "runs-on: [self-hosted, linux, x64, blossom-gpu]",
@@ -203,26 +199,15 @@ for required in (
 for forbidden in ("pull_request:", "push:", "sudo", "sgdisk", "mkfs", "wipefs", "parted", "physical_write_harness"):
     if forbidden in observation_workflow:
         fail(f"physical device observation workflow gained forbidden authority: {forbidden}")
-for required in (
-    "AC-READY",
-    "RECOVERY-READY",
-    "os.urandom",
-    "device_observer()",
-    "expected_confirmation",
-    "target_digest",
-):
-    if required not in candidate:
-        fail(f"physical candidate entrypoint is incomplete: {required}")
+for required in ('"live_media_present": any', '"purpose": "physical_install"', "STATE_ROOT"):
+    if required not in install_context:
+        fail(f"graphical install context is incomplete: {required}")
+for required in ("observe_ac_power", "os.urandom", "make_observation", "expected_confirmation", "target_digest"):
+    if required not in graphical_observer:
+        fail(f"graphical install observer is incomplete: {required}")
 for forbidden in ("sgdisk", "mkfs", "wipefs", "parted", "subprocess", "shell=True"):
-    if forbidden in candidate:
-        fail(f"physical candidate entrypoint gained inline write authority: {forbidden}")
-for required in (
-    "usage: blossom-physical-install (from the live root shell)",
-    "cd /opt/blossom",
-    "physical_candidate_install",
-):
-    if required not in candidate_entrypoint:
-        fail(f"physical candidate command is incomplete: {required}")
+    if forbidden in install_context or forbidden in graphical_observer:
+        fail(f"graphical install observation gained inline write authority: {forbidden}")
 for required in (
     "linux-lts",
     "linux-firmware",
@@ -233,18 +218,25 @@ for required in (
     "noto-fonts",
     "noto-fonts-emoji",
     "blossom-rootfs.tar.zst",
-    "blossom-physical-install",
+    "blossom-rootfs.manifest.json",
+    "graphical_install_backend.py",
+    "physical_install_context.py",
+    ': > "$rootfs/etc/machine-id"',
     'rm -f "$profile/airootfs/etc/systemd/system/blossom-evidence-install.service"',
 ):
     if required not in candidate_builder:
         fail(f"physical candidate builder is incomplete: {required}")
-physical_bash_profile = read("distribution/physical-rootfs/home/blossom/.bash_profile")
-if "exec start-hyprland" not in physical_bash_profile:
-    fail("physical desktop session does not use the supported Hyprland launcher")
-if "exec Hyprland" in physical_bash_profile:
-    fail("physical desktop session bypasses start-hyprland")
-if "external disks are never installation targets" not in candidate:
-    fail("physical candidate does not explain its internal-disk-only target policy")
+if 'useradd --root "$rootfs"' in candidate_builder or "getty-autologin.conf" in candidate_builder:
+    fail("installed image must not contain a fixed account or console autologin")
+for required in ("greetd", "regreet", "graphical.target.wants/greetd.service"):
+    if required not in candidate_builder:
+        fail(f"installed graphical login is incomplete: {required}")
+if 'command = "Hyprland --config /etc/greetd/hyprland.conf"' not in installed_greetd:
+    fail("installed greetd session is not Wayland-hosted")
+if "Exec=/usr/bin/start-hyprland" not in installed_session:
+    fail("installed Blossom session bypasses the supported launcher")
+if installed_sudoers.strip() != "%wheel ALL=(ALL:ALL) ALL":
+    fail("installed administrator role is not password-authenticated")
 for forbidden in ("systemctl enable",):
     if forbidden in candidate_builder:
         fail(f"physical candidate builder retained VM-only behavior: {forbidden}")
@@ -276,7 +268,7 @@ for required in (
 for required in (
     "Boot exact candidate and require the graphical desktop",
     "blossom.desktop-probe=1",
-    "BLOSSOM_DESKTOP_READY shell=active broker=active windows=2",
+    "BLOSSOM_DESKTOP_READY security=active broker=active desktop=active layers=4",
     "-device virtio-vga",
     "archisosearchuuid=$uuid",
 ):
@@ -284,9 +276,13 @@ for required in (
         fail(f"physical candidate graphical acceptance is incomplete: {required}")
 for required in (
     "blossom-shell-ui.service",
-    "blossom-shell-service.service",
-    '"Blossom OS"',
-    '"Welcome to Blossom OS"',
+    "blossom-shell-broker@1000.service",
+    "hyprctl layers -j",
+    '"blossom-background"',
+    '"blossom-top-bar"',
+    '"blossom-dock"',
+    '"blossom-welcome"',
+    "blossom-desktop-shell.service",
     "BLOSSOM_DESKTOP_FAILED",
 ):
     if required not in desktop_probe:
@@ -328,12 +324,13 @@ for required in (
     '["/usr/lib/blossom-os/blossom-privileged-helper"]="0:0:755"',
     '["/usr/lib/blossom-os/blossom-shell-ui"]="0:0:755"',
     '["/usr/lib/blossom-os/blossom-desktop-launcher"]="0:0:755"',
+    '["/usr/lib/blossom-os/blossom-installer"]="0:0:755"',
     '["/usr/local/bin/blossom-shell-recovery"]="0:0:755"',
     '["/usr/local/bin/blossom-start-session"]="0:0:755"',
     '["/usr/local/bin/blossom-desktop-probe"]="0:0:755"',
     '["/usr/local/libexec/blossom-provision-live-user"]="0:0:755"',
-    '["/usr/local/bin/blossom-physical-install"]="0:0:755"',
-    '["/usr/local/libexec/blossom-physical-install-backend"]="0:0:755"',
+    '["/usr/local/bin/blossom-install-observe"]="0:0:755"',
+    '["/usr/local/libexec/blossom-graphical-install-backend"]="0:0:755"',
 ):
     if required not in candidate_profile:
         fail(f"physical candidate executable permission is missing: {required}")
@@ -416,9 +413,18 @@ for required in ("liveEnvironment", "openTerminal", "openInstaller"):
 for required in ("openTerminal", "openInstaller", 'QStringLiteral("Launch1")'):
     if required not in broker_source:
         fail(f"Blossom shell broker action is missing: {required}")
-for required in ('subject.user == "blossom"', 'action.lookup("program") == "/usr/local/bin/blossom-physical-install"'):
+for required in ('subject.user == "blossom"', 'action.lookup("program") == "/usr/local/libexec/blossom-graphical-install-backend"'):
     if required not in installer_rule:
         fail(f"live installer privilege boundary is incomplete: {required}")
+for required in ("Language and keyboard", "Connect or continue offline", "Create your account", "Review before erasing", "Installer.install"):
+    if required not in installer_qml:
+        fail(f"graphical installer flow is incomplete: {required}")
+for required in ("blossom-install-observe", "pkexec", "blossom-graphical-install-backend", "closeWriteChannel"):
+    if required not in graphical_installer:
+        fail(f"graphical installer controller is incomplete: {required}")
+for required in ("validate_profile", "validate_password", "run_once", "provision", 'request["password"] = ""'):
+    if required not in graphical_backend:
+        fail(f"graphical installer backend is incomplete: {required}")
 for required in ("Blossom OS Recovery Console", "vt.global_cursor_default=0", "blossom.recovery=1"):
     if required not in candidate_builder:
         fail(f"candidate boot experience is incomplete: {required}")

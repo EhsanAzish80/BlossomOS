@@ -11,6 +11,6 @@ int main(int argc, char *argv[]) {
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,
                      &application, [] { QCoreApplication::exit(1); },
                      Qt::QueuedConnection);
-    engine.load(QUrl(QStringLiteral("file:///usr/share/blossom-os/shell/shell.qml")));
+    engine.load(QUrl(QStringLiteral("file:///usr/share/blossom-os/shell/SecurityHost.qml")));
     return application.exec();
 }

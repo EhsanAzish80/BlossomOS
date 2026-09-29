@@ -14,9 +14,9 @@ mod audit;
 #[cfg(all(target_os = "linux", feature = "production-private-inference"))]
 const PRODUCTION_AUDIT_PATH: &str = "/run/blossom-model-gateway/audit";
 
-pub const PRODUCTION_SOCKET_PATH: &str = "/run/blossom-model-gateway/inference.sock";
+pub const PRODUCTION_SOCKET_PATH: &str = blossom_core::PRIVATE_GATEWAY_SOCKET_PATH;
 #[cfg(all(target_os = "linux", feature = "production-private-inference"))]
-const PRODUCTION_PROFILE_PATH: &str = "/etc/blossom-os/model-profiles/active.json";
+const PRODUCTION_PROFILE_PATH: &str = blossom_core::ACTIVE_MODEL_PROFILE_PATH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GatewayProcessError {
@@ -357,9 +357,12 @@ where
     if write_failed || !cancellation_valid {
         return Err(GatewayProcessError::PrivateConnectionUnavailable);
     }
-    inference_result?;
-    let (terminal, _) =
+    let inference_failed = inference_result.is_err();
+    let (terminal, terminal_outcome) =
         pending_terminal.ok_or(GatewayProcessError::PrivateConnectionUnavailable)?;
+    if inference_failed && terminal_outcome != GatewayAuditOutcome::ProviderFailed {
+        return Err(GatewayProcessError::PrivateConnectionUnavailable);
+    }
     stream
         .write_all(&terminal)
         .map_err(|_| GatewayProcessError::PrivateConnectionUnavailable)?;
@@ -515,14 +518,17 @@ pub fn run_production() -> Result<(), GatewayProcessError> {
         };
         use std::path::Path;
 
-        let specifications = [
-            production_provider_profile(GatewayProfile::LlamaCppCpuV1)
-                .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
-                .ok_or(GatewayProcessError::ProfileRegistryUnavailable)?,
-            production_provider_profile(GatewayProfile::OllamaCpuV1)
-                .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
-                .ok_or(GatewayProcessError::ProfileRegistryUnavailable)?,
-        ];
+        let specifications = [GatewayProfile::LlamaCppCpuV1, GatewayProfile::OllamaCpuV1]
+            .into_iter()
+            .map(production_provider_profile)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| GatewayProcessError::ProfileRegistryUnavailable)?
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
+        if specifications.is_empty() {
+            return Err(GatewayProcessError::ProfileRegistryUnavailable);
+        }
         let readiness = load_installed_runtime_readiness_from_set(
             Path::new(PRODUCTION_PROFILE_PATH),
             &specifications,
@@ -888,6 +894,59 @@ mod tests {
                 let event = decode_gateway_event(&reader.read_one(&mut client)).unwrap();
                 terminal = matches!(event.event, NormalizedStreamKind::Finished { .. });
             }
+            assert_eq!(server_thread.join().unwrap(), Ok(()));
+        }
+
+        #[test]
+        fn provider_failure_is_delivered_as_a_validated_terminal_event() {
+            let (mut client, server) = UnixStream::pair().unwrap();
+            client
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let server_thread = std::thread::spawn(move || {
+                let mut audit = TestAudit::default();
+                serve_authorized_private_connection(
+                    server,
+                    PrivateConnectionContext {
+                        profile: GatewayProfile::LlamaCppCpuV1,
+                        provider: ModelProviderKind::LlamaCpp,
+                        model: ModelProfile::parse("fixture-model:1".into()).unwrap(),
+                        boot_id_sha256: &"a".repeat(64),
+                        instance_nonce: "private-failure-1",
+                        instance_sha256: &"d".repeat(64),
+                        client_uid_sha256: &"e".repeat(64),
+                    },
+                    &mut audit,
+                    |request, cancellation, emit| {
+                        let mut state = ModelStreamState::new(request, cancellation);
+                        emit(&state.apply(0, ProviderStreamInput::Started).unwrap());
+                        emit(
+                            &state
+                                .apply(
+                                    1,
+                                    ProviderStreamInput::Failed(
+                                        blossom_core::ProviderFailureCategory::Malformed,
+                                    ),
+                                )
+                                .unwrap(),
+                        );
+                        Err(GatewayProcessError::PrivateConnectionUnavailable)
+                    },
+                )
+            });
+            let mut reader = ClientReader::new();
+            let _ = reader.read_one(&mut client);
+            let request_id = InferenceRequestId::parse("private-failure-1".into()).unwrap();
+            client.write_all(&private_frame(&request_id)).unwrap();
+            let started = decode_gateway_event(&reader.read_one(&mut client)).unwrap();
+            assert!(matches!(started.event, NormalizedStreamKind::Started));
+            let failed = decode_gateway_event(&reader.read_one(&mut client)).unwrap();
+            assert!(matches!(
+                failed.event,
+                NormalizedStreamKind::Failed {
+                    category: blossom_core::ProviderFailureCategory::Malformed
+                }
+            ));
             assert_eq!(server_thread.join().unwrap(), Ok(()));
         }
 

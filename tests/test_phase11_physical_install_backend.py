@@ -1,10 +1,15 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from scripts.distribution.physical_install_backend import (
     BackendError,
     LSBLK_TARGET,
+    SLOT_SYNC_PATHS,
+    STATE_DIRECTORIES,
     TARGET,
     command_plan,
+    sync_slot_state,
     validate_target,
 )
 
@@ -89,20 +94,82 @@ class PhysicalInstallBackendTests(unittest.TestCase):
             with self.subTest(changed=changed), self.assertRaises(BackendError):
                 validate_target(target(), changed)
 
-    def test_command_plan_has_only_fixed_sda_partitioning(self):
+    def test_command_plan_creates_dual_root_and_never_constructs_children(self):
         plan = command_plan()
         rendered = "\n".join(" ".join(command) for command in plan)
         self.assertIn("sgdisk --zap-all /dev/sda", rendered)
-        self.assertIn("mkfs.fat -F 32 -n BLOSSOM_EFI /dev/sda1", rendered)
-        self.assertIn("mkfs.ext4 -F -L BLOSSOM_SYSTEM /dev/sda2", rendered)
-        root_mount = plan.index(["mount", "/dev/sda2", "/mnt/blossom-install"])
-        boot_directory = plan.index(["mkdir", "-p", "/mnt/blossom-install/boot"])
-        boot_mount = plan.index(["mount", "/dev/sda1", "/mnt/blossom-install/boot"])
-        self.assertLess(root_mount, boot_directory)
-        self.assertLess(boot_directory, boot_mount)
-        for forbidden in ("/dev/sdb", "/dev/vda", "sh -c", "bash -c"):
+        self.assertIn("BLOSSOM_EFI", rendered)
+        self.assertIn("BLOSSOM_ROOT_A", rendered)
+        self.assertIn("BLOSSOM_ROOT_B", rendered)
+        self.assertIn("BLOSSOM_STATE", rendered)
+        for forbidden in ("/dev/sda1", "/dev/sda2", "/dev/sdb", "/dev/vda", "sh -c", "bash -c"):
             self.assertNotIn(forbidden, rendered)
         self.assertTrue(all(type(command) is list for command in plan))
+
+    def test_only_directories_are_persistent_bind_mounts(self):
+        self.assertEqual(
+            set(STATE_DIRECTORIES),
+            {"home", "var/lib/blossom", "var/log", "etc/NetworkManager/system-connections", "var/lib/bluetooth"},
+        )
+        self.assertTrue({"etc/passwd", "etc/shadow", "etc/group", "etc/gshadow"}.issubset(SLOT_SYNC_PATHS))
+        self.assertTrue({"etc/hostname", "etc/machine-id", "etc/locale.conf", "etc/vconsole.conf"}.issubset(SLOT_SYNC_PATHS))
+
+    def test_slot_sync_preserves_regular_modes_and_timezone_symlink(self):
+        with TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source = base / "a"
+            destination = base / "b"
+            source.mkdir()
+            destination.mkdir()
+            for relative in SLOT_SYNC_PATHS:
+                path = source / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if relative == "etc/localtime":
+                    path.symlink_to("/usr/share/zoneinfo/Europe/Istanbul")
+                else:
+                    path.write_text(f"{relative}\n", encoding="utf-8")
+                    path.chmod(0o400 if relative == "etc/shadow" else 0o644)
+            sync_slot_state(source, destination)
+            self.assertEqual((destination / "etc/shadow").stat().st_mode & 0o777, 0o400)
+            self.assertTrue((destination / "etc/localtime").is_symlink())
+            self.assertEqual(
+                (destination / "etc/localtime").readlink(),
+                Path("/usr/share/zoneinfo/Europe/Istanbul"),
+            )
+
+    def test_slot_sync_mirrors_missing_paths(self):
+        with TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            source = base / "a"
+            destination = base / "b"
+            source.mkdir()
+            destination.mkdir()
+            for relative in SLOT_SYNC_PATHS:
+                source_path = source / relative
+                source_path.parent.mkdir(parents=True, exist_ok=True)
+                destination_path = destination / relative
+                destination_path.parent.mkdir(parents=True, exist_ok=True)
+                destination_path.write_text("stale\n", encoding="utf-8")
+                if relative != "etc/vconsole.conf":
+                    source_path.write_text("current\n", encoding="utf-8")
+            sync_slot_state(source, destination)
+            self.assertFalse((destination / "etc/vconsole.conf").exists())
+            self.assertEqual((destination / "etc/passwd").read_text(), "current\n")
+
+    def test_candidate_build_forces_an_empty_machine_identity(self):
+        repository = Path(__file__).resolve().parents[1]
+        builder = (repository / "scripts/distribution/build_physical_candidate.sh").read_text()
+        self.assertIn(': > "$rootfs/etc/machine-id"', builder)
+        self.assertIn('[[ -s "$rootfs/etc/machine-id" ]]', builder)
+        self.assertIn("blossom-rootfs.manifest.json", builder)
+        self.assertIn('"machine_id_bytes": 0', builder)
+        self.assertNotIn("blossom-physical-install", builder)
+        self.assertFalse(
+            (repository / "distribution/archiso/airootfs/usr/local/bin/blossom-physical-install").exists()
+        )
+        self.assertFalse(
+            (repository / "distribution/archiso/airootfs/usr/local/libexec/blossom-physical-install-backend").exists()
+        )
 
 
 if __name__ == "__main__":

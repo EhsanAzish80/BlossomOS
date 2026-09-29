@@ -336,7 +336,7 @@ fn connect_with_cancellation<T>(
 #[derive(Serialize)]
 struct OllamaRequest<'a> {
     model: &'a str,
-    messages: Vec<OllamaRequestMessage<'a>>,
+    messages: Vec<OllamaRequestMessage>,
     stream: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tools: Vec<OllamaTool>,
@@ -346,9 +346,9 @@ struct OllamaRequest<'a> {
 }
 
 #[derive(Serialize)]
-struct OllamaRequestMessage<'a> {
+struct OllamaRequestMessage {
     role: &'static str,
-    content: &'a str,
+    content: String,
 }
 
 #[derive(Serialize)]
@@ -376,7 +376,7 @@ fn encode_request(request: &InferenceRequest) -> Result<Vec<u8>, OllamaAdapterEr
                 super::ConversationRole::Assistant => "assistant",
                 super::ConversationRole::Tool => "tool",
             },
-            content: message.content(),
+            content: message.provider_content(),
         })
         .collect();
     let tools = if request.output_mode() == InferenceOutputMode::BlossomTurn {

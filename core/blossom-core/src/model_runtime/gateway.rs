@@ -279,6 +279,7 @@ pub fn encode_gateway_private_request(
                     ConversationRole::Tool => WireRole::Tool,
                 },
                 content: message.content.clone(),
+                untrusted_data: message.untrusted_data,
             })
             .collect(),
         intents: WireCatalogue {
@@ -374,6 +375,8 @@ enum WireInputClassification {
 struct WireMessage {
     role: WireRole,
     content: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    untrusted_data: bool,
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -446,8 +449,15 @@ fn decode_wire_messages(
                 WireRole::Assistant => ConversationRole::Assistant,
                 WireRole::Tool => ConversationRole::Tool,
             };
-            ConversationMessage::new(role, message.content)
-                .map_err(|_| GatewayProtocolError::InvalidRequest)
+            if message.untrusted_data {
+                if role != ConversationRole::Tool {
+                    return Err(GatewayProtocolError::InvalidRequest);
+                }
+                ConversationMessage::untrusted_data(message.content)
+            } else {
+                ConversationMessage::new(role, message.content)
+            }
+            .map_err(|_| GatewayProtocolError::InvalidRequest)
         })
         .collect()
 }

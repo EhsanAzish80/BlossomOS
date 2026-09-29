@@ -187,6 +187,7 @@ impl ValidatedPlan {
                 }
                 ModelIntentKind::ProcessSelf => ToolRequest::ProcessSelf { request_id },
                 ModelIntentKind::ProcessList => ToolRequest::ProcessList { request_id },
+                ModelIntentKind::FilesWriteCreate => return Err(PlanError::IntentNotEligible),
             };
             let step_id = StepId::parse(format!("step-{:03}", index + 1))?;
             let depends_on = proposed
@@ -594,21 +595,21 @@ pub trait TypedRequestEngine {
     fn approve_typed(
         &mut self,
         token: ApprovalToken,
-        request: ToolRequest,
+        preview_sha256: &str,
         now_ms: u64,
     ) -> Result<CompletionOutcome, EngineError>;
 
     fn deny_typed(
         &mut self,
         token: ApprovalToken,
-        request: ToolRequest,
+        preview_sha256: &str,
         now_ms: u64,
     ) -> Result<(), EngineError>;
 
     fn cancel_typed(
         &mut self,
         token: ApprovalToken,
-        request: ToolRequest,
+        preview_sha256: &str,
         now_ms: u64,
     ) -> Result<(), EngineError>;
 }
@@ -616,7 +617,7 @@ pub trait TypedRequestEngine {
 struct PendingStep {
     index: usize,
     token: ApprovalToken,
-    request: ToolRequest,
+    preview_sha256: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -744,13 +745,17 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
             Ok(BeginOutcome::Denied) => {
                 self.finish_without_start(index, StepTerminalOutcome::Denied)
             }
-            Ok(BeginOutcome::ApprovalRequired { request, token }) => {
+            Ok(BeginOutcome::ApprovalRequired {
+                request,
+                token,
+                preview_sha256,
+            }) => {
                 self.lifecycles[index]
                     .awaiting_approval()
                     .map_err(|_| OrchestrationError::InvalidLifecycle)?;
                 self.record_phase(index);
                 if request != *step.request() {
-                    let _ = self.engine.cancel_typed(token, request, now_ms);
+                    let _ = self.engine.cancel_typed(token, &preview_sha256, now_ms);
                     self.lifecycles[index]
                         .finish(StepTerminalOutcome::Blocked)
                         .map_err(|_| OrchestrationError::InvalidLifecycle)?;
@@ -762,7 +767,7 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
                 self.pending = Some(PendingStep {
                     index,
                     token,
-                    request: request.clone(),
+                    preview_sha256,
                 });
                 Ok(OrchestrationEvent::ApprovalRequired {
                     plan_id: self.plan.plan_id().clone(),
@@ -786,7 +791,7 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
             .ok_or(OrchestrationError::NoApprovalPending)?;
         match self
             .engine
-            .approve_typed(pending.token, pending.request, now_ms)
+            .approve_typed(pending.token, &pending.preview_sha256, now_ms)
         {
             Ok(completion) => self.finish_completion(pending.index, completion),
             Err(EngineError::Approval(_)) => {
@@ -803,7 +808,7 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
             .ok_or(OrchestrationError::NoApprovalPending)?;
         let outcome = if self
             .engine
-            .deny_typed(pending.token, pending.request, now_ms)
+            .deny_typed(pending.token, &pending.preview_sha256, now_ms)
             .is_ok()
         {
             StepTerminalOutcome::Denied
@@ -818,7 +823,7 @@ impl<E: TypedRequestEngine> PlanOrchestrator<E> {
         if let Some(pending) = self.pending.take() {
             let outcome = if self
                 .engine
-                .cancel_typed(pending.token, pending.request, now_ms)
+                .cancel_typed(pending.token, &pending.preview_sha256, now_ms)
                 .is_ok()
             {
                 StepTerminalOutcome::CancelledBeforeStart
@@ -985,8 +990,8 @@ pub enum SummaryError {
 mod tests {
     use super::*;
     use crate::{
-        ApprovalStore, BlossomEngine, CommandSpec, ExecutionResult, Executor, ExecutorError,
-        PolicyRule,
+        BlossomEngine, CommandSpec, ExecutionResult, Executor, ExecutorError, PolicyRule,
+        PreparedApprovalStore,
     };
     use std::sync::{
         Arc,
@@ -1074,7 +1079,7 @@ mod tests {
                 capability: Capability::SystemReadKernelIdentity,
                 decision,
             }]),
-            ApprovalStore::new(100),
+            PreparedApprovalStore::new(100),
             CountingExecutor {
                 calls,
                 result: ExecutionResult {
