@@ -1,7 +1,7 @@
 # ARM64 local-agent image-gate evidence
 
 Status: complete for the exact baked-image boundary described below on
-2026-09-29 at commit `a30d628`.
+2026-09-29 at commit `3bae68c`.
 
 This record covers a freshly built Blossom OS ARM64 development qcow2 booted
 under QEMU with Apple Hypervisor acceleration. The image ran the same public
@@ -19,18 +19,18 @@ audit path all active inside the guest.
 - Display: VirtIO GPU at 1280 x 800, scale 1
 - Network: QEMU user networking with a successful HTTPS probe
 - Model: Qwen 2.5 0.5B, Q4_K_M
-- Source commit baked into the image: `a30d628`
-- Qualification duration: 214 seconds
+- Source commit baked into the image: `3bae68c`
+- Qualification duration: 206 seconds
 
 ## Artifact verification
 
 The build completed its qcow2 integrity check, the checked-in builder's raw
 intermediate was removed, and the build work directory returned to zero bytes.
-The host retained 113 GiB free after the build.
+The host retained 44 GiB free after the build.
 
 - Image SHA-256:
-  `07aca9bba4d801af03ca1ae2d0d41d9cfe4a7939e9ba892fc16d670800207707`
-- Image size: 4,267,638,784 bytes
+  `e9c475185f8d301d90ef24301b2846712dc2b5a1dadfaabbbf10db0057118eef`
+- Image size: 4,281,663,488 bytes
 - `qemu-img check`: no errors
 
 ## Agent result
@@ -76,21 +76,23 @@ not from a separately prepared package-test guest.
 The raw evidence is retained locally and intentionally excluded from Git:
 
 - `.local-arm64/qualification/result.log`:
-  SHA-256 `a46778bad24dff7df486f3e3c177c78d945e7180cf8a8ff8eec206df66fac1eb`
+  SHA-256 `9da5a54ce0590b9554ff6156abb9e0ebfe4c423e76634bfda7b6a11b70efba57`
 - `.local-arm64/qualification/serial.log`:
-  SHA-256 `1af9474895f83d6aaaeabe6cd5afb4690336f0c6710517c4a3e9bd23e71e7d1d`
+  SHA-256 `eb0729d88268dc2e531694c93dcf0fd15fe2c0d20c843c9da6f9c6d187b5122a`
 
 The result log contains both terminal markers:
 
 ```text
 BLOSSOM_ARM64_AGENT_GATE_READY attempts=20 records=100 effects=20 executor_starts=0
-BLOSSOM_ARM64_QUALIFICATION_READY desktop=active display=1280x800@1 network=https installer=active browser=profile seconds=214
+BLOSSOM_ARM64_QUALIFICATION_READY desktop=active display=1280x800@1 network=https installer=active browser=profile seconds=206
 ```
 
 ## Limitations
 
-- Approval was submitted by the qualification client, not an independently
-  authenticated human interaction.
+- Approval was submitted by the qualification client through the
+  qualification-only PolicyKit rule. Password authentication was bypassed, so
+  this proves exact pipeline wiring but not independently authenticated human
+  intent or the production password prompt.
 - This used a 0.5B model in an ARM64 VM.
 - The implementation and evidence have not received independent review.
 - This does not cover x86-64 or the physical Intel MacBook.
