@@ -54,7 +54,8 @@ jobs:
       - name: Validate inactive model runtime packaging boundary
         run: |
           python3 scripts/ci/check_model_runtime_packaging.py
-          python3 scripts/package_llama_cpp_runtime.py --verify-lock
+          python3 scripts/package_llama_cpp_runtime.py --architecture x86_64 --verify-lock
+          python3 scripts/package_llama_cpp_runtime.py --architecture aarch64 --verify-lock
           python3 scripts/package_ollama_runtime.py --verify-lock
           sudo install -d -m 0755 \
             /usr/lib/blossom-os/providers/ollama \

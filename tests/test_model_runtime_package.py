@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/package_llama_cpp_runtime.py"
 REGISTRY_ROOT = ROOT / "system/model-runtime/registry"
 RUNTIME_PKGBUILD = ROOT / "distribution/packages/blossom-model-runtime/PKGBUILD"
+QUALITY_WORKFLOW = ROOT / ".github/workflows/quality.yml"
 
 
 class ModelRuntimePackageTests(unittest.TestCase):
@@ -30,6 +31,19 @@ class ModelRuntimePackageTests(unittest.TestCase):
             self.assertEqual(emitted.returncode, 0, emitted.stdout)
             registry = REGISTRY_ROOT / f"llama-cpp-cpu-{architecture}.profile.json"
             self.assertEqual(emitted.stdout.rstrip("\n").encode(), registry.read_bytes().rstrip(b"\n"))
+
+    def test_quality_gate_verifies_both_architecture_records(self) -> None:
+        workflow = QUALITY_WORKFLOW.read_text(encoding="utf-8")
+        for architecture in ("x86_64", "aarch64"):
+            self.assertIn(
+                "python3 scripts/package_llama_cpp_runtime.py "
+                f"--architecture {architecture} --verify-lock",
+                workflow,
+            )
+        self.assertNotIn(
+            "python3 scripts/package_llama_cpp_runtime.py --verify-lock",
+            workflow,
+        )
 
     def test_receipts_bind_shared_model_and_architecture_runtime(self) -> None:
         specification = importlib.util.spec_from_file_location("llama_packager", SCRIPT)
