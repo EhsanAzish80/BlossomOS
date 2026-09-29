@@ -39,6 +39,15 @@ impl BatteryAuditStatus {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalAuthenticationOutcome {
+    Authorized,
+    Denied,
+    Expired,
+    Unavailable,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AuditEvent {
@@ -76,6 +85,12 @@ pub enum AuditEvent {
     },
     ApprovalIssued {
         request_id: String,
+    },
+    ApprovalAuthentication {
+        request_id: String,
+        action: String,
+        preview_sha256: String,
+        outcome: ApprovalAuthenticationOutcome,
     },
     ApprovalRejected {
         request_id: String,

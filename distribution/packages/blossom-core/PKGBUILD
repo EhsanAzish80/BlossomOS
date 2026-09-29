@@ -1,6 +1,6 @@
 pkgname=blossom-core
 pkgver=0.9.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Blossom OS reviewed service boundaries'
 arch=('x86_64' 'aarch64')
 license=('Apache-2.0')
@@ -50,4 +50,6 @@ package() {
     "$pkgdir/usr/share/dbus-1/system.d/org.blossomos.Privileged1.conf"
   install -Dm0644 "$repo_root/system/privileged-helper/packaging/org.blossomos.privileged1.policy" \
     "$pkgdir/usr/share/polkit-1/actions/org.blossomos.privileged1.policy"
+  install -Dm0644 "$repo_root/system/shell/packaging/org.blossomos.shell.policy" \
+    "$pkgdir/usr/share/polkit-1/actions/org.blossomos.shell.policy"
 }

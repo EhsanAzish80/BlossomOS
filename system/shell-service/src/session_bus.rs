@@ -21,6 +21,11 @@ use zbus::proxy::{Builder as ProxyBuilder, CacheProperties, MethodFlags};
 use zbus::{Connection, Proxy};
 
 use crate::ShellProcessError;
+#[cfg(feature = "production-dbus-service")]
+use crate::trusted_approval::PolkitTrustedApproval;
+use crate::trusted_approval::{
+    DenyTrustedApproval, TrustedApprovalAuthorizer, TrustedApprovalResult,
+};
 
 const DBUS_DESTINATION: &str = "org.freedesktop.DBus";
 const DBUS_PATH: &str = "/org/freedesktop/DBus";
@@ -62,6 +67,23 @@ pub trait ShellRequestHandler: Send {
         input: &[u8],
         now_ms: u64,
     ) -> Result<Vec<u8>, HandlerError>;
+    fn approval_authentication(
+        &mut self,
+        peer: &ShellPeerId,
+        input: &[u8],
+        now_ms: u64,
+    ) -> Result<Option<blossom_core::ShellApprovalAuthentication>, HandlerError>;
+    fn reject_approval_authentication(
+        &mut self,
+        peer: &ShellPeerId,
+        input: &[u8],
+        now_ms: u64,
+    ) -> Result<(), HandlerError>;
+    fn record_approval_authentication(
+        &mut self,
+        challenge: &blossom_core::ShellApprovalAuthentication,
+        outcome: blossom_core::ApprovalAuthenticationOutcome,
+    ) -> Result<(), HandlerError>;
     fn cancel(
         &mut self,
         peer: &ShellPeerId,
@@ -116,6 +138,37 @@ impl<E: Executor + Send, B: BatterySummaryProvider + Send> ShellRequestHandler
         )
     }
 
+    fn approval_authentication(
+        &mut self,
+        peer: &ShellPeerId,
+        input: &[u8],
+        now_ms: u64,
+    ) -> Result<Option<blossom_core::ShellApprovalAuthentication>, HandlerError> {
+        let request = decode_shell_client_request(input).map_err(|_| HandlerError::Rejected)?;
+        ShellDiagnosticService::approval_authentication_challenge(self, peer, &request, now_ms)
+            .map_err(HandlerError::from)
+    }
+
+    fn reject_approval_authentication(
+        &mut self,
+        peer: &ShellPeerId,
+        input: &[u8],
+        now_ms: u64,
+    ) -> Result<(), HandlerError> {
+        let request = decode_shell_client_request(input).map_err(|_| HandlerError::Rejected)?;
+        ShellDiagnosticService::reject_approval_authentication(self, peer, &request, now_ms)
+            .map_err(HandlerError::from)
+    }
+
+    fn record_approval_authentication(
+        &mut self,
+        challenge: &blossom_core::ShellApprovalAuthentication,
+        outcome: blossom_core::ApprovalAuthenticationOutcome,
+    ) -> Result<(), HandlerError> {
+        ShellDiagnosticService::record_approval_authentication(self, challenge, outcome)
+            .map_err(HandlerError::from)
+    }
+
     fn cancel(
         &mut self,
         peer: &ShellPeerId,
@@ -166,12 +219,21 @@ fn encode(value: &impl serde::Serialize) -> Result<Vec<u8>, HandlerError> {
 
 pub struct ShellBusService {
     handler: Arc<Mutex<Box<dyn ShellRequestHandler>>>,
+    authorizer: Arc<Mutex<Box<dyn TrustedApprovalAuthorizer>>>,
 }
 
 impl ShellBusService {
     pub fn new(handler: impl ShellRequestHandler + 'static) -> Self {
+        Self::with_authorizer(handler, DenyTrustedApproval)
+    }
+
+    pub fn with_authorizer(
+        handler: impl ShellRequestHandler + 'static,
+        authorizer: impl TrustedApprovalAuthorizer + 'static,
+    ) -> Self {
         Self {
             handler: Arc::new(Mutex::new(Box::new(handler))),
+            authorizer: Arc::new(Mutex::new(Box::new(authorizer))),
         }
     }
 
@@ -225,6 +287,47 @@ impl ShellBusService {
         #[zbus(connection)] connection: &Connection,
     ) -> zbus::fdo::Result<Vec<u8>> {
         let peer = authenticated_peer(&header, connection).await?;
+        let decision_time = now_ms();
+        let challenge = self
+            .handler
+            .lock()
+            .map_err(|_| failed())?
+            .approval_authentication(&peer, &input, decision_time)
+            .map_err(|_| denied())?;
+        if let Some(challenge) = challenge {
+            let result = self
+                .authorizer
+                .lock()
+                .map_err(|_| failed())?
+                .authorize(&challenge);
+            let audit_outcome = match result {
+                TrustedApprovalResult::Authorized => {
+                    blossom_core::ApprovalAuthenticationOutcome::Authorized
+                }
+                TrustedApprovalResult::Denied => {
+                    blossom_core::ApprovalAuthenticationOutcome::Denied
+                }
+                TrustedApprovalResult::Expired => {
+                    blossom_core::ApprovalAuthenticationOutcome::Expired
+                }
+                TrustedApprovalResult::Unavailable => {
+                    blossom_core::ApprovalAuthenticationOutcome::Unavailable
+                }
+            };
+            self.handler
+                .lock()
+                .map_err(|_| failed())?
+                .record_approval_authentication(&challenge, audit_outcome)
+                .map_err(|_| denied())?;
+            if result != TrustedApprovalResult::Authorized {
+                self.handler
+                    .lock()
+                    .map_err(|_| failed())?
+                    .reject_approval_authentication(&peer, &input, now_ms())
+                    .map_err(|_| denied())?;
+                return Err(denied());
+            }
+        }
         self.handler
             .lock()
             .map_err(|_| failed())?
@@ -530,7 +633,7 @@ pub fn run_production() -> Result<(), ShellProcessError> {
         Some(64),
     )
     .map_err(|_| ShellProcessError::SessionBusUnavailable)?;
-    let interface = ShellBusService::new(service);
+    let interface = ShellBusService::with_authorizer(service, PolkitTrustedApproval::default());
     let handler = interface.shared_handler();
     connection
         .object_server()
@@ -618,6 +721,29 @@ mod tests {
         }
         fn decide(&mut self, _: &ShellPeerId, _: &[u8], _: u64) -> Result<Vec<u8>, HandlerError> {
             Err(HandlerError::Rejected)
+        }
+        fn approval_authentication(
+            &mut self,
+            _: &ShellPeerId,
+            _: &[u8],
+            _: u64,
+        ) -> Result<Option<blossom_core::ShellApprovalAuthentication>, HandlerError> {
+            Ok(None)
+        }
+        fn reject_approval_authentication(
+            &mut self,
+            _: &ShellPeerId,
+            _: &[u8],
+            _: u64,
+        ) -> Result<(), HandlerError> {
+            Ok(())
+        }
+        fn record_approval_authentication(
+            &mut self,
+            _: &blossom_core::ShellApprovalAuthentication,
+            _: blossom_core::ApprovalAuthenticationOutcome,
+        ) -> Result<(), HandlerError> {
+            Ok(())
         }
         fn cancel(&mut self, _: &ShellPeerId, _: &[u8], _: u64) -> Result<Vec<u8>, HandlerError> {
             Err(HandlerError::Rejected)

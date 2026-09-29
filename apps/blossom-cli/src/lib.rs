@@ -1079,6 +1079,14 @@ fn describe_event(event: &AuditEvent) -> String {
         AuditEvent::ApprovalIssued { request_id } => {
             format!("request {request_id} awaiting one-time approval")
         }
+        AuditEvent::ApprovalAuthentication {
+            request_id,
+            action,
+            preview_sha256,
+            outcome,
+        } => format!(
+            "request {request_id} authentication {outcome:?} for {action}, preview_sha256={preview_sha256}"
+        ),
         AuditEvent::ApprovalRejected { request_id, error } => {
             format!("request {request_id} approval rejected ({error})")
         }

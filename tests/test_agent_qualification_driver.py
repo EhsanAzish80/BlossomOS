@@ -183,6 +183,10 @@ class AgentQualificationDriverTests(unittest.TestCase):
         entries = [json.loads(line) for line in self.ledger.read_text().splitlines()]
         self.assertEqual([entry["sequence"] for entry in entries], [1, 2, 3, 4, 5])
         self.assertEqual({entry["mode"] for entry in entries}, {"fixture"})
+        self.assertEqual(
+            {entry["approval_authentication"] for entry in entries},
+            {"qualification_polkit_bypass"},
+        )
         self.assertEqual({entry["commit"] for entry in entries}, {"8fff60e"})
         self.assertTrue(all(entry["status"] == "passed" for entry in entries))
         self.assertEqual(entries[0]["effects"], 1)

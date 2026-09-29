@@ -120,6 +120,7 @@ def load_identity(
         "receipt_digest": digest(receipt_bytes),
         "architecture": current_arch,
         "mode": mode,
+        "approval_authentication": "qualification_polkit_bypass",
     }
 
 

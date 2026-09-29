@@ -1,6 +1,6 @@
 pkgname=blossom-qualification
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Blossom OS VM-only agent qualification tools'
 arch=('x86_64' 'aarch64')
 license=('Apache-2.0')
@@ -24,4 +24,6 @@ package() {
     "$pkgdir/home/blossom/Workspace/.blossom-qualification/indirect-invalid.txt"
   install -Dm0644 "$startdir/fixtures/indirect-valid.txt" \
     "$pkgdir/home/blossom/Workspace/.blossom-qualification/indirect-valid.txt"
+  install -Dm0644 "$startdir/49-blossom-model-effect-qualification.rules" \
+    "$pkgdir/usr/share/polkit-1/rules.d/49-blossom-model-effect-qualification.rules"
 }
