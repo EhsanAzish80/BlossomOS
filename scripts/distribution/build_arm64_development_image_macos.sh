@@ -4,10 +4,16 @@ set -euo pipefail
 repo=$(cd "$(dirname "$0")/../.." && pwd -P)
 output=${1:-"$repo/.local-arm64"}
 profile=${BLOSSOM_ARM64_COLIMA_PROFILE:-blossom-arm64}
+image_mode=${BLOSSOM_ARM64_IMAGE_MODE:-pipeline-qualification}
 context="colima-$profile"
 rootfs_name=ArchLinuxARM-aarch64-latest.tar.gz
 rootfs_url=${BLOSSOM_ARM64_ROOTFS_URL:-https://ca.us.mirror.archlinuxarm.org/os/$rootfs_name}
 rootfs_sha256=${BLOSSOM_ARM64_ROOTFS_SHA256:-42a4eeaa038994ffd31fa173256ef2f0ef511358eeb41b9ea1f8626391b9b319}
+
+case "$image_mode" in
+  pipeline-qualification|trusted-approval) ;;
+  *) echo "error: BLOSSOM_ARM64_IMAGE_MODE must be pipeline-qualification or trusted-approval" >&2; exit 2 ;;
+esac
 
 if [[ $(uname -s) != Darwin || $(uname -m) != arm64 ]]; then
   echo "error: this builder requires an Apple-silicon Mac" >&2
@@ -110,6 +116,7 @@ fi
 docker --context "$context" run --rm --platform linux/arm64 --privileged \
   --dns 1.1.1.1 \
   --env BLOSSOM_IMAGE_COMMIT="$source_commit" \
+  --env BLOSSOM_ARM64_IMAGE_MODE="$image_mode" \
   --env BLOSSOM_LLAMA_RUNTIME_ARCHIVE="/output/cache/$(basename "$runtime_archive")" \
   --env BLOSSOM_LLAMA_MODEL="/output/cache/$(basename "$model_file")" \
   --env BLOSSOM_LLAMA_MODEL_LICENSE="/output/cache/$(basename "$model_license")" \

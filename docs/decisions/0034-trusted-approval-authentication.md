@@ -145,6 +145,22 @@ checks enforce that separation. Qualification evidence must state that its
 approvals bypassed password authentication and therefore prove pipeline wiring,
 not independent human intent.
 
+Production-policy qualification is split deliberately. Automation, running in
+an installed image without the bypass rule or qualification driver, proves that
+a same-user client cannot self-approve, that a missing authentication agent
+fails closed, and that both cases produce zero effects and zero executor starts.
+It also proves from installed package and filesystem state that the bypass is
+absent. Automation does not claim that a person entered a password.
+
+The remaining claim requires a single-tester manual check through the Blossom
+shell UI: correct authentication produces exactly one preview-matching effect;
+wrong authentication and cancellation produce none; two consecutive effects
+each open a fresh challenge; and authentication completed after the 30-second
+approval lifetime loses to expiry. The tester preserves the exact preview and
+system password-prompt screenshots. This evidence is a manual security check,
+not a usability study. The maintained checklist is
+`docs/TRUSTED_APPROVAL_MANUAL_EVIDENCE.md`.
+
 ## Consequences
 
 Model-proposed writes gain deliberate per-effect friction. Systems without a

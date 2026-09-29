@@ -30,6 +30,11 @@ done
 for input in BLOSSOM_IMAGE_COMMIT BLOSSOM_LLAMA_RUNTIME_ARCHIVE BLOSSOM_LLAMA_MODEL BLOSSOM_LLAMA_MODEL_LICENSE; do
   [[ -n ${!input:-} ]] || { echo "error: missing image input: $input" >&2; exit 2; }
 done
+image_mode=${BLOSSOM_ARM64_IMAGE_MODE:-pipeline-qualification}
+case "$image_mode" in
+  pipeline-qualification|trusted-approval) ;;
+  *) echo "error: invalid ARM64 image mode: $image_mode" >&2; exit 2 ;;
+esac
 [[ $BLOSSOM_IMAGE_COMMIT =~ ^[0-9a-f]{40}$ ]] || {
   echo "error: invalid image source commit" >&2
   exit 2
@@ -128,8 +133,13 @@ chroot "$work/root" runuser -u builder -- env HOME=/home/builder PKGDEST=/opt/bl
   makepkg --nodeps --noconfirm --dir /opt/blossom-source/distribution/packages/blossom-core
 chroot "$work/root" runuser -u builder -- env HOME=/home/builder PKGDEST=/opt/blossom-packages \
   makepkg --nodeps --noconfirm --dir /opt/blossom-source/distribution/packages/blossom-shell
-chroot "$work/root" runuser -u builder -- env HOME=/home/builder PKGDEST=/opt/blossom-packages \
-  makepkg --nodeps --noconfirm --dir /opt/blossom-source/distribution/packages/blossom-qualification
+if [[ $image_mode == pipeline-qualification ]]; then
+  chroot "$work/root" runuser -u builder -- env HOME=/home/builder PKGDEST=/opt/blossom-packages \
+    makepkg --nodeps --noconfirm --dir /opt/blossom-source/distribution/packages/blossom-qualification
+else
+  chroot "$work/root" runuser -u builder -- env HOME=/home/builder PKGDEST=/opt/blossom-packages \
+    makepkg --nodeps --noconfirm --dir /opt/blossom-source/distribution/packages/blossom-trusted-approval-qualification
+fi
 chroot "$work/root" runuser -u builder -- env \
   HOME=/home/builder PKGDEST=/opt/blossom-packages \
   BLOSSOM_REPO_ROOT=/opt/blossom-source \
@@ -138,13 +148,17 @@ chroot "$work/root" runuser -u builder -- env \
   BLOSSOM_LLAMA_MODEL_LICENSE="/opt/blossom-inputs/$(basename "$BLOSSOM_LLAMA_MODEL_LICENSE")" \
   BLOSSOM_MODEL_GATEWAY=/opt/blossom-source/distribution/packages/blossom-core/src/target/release/blossom-model-gateway \
   makepkg --nodeps --noconfirm --dir /opt/blossom-source/distribution/packages/blossom-model-runtime
-chroot "$work/root" /bin/bash -lc '
+chroot "$work/root" env BLOSSOM_ARM64_IMAGE_MODE="$image_mode" /bin/bash -lc '
   packages=(
     /opt/blossom-packages/blossom-core-[0-9]*-aarch64.pkg.tar.*
     /opt/blossom-packages/blossom-shell-[0-9]*-aarch64.pkg.tar.*
     /opt/blossom-packages/blossom-model-runtime-b[0-9]*-aarch64.pkg.tar.*
-    /opt/blossom-packages/blossom-qualification-[0-9]*-aarch64.pkg.tar.*
   )
+  if [[ $BLOSSOM_ARM64_IMAGE_MODE == pipeline-qualification ]]; then
+    packages+=(/opt/blossom-packages/blossom-qualification-[0-9]*-aarch64.pkg.tar.*)
+  else
+    packages+=(/opt/blossom-packages/blossom-trusted-approval-qualification-[0-9]*-aarch64.pkg.tar.*)
+  fi
   ((${#packages[@]} == 4)) || {
     echo "error: expected exactly four Blossom package artifacts" >&2
     exit 1
@@ -202,8 +216,22 @@ ln -sf /usr/lib/systemd/system/blossom-model-gateway.service \
   "$work/root/etc/systemd/system/multi-user.target.wants/blossom-model-gateway.service"
 ln -sf /usr/lib/systemd/system/greetd.service \
   "$work/root/etc/systemd/system/graphical.target.wants/greetd.service"
-ln -sf /usr/lib/systemd/system/blossom-arm64-qualification.service \
-  "$work/root/etc/systemd/system/graphical.target.wants/blossom-arm64-qualification.service"
+if [[ $image_mode == pipeline-qualification ]]; then
+  ln -sf /usr/lib/systemd/system/blossom-arm64-qualification.service \
+    "$work/root/etc/systemd/system/graphical.target.wants/blossom-arm64-qualification.service"
+else
+  qualification_rule="$work/root/usr/share/polkit-1/rules.d/49-blossom-model-effect-qualification.rules"
+  [[ ! -e $qualification_rule ]] || {
+    echo "error: trusted-approval image contains the qualification polkit bypass" >&2
+    exit 1
+  }
+  ! chroot "$work/root" pacman -Q blossom-qualification >/dev/null 2>&1 || {
+    echo "error: trusted-approval image contains blossom-qualification" >&2
+    exit 1
+  }
+  ln -sf /usr/lib/systemd/system/blossom-trusted-approval-qualification.service \
+    "$work/root/etc/systemd/system/graphical.target.wants/blossom-trusted-approval-qualification.service"
+fi
 ln -sf /usr/lib/systemd/system/graphical.target "$work/root/etc/systemd/system/default.target"
 ln -sf /usr/lib/systemd/user/blossom-shell-ui.service \
   "$work/root/etc/systemd/user/graphical-session.target.wants/blossom-shell-ui.service"
