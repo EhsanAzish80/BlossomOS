@@ -37,7 +37,7 @@ qemu-system-aarch64 \
   -chardev null,id=qga \
   -device virtserialport,chardev=qga,name=org.qemu.guest_agent.0 \
   -chardev "file,id=qualification,path=$result" \
-  -device virtserialport,chardev=qualification,name=org.blossomos.trusted-approval-qualification \
+  -device virtserialport,chardev=qualification,name=org.blossomos.qualification \
   -display none -monitor none -serial "file:$serial" &
 pid=$!
 
