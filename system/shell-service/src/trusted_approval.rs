@@ -1,7 +1,7 @@
 use blossom_core::ShellApprovalAuthentication;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use zbus::proxy::{Builder as ProxyBuilder, CacheProperties, MethodFlags};
+use zbus::proxy::{Builder as ProxyBuilder, CacheProperties};
 use zbus::zvariant::Value;
 use zbus::{Proxy, connection};
 
@@ -117,10 +117,9 @@ async fn check(address: &str, challenge: &ShellApprovalAuthentication) -> Truste
         ("blossom.effect", challenge.effect.into()),
         ("blossom.expires_at_ms", challenge.expires_at_ms.to_string()),
     ]);
-    let response: Result<Option<AuthorizationResponse>, zbus::Error> = authority
-        .call_with_flags(
+    let response: Result<AuthorizationResponse, zbus::Error> = authority
+        .call(
             "CheckAuthorization",
-            MethodFlags::NoAutoStart.into(),
             &(
                 subject,
                 MODEL_EFFECT_POLKIT_ACTION,
@@ -131,8 +130,8 @@ async fn check(address: &str, challenge: &ShellApprovalAuthentication) -> Truste
         )
         .await;
     match response {
-        Ok(Some((true, _, _))) => TrustedApprovalResult::Authorized,
-        Ok(Some((false, _, _))) => TrustedApprovalResult::Denied,
+        Ok((true, _, _)) => TrustedApprovalResult::Authorized,
+        Ok((false, _, _)) => TrustedApprovalResult::Denied,
         _ => TrustedApprovalResult::Unavailable,
     }
 }
