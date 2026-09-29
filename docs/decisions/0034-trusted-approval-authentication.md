@@ -175,10 +175,16 @@ manager and polkit agent were running, and the broker was attached to
 `user@1000.service`. The broker's `ExecCondition` nevertheless exited at the
 namespace step with `226/NAMESPACE`: its writable `BindPaths` source did not
 exist because `/home/blossom/Workspace` had never been provisioned. The account
-provisioners now create the workspace before a login can start the broker. The
-unit resolves the account home with systemd's `%h` specifier rather than a
-fixed username, so an installed owner selected in the graphical installer gets
-the same bounded workspace invariant.
+provisioners now create the workspace before a login can start the broker.
+
+A follow-up image established that `%h` is not a valid way to make this system
+unit account-neutral: the system manager expanded it to `/root`, before the
+numeric `User=` identity was applied. Live replacement with the explicit
+qualification-account path made the broker active immediately, with the
+intended bounded bind. The ARM64 gate therefore retains the explicit
+`/home/blossom/Workspace` path. Mapping an arbitrary graphical-installer owner
+name into the system-managed broker is still an open physical-candidate design
+item; this gate does not claim that mapping is solved.
 
 The remaining claim requires a single-tester manual check through the Blossom
 shell UI: correct authentication produces exactly one preview-matching effect;
