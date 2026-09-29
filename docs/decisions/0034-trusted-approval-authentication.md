@@ -156,11 +156,22 @@ The automated production-policy image creates a greetd initial session for the
 qualification user. This autologin is confined to the ARM64 qualification
 builder and is forbidden from physical and production images by source checks.
 The gate must observe an active logind session before it starts a request. The
-broker first asks polkit non-interactively about its own system-bus subject:
+broker first asks polkit non-interactively about the trusted session subject:
 only `is_challenge=true` is an eligible environment. A flat unauthorized result
 is recorded as `invalid_environment` and can never satisfy the gate. The later
 interactive result retains whether that proven challenge was rejected, expired
 or could not be served because the agent was absent.
+
+The first complete production-policy run proved that the preceding subject was
+still wrong. The graphical logind session was active, but the system-managed
+broker process is not a member of that session. Consequently a
+`system-bus-name` subject for the broker was classified as inactive and polkit
+returned a flat denial. The broker now discovers the one active, local,
+non-remote graphical logind session for its own UID and supplies that trusted
+`unix-session` identity to polkit. Zero or multiple eligible sessions fail as
+`invalid_environment`; neither the model nor the session-bus client supplies
+the session identifier. This makes `allow_active=auth_self` evaluate the real
+desktop session where the authentication agent is registered.
 
 The first attempted automated image exposed a separate startup error: a
 `Type=oneshot` qualification service was ordered after and wanted by

@@ -2,13 +2,17 @@ use blossom_core::ShellApprovalAuthentication;
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use zbus::proxy::{Builder as ProxyBuilder, CacheProperties};
-use zbus::zvariant::Value;
+use zbus::zvariant::{OwnedObjectPath, Value};
 use zbus::{Proxy, connection};
 
 pub const MODEL_EFFECT_POLKIT_ACTION: &str = "org.blossomos.shell.approve-model-effect";
 const POLKIT_DESTINATION: &str = "org.freedesktop.PolicyKit1";
 const POLKIT_PATH: &str = "/org/freedesktop/PolicyKit1/Authority";
 const POLKIT_INTERFACE: &str = "org.freedesktop.PolicyKit1.Authority";
+const LOGIN1_DESTINATION: &str = "org.freedesktop.login1";
+const LOGIN1_PATH: &str = "/org/freedesktop/login1";
+const LOGIN1_MANAGER_INTERFACE: &str = "org.freedesktop.login1.Manager";
+const LOGIN1_SESSION_INTERFACE: &str = "org.freedesktop.login1.Session";
 const SYSTEM_BUS_ADDRESS: &str = "unix:path=/run/dbus/system_bus_socket";
 const ALLOW_USER_INTERACTION: u32 = 1;
 
@@ -109,10 +113,67 @@ async fn check(
         },
         Err(_) => return TrustedApprovalResult::Unavailable,
     };
-    let Some(unique_name) = connection.unique_name() else {
-        return TrustedApprovalResult::Unavailable;
+    let Some(session_id) = active_local_graphical_session(&connection).await else {
+        return TrustedApprovalResult::InvalidEnvironment;
     };
-    let authority: Proxy<'_> = match ProxyBuilder::new(&connection)
+    check_for_session(&connection, challenge, challenged, &session_id).await
+}
+
+async fn active_local_graphical_session(connection: &zbus::Connection) -> Option<String> {
+    let manager: Proxy<'_> = ProxyBuilder::new(connection)
+        .destination(LOGIN1_DESTINATION)
+        .ok()?
+        .path(LOGIN1_PATH)
+        .ok()?
+        .interface(LOGIN1_MANAGER_INTERFACE)
+        .ok()?
+        .cache_properties(CacheProperties::No)
+        .build()
+        .await
+        .ok()?;
+    let sessions: Vec<(String, u32, String, String, OwnedObjectPath)> =
+        manager.call("ListSessions", &()).await.ok()?;
+    let expected_uid = nix::unistd::geteuid().as_raw();
+    let mut eligible = Vec::new();
+    for (session_id, uid, _, seat, path) in sessions {
+        if uid != expected_uid || seat.is_empty() {
+            continue;
+        }
+        let session: Proxy<'_> = ProxyBuilder::new(connection)
+            .destination(LOGIN1_DESTINATION)
+            .ok()?
+            .path(path)
+            .ok()?
+            .interface(LOGIN1_SESSION_INTERFACE)
+            .ok()?
+            .cache_properties(CacheProperties::No)
+            .build()
+            .await
+            .ok()?;
+        let active: bool = session.get_property("Active").await.ok()?;
+        let remote: bool = session.get_property("Remote").await.ok()?;
+        let class: String = session.get_property("Class").await.ok()?;
+        let kind: String = session.get_property("Type").await.ok()?;
+        let state: String = session.get_property("State").await.ok()?;
+        if active
+            && !remote
+            && class == "user"
+            && matches!(kind.as_str(), "wayland" | "x11")
+            && state == "active"
+        {
+            eligible.push(session_id);
+        }
+    }
+    (eligible.len() == 1).then(|| eligible.remove(0))
+}
+
+async fn check_for_session(
+    connection: &zbus::Connection,
+    challenge: &ShellApprovalAuthentication,
+    challenged: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    session_id: &str,
+) -> TrustedApprovalResult {
+    let authority: Proxy<'_> = match ProxyBuilder::new(connection)
         .destination(POLKIT_DESTINATION)
         .and_then(|builder| builder.path(POLKIT_PATH))
         .and_then(|builder| builder.interface(POLKIT_INTERFACE))
@@ -123,8 +184,8 @@ async fn check(
         },
         Err(_) => return TrustedApprovalResult::Unavailable,
     };
-    let subject_details = HashMap::from([("name", Value::from(unique_name.as_str()))]);
-    let subject = ("system-bus-name", subject_details);
+    let subject_details = HashMap::from([("session-id", Value::from(session_id))]);
+    let subject = ("unix-session", subject_details);
     let details = HashMap::from([
         ("blossom.request_id", challenge.request_id.clone()),
         ("blossom.preview_sha256", challenge.preview_sha256.clone()),
@@ -223,15 +284,15 @@ mod tests {
             flags: u32,
             cancellation_id: String,
         ) -> Result<(bool, bool, HashMap<String, String>), AuthorityError> {
-            let sender = subject
+            let session_id = subject
                 .1
-                .get("name")
+                .get("session-id")
                 .and_then(|value| value.try_clone().ok())
                 .and_then(|value| String::try_from(value).ok());
             let (valid, behavior) = {
                 let mut seen = self.0.lock().unwrap();
-                let valid = subject.0 == "system-bus-name"
-                    && sender.as_deref().is_some_and(|name| name.starts_with(':'))
+                let valid = subject.0 == "unix-session"
+                    && session_id.as_deref() == Some("session-1")
                     && action == MODEL_EFFECT_POLKIT_ACTION
                     && details.get("blossom.request_id").map(String::as_str) == Some("request-1")
                     && details.get("blossom.preview_sha256").map(String::as_str)
@@ -314,7 +375,29 @@ mod tests {
             .unwrap()
             .build()
             .unwrap();
-        let result = async_io::block_on(check_with_timeout(&address, timeout, &challenge()));
+        let result = async_io::block_on(async {
+            let connection = connection::Builder::address(address.as_str())
+                .unwrap()
+                .max_queued(8)
+                .method_timeout(Duration::from_secs(30))
+                .build()
+                .await
+                .unwrap();
+            let challenged = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let observed = challenged.clone();
+            futures_lite::future::race(
+                check_for_session(&connection, &challenge(), observed, "session-1"),
+                async move {
+                    async_io::Timer::after(timeout).await;
+                    if challenged.load(std::sync::atomic::Ordering::SeqCst) {
+                        TrustedApprovalResult::ChallengeExpired
+                    } else {
+                        TrustedApprovalResult::Expired
+                    }
+                },
+            )
+            .await
+        });
         (result, seen)
     }
 
