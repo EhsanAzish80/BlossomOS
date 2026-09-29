@@ -223,6 +223,10 @@ class Arm64AgentContractTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("org.blossomos.shell.approve-model-effect", policy)
         self.assertIn("<allow_active>auth_self</allow_active>", policy)
+        self.assertIn(
+            '<annotate key="org.freedesktop.policykit.owner">unix-user:blossom</annotate>',
+            policy,
+        )
         self.assertNotIn("auth_self_keep", policy)
         core_package = (
             ROOT / "distribution/packages/blossom-core/PKGBUILD"
