@@ -482,7 +482,7 @@ fn infer_installed_gateway(
     )
     .map_err(map_gateway_client_error)?;
     client
-        .infer(request_id, &messages, intents, 30_000)
+        .infer(request_id, messages, intents, 30_000)
         .map_err(map_gateway_client_error)
 }
 
