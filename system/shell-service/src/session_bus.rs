@@ -313,6 +313,15 @@ impl ShellBusService {
                 TrustedApprovalResult::Unavailable => {
                     blossom_core::ApprovalAuthenticationOutcome::Unavailable
                 }
+                TrustedApprovalResult::ChallengeExpired => {
+                    blossom_core::ApprovalAuthenticationOutcome::ChallengeExpired
+                }
+                TrustedApprovalResult::ChallengeUnavailable => {
+                    blossom_core::ApprovalAuthenticationOutcome::ChallengeUnavailable
+                }
+                TrustedApprovalResult::InvalidEnvironment => {
+                    blossom_core::ApprovalAuthenticationOutcome::InvalidEnvironment
+                }
             };
             self.handler
                 .lock()

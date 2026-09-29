@@ -120,23 +120,32 @@ def main() -> int:
         for record in relevant
         if record.get("kind") == "execution" and record.get("category") == "started"
     ]
-    rejection = [
+    authentication = [
         record
         for record in relevant
         if record.get("kind") == "approval"
-        and record.get("category") == "authentication_rejected"
+        and str(record.get("category", "")).startswith("authentication_")
     ]
-    if effects or executor_starts or len(rejection) != 1:
+    expected = {
+        "self_approval": {"authentication_rejected", "authentication_challenge_expired"},
+        "missing_agent": {
+            "authentication_rejected",
+            "authentication_challenge_unavailable",
+        },
+    }[args.case]
+    reasons = [record.get("category") for record in authentication]
+    if effects or executor_starts or len(authentication) != 1 or reasons[0] not in expected:
         raise ProbeError(
             f"fail-closed audit mismatch: effects={len(effects)} "
-            f"executor_starts={len(executor_starts)} rejections={len(rejection)}"
+            f"executor_starts={len(executor_starts)} authentication={reasons}"
         )
     print(
         json.dumps(
             {
                 "case": args.case,
                 "status": "passed",
-                "audit_reason": "authentication_rejected",
+                "audit_reason": reasons[0],
+                "challenge_observed": True,
                 "effects": 0,
                 "executor_starts": 0,
             },

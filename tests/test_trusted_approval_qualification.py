@@ -21,6 +21,9 @@ class TrustedApprovalQualificationTests(unittest.TestCase):
             'record.get("kind") == "effect"',
             'record.get("kind") == "execution"',
             'record.get("category") == "started"',
+            '"authentication_challenge_expired"',
+            '"authentication_challenge_unavailable"',
+            '"challenge_observed": True',
             '"AccessDenied"',
         ):
             self.assertIn(required, source)
@@ -56,6 +59,9 @@ class TrustedApprovalQualificationTests(unittest.TestCase):
             "systemctl --user",
             "stop hyprpolkitagent.service",
             "--case missing_agent",
+            "loginctl show-session",
+            "invalid-environment-inactive-session",
+            "session_active=yes",
             "effects=0 executor_starts=0 bypass=absent",
         ):
             self.assertIn(required, orchestrator)
@@ -78,6 +84,40 @@ class TrustedApprovalQualificationTests(unittest.TestCase):
         self.assertIn(f"/dev/virtio-ports/{channel}", service)
         self.assertIn(f"/dev/virtio-ports/{channel}", orchestrator)
         self.assertIn(f"name={channel}", launcher)
+
+    def test_probe_does_not_block_graphical_target_or_pull_up_a_session(self):
+        service = (
+            ROOT
+            / "distribution/packages/blossom-trusted-approval-qualification"
+            / "blossom-trusted-approval-qualification.service"
+        ).read_text(encoding="utf-8")
+        orchestrator = (
+            ROOT
+            / "distribution/packages/blossom-trusted-approval-qualification"
+            / "blossom-trusted-approval-qualification-probe"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Type=simple", service)
+        self.assertNotIn("After=graphical.target", service)
+        self.assertIn("After=greetd.service NetworkManager-wait-online.service", service)
+        self.assertNotIn("Wants=NetworkManager-wait-online.service blossom-shell-broker@1000.service", service)
+        self.assertIn("BLOSSOM_ARM64_TRUSTED_APPROVAL_ACTIVATED", orchestrator)
+        self.assertIn("systemd-cat", orchestrator)
+        self.assertIn(">/dev/console", orchestrator)
+
+    def test_probe_image_has_session_autologin_but_physical_image_does_not(self):
+        arm_builder = (
+            ROOT / "scripts/distribution/build_arm64_development_image.sh"
+        ).read_text(encoding="utf-8")
+        physical_builder = (
+            ROOT / "scripts/distribution/build_physical_candidate.sh"
+        ).read_text(encoding="utf-8")
+        physical_greetd = (
+            ROOT / "distribution/physical-rootfs/etc/greetd/config.toml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("[initial_session]", arm_builder)
+        self.assertIn('user = "blossom"', arm_builder)
+        self.assertNotIn("[initial_session]", physical_builder)
+        self.assertNotIn("[initial_session]", physical_greetd)
 
     def test_test_only_package_is_not_referenced_by_physical_builds(self):
         package_name = "blossom-trusted-approval-qualification"

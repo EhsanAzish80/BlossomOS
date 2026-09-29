@@ -23,6 +23,9 @@ pub enum TrustedApprovalResult {
     Denied,
     Expired,
     Unavailable,
+    ChallengeExpired,
+    ChallengeUnavailable,
+    InvalidEnvironment,
 }
 
 pub trait TrustedApprovalAuthorizer: Send {
@@ -74,15 +77,26 @@ async fn check_with_timeout(
     challenge: &ShellApprovalAuthentication,
 ) -> TrustedApprovalResult {
     use futures_lite::future::race;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
-    race(check(address, challenge), async move {
+    let challenged = std::sync::Arc::new(AtomicBool::new(false));
+    let observed = challenged.clone();
+    race(check(address, challenge, observed), async move {
         async_io::Timer::after(timeout).await;
-        TrustedApprovalResult::Expired
+        if challenged.load(Ordering::SeqCst) {
+            TrustedApprovalResult::ChallengeExpired
+        } else {
+            TrustedApprovalResult::Expired
+        }
     })
     .await
 }
 
-async fn check(address: &str, challenge: &ShellApprovalAuthentication) -> TrustedApprovalResult {
+async fn check(
+    address: &str,
+    challenge: &ShellApprovalAuthentication,
+    challenged: std::sync::Arc<std::sync::atomic::AtomicBool>,
+) -> TrustedApprovalResult {
     let connection = match connection::Builder::address(address) {
         Ok(builder) => match builder
             .max_queued(8)
@@ -117,22 +131,33 @@ async fn check(address: &str, challenge: &ShellApprovalAuthentication) -> Truste
         ("blossom.effect", challenge.effect.into()),
         ("blossom.expires_at_ms", challenge.expires_at_ms.to_string()),
     ]);
-    let response: Result<AuthorizationResponse, zbus::Error> = authority
-        .call(
-            "CheckAuthorization",
-            &(
-                subject,
-                MODEL_EFFECT_POLKIT_ACTION,
-                details,
-                ALLOW_USER_INTERACTION,
-                "",
-            ),
+    let arguments = |flags| {
+        (
+            (subject.0, subject.1.clone()),
+            MODEL_EFFECT_POLKIT_ACTION,
+            details.clone(),
+            flags,
+            "",
         )
+    };
+    let preflight: Result<AuthorizationResponse, zbus::Error> =
+        authority.call("CheckAuthorization", &arguments(0)).await;
+    match preflight {
+        Ok((true, _, _)) => return TrustedApprovalResult::Authorized,
+        Ok((false, true, _)) => {
+            use std::sync::atomic::Ordering;
+            challenged.store(true, Ordering::SeqCst);
+        }
+        Ok((false, false, _)) => return TrustedApprovalResult::InvalidEnvironment,
+        Err(_) => return TrustedApprovalResult::Unavailable,
+    }
+    let response: Result<AuthorizationResponse, zbus::Error> = authority
+        .call("CheckAuthorization", &arguments(ALLOW_USER_INTERACTION))
         .await;
     match response {
         Ok((true, _, _)) => TrustedApprovalResult::Authorized,
         Ok((false, _, _)) => TrustedApprovalResult::Denied,
-        _ => TrustedApprovalResult::Unavailable,
+        Err(_) => TrustedApprovalResult::ChallengeUnavailable,
     }
 }
 
@@ -164,8 +189,10 @@ mod tests {
     #[derive(Clone, Copy, Default)]
     enum Behavior {
         #[default]
-        Allow,
-        Deny,
+        Bypass,
+        ChallengeAllow,
+        ChallengeDeny,
+        Inactive,
         Delay,
     }
 
@@ -215,18 +242,25 @@ mod tests {
                         .get("blossom.expires_at_ms")
                         .and_then(|value| value.parse::<u64>().ok())
                         .is_some_and(|value| value > now_ms())
-                    && flags == ALLOW_USER_INTERACTION
                     && cancellation_id.is_empty();
                 seen.calls += 1;
                 seen.valid = valid;
                 (valid, seen.behavior)
             };
-            if matches!(behavior, Behavior::Delay) {
+            if matches!(behavior, Behavior::Delay) && flags == ALLOW_USER_INTERACTION {
                 async_io::Timer::after(Duration::from_millis(100)).await;
             }
-            Ok(match behavior {
-                Behavior::Allow | Behavior::Delay => (valid, false, HashMap::new()),
-                Behavior::Deny => (false, false, HashMap::new()),
+            Ok(match (behavior, flags) {
+                (Behavior::Bypass, 0) => (valid, false, HashMap::new()),
+                (Behavior::ChallengeAllow | Behavior::ChallengeDeny | Behavior::Delay, 0) => {
+                    (false, valid, HashMap::new())
+                }
+                (Behavior::ChallengeAllow | Behavior::Delay, ALLOW_USER_INTERACTION) => {
+                    (valid, false, HashMap::new())
+                }
+                (Behavior::ChallengeDeny, ALLOW_USER_INTERACTION) => (false, false, HashMap::new()),
+                (Behavior::Inactive, 0) => (false, false, HashMap::new()),
+                _ => (false, false, HashMap::new()),
             })
         }
     }
@@ -286,22 +320,31 @@ mod tests {
 
     #[test]
     fn binds_authentication_to_exact_preview_over_dbus() {
-        let (result, seen) = authorize_with_behavior(Behavior::Allow, Duration::from_secs(2));
+        let (result, seen) =
+            authorize_with_behavior(Behavior::ChallengeAllow, Duration::from_secs(2));
         assert_eq!(result, TrustedApprovalResult::Authorized);
         let seen = seen.lock().unwrap();
-        assert_eq!(seen.calls, 1);
+        assert_eq!(seen.calls, 2);
         assert!(seen.valid);
     }
 
     #[test]
-    fn denial_and_timeout_fail_closed() {
+    fn bypass_denial_inactive_environment_and_timeout_are_distinct() {
         assert_eq!(
-            authorize_with_behavior(Behavior::Deny, Duration::from_secs(2)).0,
+            authorize_with_behavior(Behavior::Bypass, Duration::from_secs(2)).0,
+            TrustedApprovalResult::Authorized
+        );
+        assert_eq!(
+            authorize_with_behavior(Behavior::ChallengeDeny, Duration::from_secs(2)).0,
             TrustedApprovalResult::Denied
         );
         assert_eq!(
+            authorize_with_behavior(Behavior::Inactive, Duration::from_secs(2)).0,
+            TrustedApprovalResult::InvalidEnvironment
+        );
+        assert_eq!(
             authorize_with_behavior(Behavior::Delay, Duration::from_millis(10)).0,
-            TrustedApprovalResult::Expired
+            TrustedApprovalResult::ChallengeExpired
         );
     }
 }

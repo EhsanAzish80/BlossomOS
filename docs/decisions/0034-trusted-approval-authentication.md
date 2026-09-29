@@ -152,6 +152,24 @@ fails closed, and that both cases produce zero effects and zero executor starts.
 It also proves from installed package and filesystem state that the bypass is
 absent. Automation does not claim that a person entered a password.
 
+The automated production-policy image creates a greetd initial session for the
+qualification user. This autologin is confined to the ARM64 qualification
+builder and is forbidden from physical and production images by source checks.
+The gate must observe an active logind session before it starts a request. The
+broker first asks polkit non-interactively about its own system-bus subject:
+only `is_challenge=true` is an eligible environment. A flat unauthorized result
+is recorded as `invalid_environment` and can never satisfy the gate. The later
+interactive result retains whether that proven challenge was rejected, expired
+or could not be served because the agent was absent.
+
+The first attempted automated image exposed a separate startup error: a
+`Type=oneshot` qualification service was ordered after and wanted by
+`graphical.target`, so it held that target open while waiting for the session
+broker. The broker was inactive because the greetd session had not completed.
+The corrected service is non-blocking, waits for greetd, never pulls up
+`user@1000.service` or the broker itself, and fails with `invalid_environment`
+unless the real session has activated both.
+
 The remaining claim requires a single-tester manual check through the Blossom
 shell UI: correct authentication produces exactly one preview-matching effect;
 wrong authentication and cancellation produce none; two consecutive effects

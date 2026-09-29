@@ -46,6 +46,9 @@ pub enum ApprovalAuthenticationOutcome {
     Denied,
     Expired,
     Unavailable,
+    ChallengeExpired,
+    ChallengeUnavailable,
+    InvalidEnvironment,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
