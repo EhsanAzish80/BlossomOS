@@ -54,10 +54,13 @@ new file inside a workspace folder**. The model proposes a file name and its
 content; you see the exact name and content, approve once, and Blossom writes
 the file, verifies it, and records the outcome.
 
-That loop passes automated tests with a stand-in (fixture) model provider. A
-qualification run against a real local model has not
-yet been recorded. Everything else the agent might do in future is out of scope
-until it has the same end-to-end evidence.
+That loop passes automated tests with a stand-in (fixture) model provider. It
+also passed 20 consecutive real-model runs from a freshly built ARM64 image:
+all 20 intended file creations were verified, while the 80 adversarial cases
+produced no effects and started no command executor. See the
+[ARM64 image-gate evidence](docs/ARM64_AGENT_IMAGE_GATE_EVIDENCE.md) for the
+exact boundary and limitations. Everything else the agent might do in future
+is out of scope until it has the same end-to-end evidence.
 
 ## How an action happens
 

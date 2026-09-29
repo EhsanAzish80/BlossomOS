@@ -39,6 +39,8 @@ explicitly labeled future work. A target design is not an implementation claim.
 
 Cross-phase local-agent package evidence: [ARM64 package gate](ARM64_AGENT_PACKAGE_GATE_EVIDENCE.md).
 
+Baked-image local-agent evidence: [ARM64 image gate](ARM64_AGENT_IMAGE_GATE_EVIDENCE.md).
+
 Each phase may have additional design, implementation, and installed-evidence
 records beside its primary document. Filenames use `PHASE_<number>_...` so the
 full record remains discoverable without duplicating it here.
