@@ -108,6 +108,12 @@ field reduce confusion but do not eliminate overlay phishing. Compromise of the
 compositor, polkit agent, kernel, root or firmware remains outside this
 boundary.
 
+The authentication agent is also a same-user process. A malicious process can
+kill `hyprpolkitagent`, register a substitute agent and present a convincing
+lookalike challenge. It still cannot authorize the broker's request without the
+real password, but it can phish for that password. This agent-substitution route
+is a second expression of the same overlay-phishing risk, not trusted pixels.
+
 ## Qualification requirements
 
 Before the path is enabled in a physical candidate, installed Linux evidence
@@ -123,6 +129,14 @@ must prove:
 5. the audit records the action, preview digest and authentication outcome but
    never a password, password-derived value or file content; and
 6. the approval surface contains no password input widget owned by Blossom.
+
+VM-qualification images may install one package-owned polkit rule which returns
+`yes` for the `blossom` qualification user and only the exact model-effect
+action. This exists solely because the automated driver cannot type a password.
+The rule is absent from physical and production packages, and image source
+checks enforce that separation. Qualification evidence must state that its
+approvals bypassed password authentication and therefore prove pipeline wiring,
+not independent human intent.
 
 ## Consequences
 

@@ -64,6 +64,16 @@ pacstrap -K -C "$repo/distribution/archiso/pacman.conf" "$rootfs" \
   tumbler upower vulkan-intel wireplumber wpa_supplicant xdg-desktop-portal xdg-desktop-portal-gtk \
   xdg-desktop-portal-hyprland xorg-xwayland zstd
 pacman --root "$rootfs" --config /etc/pacman.conf --noconfirm -U "$packages"/*.pkg.tar.zst
+qualification_polkit_rule="$rootfs/usr/share/polkit-1/rules.d/49-blossom-model-effect-qualification.rules"
+if [[ "$mode" == vm-qualification ]]; then
+  [[ -f "$qualification_polkit_rule" ]] || {
+    echo "VM qualification root is missing its closed polkit bypass" >&2
+    exit 1
+  }
+elif [[ -e "$qualification_polkit_rule" ]]; then
+  echo "physical root must never contain the qualification polkit bypass" >&2
+  exit 1
+fi
 
 cp -a "$repo/distribution/physical-rootfs/." "$rootfs/"
 chmod 0440 "$rootfs/etc/sudoers.d/10-blossom-wheel"

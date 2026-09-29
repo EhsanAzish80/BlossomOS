@@ -32,7 +32,9 @@ pub mod verification;
 pub mod workspace_create;
 
 pub use approval::{ApprovalError, ApprovalToken};
-pub use audit::{AuditEvent, AuditLog, AuditRecord, BatteryAuditStatus};
+pub use audit::{
+    ApprovalAuthenticationOutcome, AuditEvent, AuditLog, AuditRecord, BatteryAuditStatus,
+};
 pub use battery_summary::{
     BATTERY_READ_TIMEOUT_MS, BatteryObservation, BatteryObservationError, BatteryReadError,
     BatteryState, BatterySummary, BatterySummaryProvider, DBUS_PROPERTIES_INTERFACE,
@@ -164,8 +166,9 @@ pub use shell_service::{
     ShellDiagnosticService, ShellServiceError, ShellServiceOutcome,
 };
 pub use shell_session::{
-    MAX_SHELL_PEER_NAME_BYTES, ShellCancellationReason, ShellCancelledApproval, ShellPeerId,
-    ShellResolvedApproval, ShellSessionApprovals, ShellSessionError,
+    MAX_SHELL_PEER_NAME_BYTES, ShellApprovalAuthentication, ShellCancellationReason,
+    ShellCancelledApproval, ShellPeerId, ShellResolvedApproval, ShellSessionApprovals,
+    ShellSessionError,
 };
 pub use storage_summary::{
     ROOT_FILESYSTEM_PATH, RootStorageReader, StorageSummary, StorageSummaryError,

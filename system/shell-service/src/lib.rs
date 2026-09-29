@@ -2,9 +2,15 @@
 
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 mod session_bus;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+mod trusted_approval;
 
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 pub use session_bus::{ShellBusService, ShellRequestHandler, run_production};
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+pub use trusted_approval::{
+    PolkitTrustedApproval, TrustedApprovalAuthorizer, TrustedApprovalResult,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShellProcessError {

@@ -213,9 +213,13 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
             now_ms,
         )? {
             BeginOutcome::ApprovalRequired { token, .. } => {
-                let preview =
-                    self.sessions
-                        .register(peer, request_id, expires_at_ms, preview, token)?;
+                let preview = self.sessions.register_model_effect(
+                    peer,
+                    request_id,
+                    expires_at_ms,
+                    preview,
+                    token,
+                )?;
                 Ok(ShellServiceOutcome::AwaitingApproval(Box::new(preview)))
             }
             BeginOutcome::Denied => Ok(ShellServiceOutcome::Denied),
@@ -349,6 +353,82 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
                 Err(ShellServiceError::WrongMethod)
             }
         }
+    }
+
+    pub fn approval_authentication_challenge(
+        &mut self,
+        peer: &ShellPeerId,
+        request: &ShellClientRequest,
+        now_ms: u64,
+    ) -> Result<Option<crate::ShellApprovalAuthentication>, ShellServiceError> {
+        let ShellClientRequest::SubmitDecision {
+            request_id,
+            preview_sha256,
+            decision,
+        } = request
+        else {
+            return Err(ShellServiceError::WrongMethod);
+        };
+        if *decision == ShellDecision::Deny {
+            return Ok(None);
+        }
+        match self
+            .sessions
+            .authentication_challenge(peer, request_id, preview_sha256, now_ms)
+        {
+            Ok(challenge) => Ok(challenge),
+            Err(ShellSessionError::ApprovalExpired) => {
+                self.expire_pending(peer, now_ms)?;
+                Ok(None)
+            }
+            Err(error) => Err(error.into()),
+        }
+    }
+
+    pub fn reject_approval_authentication(
+        &mut self,
+        peer: &ShellPeerId,
+        request: &ShellClientRequest,
+        now_ms: u64,
+    ) -> Result<(), ShellServiceError> {
+        let ShellClientRequest::SubmitDecision {
+            request_id,
+            preview_sha256,
+            decision: ShellDecision::ApproveOnce,
+        } = request
+        else {
+            return Err(ShellServiceError::WrongMethod);
+        };
+        let cancelled = match self
+            .sessions
+            .cancel(peer, request_id, preview_sha256, now_ms)
+        {
+            Ok(cancelled) => cancelled,
+            Err(ShellSessionError::ApprovalExpired) => {
+                self.expire_pending(peer, now_ms)?;
+                return Ok(());
+            }
+            Err(error) => return Err(error.into()),
+        };
+        self.engine
+            .deny_approval(cancelled.into_secret(), preview_sha256, now_ms)?;
+        Ok(())
+    }
+
+    pub fn record_approval_authentication(
+        &mut self,
+        challenge: &crate::ShellApprovalAuthentication,
+        outcome: crate::ApprovalAuthenticationOutcome,
+    ) -> Result<(), ShellServiceError> {
+        let request_id = RequestId::parse(challenge.request_id.clone())
+            .map_err(|_| ShellServiceError::WrongMethod)?;
+        self.engine.record_approval_authentication(
+            &request_id,
+            "org.blossomos.shell.approve-model-effect",
+            &challenge.preview_sha256,
+            outcome,
+        );
+        Ok(())
     }
 
     pub fn disconnect(

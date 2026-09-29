@@ -201,6 +201,20 @@ fn project_event(
             ShellActivityKind::Approval,
             ShellActivityCategory::ApprovalIssued,
         ),
+        AuditEvent::ApprovalAuthentication {
+            request_id,
+            outcome: crate::ApprovalAuthenticationOutcome::Authorized,
+            ..
+        } => (
+            request_id,
+            ShellActivityKind::Approval,
+            ShellActivityCategory::AuthenticationAuthorized,
+        ),
+        AuditEvent::ApprovalAuthentication { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Approval,
+            ShellActivityCategory::AuthenticationRejected,
+        ),
         AuditEvent::ApprovalRejected {
             request_id,
             error: ApprovalError::Expired,

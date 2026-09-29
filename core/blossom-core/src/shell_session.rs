@@ -48,7 +48,16 @@ struct PendingApproval<S> {
     request_id: RequestId,
     preview_sha256: String,
     expires_at_ms: u64,
+    authentication: Option<ShellApprovalAuthentication>,
     secret: S,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ShellApprovalAuthentication {
+    pub request_id: String,
+    pub preview_sha256: String,
+    pub effect: &'static str,
+    pub expires_at_ms: u64,
 }
 
 impl<S> ShellSessionApprovals<S> {
@@ -71,6 +80,45 @@ impl<S> ShellSessionApprovals<S> {
         preview: ShellApprovalPreview,
         secret: S,
     ) -> Result<ShellApprovalPreview, ShellSessionError> {
+        self.register_with_authentication(peer, request_id, expires_at_ms, preview, None, secret)
+    }
+
+    pub fn register_model_effect(
+        &mut self,
+        peer: ShellPeerId,
+        request_id: RequestId,
+        expires_at_ms: u64,
+        preview: ShellApprovalPreview,
+        secret: S,
+    ) -> Result<ShellApprovalPreview, ShellSessionError> {
+        if preview.operation != "files.write:create" {
+            return Err(ShellSessionError::BindingMismatch);
+        }
+        let authentication = ShellApprovalAuthentication {
+            request_id: request_id.as_str().into(),
+            preview_sha256: preview.preview_sha256.clone(),
+            effect: "files.write:create",
+            expires_at_ms,
+        };
+        self.register_with_authentication(
+            peer,
+            request_id,
+            expires_at_ms,
+            preview,
+            Some(authentication),
+            secret,
+        )
+    }
+
+    fn register_with_authentication(
+        &mut self,
+        peer: ShellPeerId,
+        request_id: RequestId,
+        expires_at_ms: u64,
+        preview: ShellApprovalPreview,
+        authentication: Option<ShellApprovalAuthentication>,
+        secret: S,
+    ) -> Result<ShellApprovalPreview, ShellSessionError> {
         if self.pending.contains_key(&peer) {
             return Err(ShellSessionError::ApprovalAlreadyPending);
         }
@@ -89,10 +137,31 @@ impl<S> ShellSessionApprovals<S> {
                 request_id,
                 preview_sha256: preview.preview_sha256.clone(),
                 expires_at_ms,
+                authentication,
                 secret,
             },
         );
         Ok(preview)
+    }
+
+    pub fn authentication_challenge(
+        &self,
+        peer: &ShellPeerId,
+        request_id: &RequestId,
+        preview_sha256: &str,
+        now_ms: u64,
+    ) -> Result<Option<ShellApprovalAuthentication>, ShellSessionError> {
+        let pending = self
+            .pending
+            .get(peer)
+            .ok_or(ShellSessionError::NoPendingApproval)?;
+        if now_ms > pending.expires_at_ms {
+            return Err(ShellSessionError::ApprovalExpired);
+        }
+        if &pending.request_id != request_id || pending.preview_sha256 != preview_sha256 {
+            return Err(ShellSessionError::BindingMismatch);
+        }
+        Ok(pending.authentication.clone())
     }
 
     pub fn resolve(
@@ -323,6 +392,61 @@ mod tests {
             Err(ShellSessionError::BindingMismatch)
         ));
         assert!(sessions.has_pending(&owner));
+    }
+
+    #[test]
+    fn model_effect_authentication_is_exact_and_non_consuming() {
+        let mut sessions = ShellSessionApprovals::default();
+        let owner = peer(":1.10");
+        let id = request("req-model-1");
+        let preview = ShellApprovalPreview::workspace_create(
+            &id,
+            1_100,
+            "/home/blossom/Workspace/note.txt".into(),
+            "bounded content",
+        );
+        sessions
+            .register_model_effect(owner.clone(), id.clone(), 1_100, preview.clone(), 73_u64)
+            .expect("register model effect");
+        let challenge = sessions
+            .authentication_challenge(&owner, &id, &preview.preview_sha256, 1_001)
+            .expect("exact challenge")
+            .expect("model effect requires authentication");
+        assert_eq!(challenge.request_id, id.as_str());
+        assert_eq!(challenge.preview_sha256, preview.preview_sha256);
+        assert_eq!(challenge.effect, "files.write:create");
+        assert_eq!(challenge.expires_at_ms, 1_100);
+        assert!(sessions.has_pending(&owner));
+        assert!(matches!(
+            sessions.authentication_challenge(&owner, &id, &"0".repeat(64), 1_002),
+            Err(ShellSessionError::BindingMismatch)
+        ));
+        let resolved = sessions
+            .resolve(
+                &owner,
+                &id,
+                &preview.preview_sha256,
+                ShellDecision::ApproveOnce,
+                1_003,
+            )
+            .expect("consume only after authentication");
+        assert_eq!(resolved.into_secret(), 73);
+    }
+
+    #[test]
+    fn non_model_approval_has_no_authentication_challenge() {
+        let mut sessions = ShellSessionApprovals::default();
+        let owner = peer(":1.10");
+        let id = request("req-fixed-1");
+        let preview = sessions
+            .register_system_uname(owner.clone(), id.clone(), 1_100, 73_u64)
+            .expect("register fixed read");
+        assert_eq!(
+            sessions
+                .authentication_challenge(&owner, &id, &preview.preview_sha256, 1_001)
+                .expect("valid binding"),
+            None
+        );
     }
 
     #[test]

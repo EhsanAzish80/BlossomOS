@@ -157,6 +157,9 @@ class Arm64AgentContractTests(unittest.TestCase):
             "start",
             "start_agent",
             "decide",
+            "approval_authentication",
+            "reject_approval_authentication",
+            "record_approval_authentication",
             "cancel",
             "activity",
             "battery",
@@ -206,11 +209,47 @@ class Arm64AgentContractTests(unittest.TestCase):
             "sole source of preview data",
             "does not create trusted pixels",
             "lookalike overlay",
+            "agent-substitution",
+            "bypassed password authentication",
             "must never fall back",
         ):
             self.assertIn(required, adr)
         index = (ROOT / "docs/decisions/README.md").read_text(encoding="utf-8")
         self.assertIn("ADR-0034", index)
+
+    def test_model_effect_policy_never_caches_authentication(self):
+        policy = (
+            ROOT / "system/shell/packaging/org.blossomos.shell.policy"
+        ).read_text(encoding="utf-8")
+        self.assertIn("org.blossomos.shell.approve-model-effect", policy)
+        self.assertIn("<allow_active>auth_self</allow_active>", policy)
+        self.assertNotIn("auth_self_keep", policy)
+        core_package = (
+            ROOT / "distribution/packages/blossom-core/PKGBUILD"
+        ).read_text(encoding="utf-8")
+        self.assertIn("org.blossomos.shell.policy", core_package)
+
+    def test_qualification_polkit_bypass_cannot_ship_in_production(self):
+        qualification_package = (
+            ROOT / "distribution/packages/blossom-qualification/PKGBUILD"
+        ).read_text(encoding="utf-8")
+        core_package = (
+            ROOT / "distribution/packages/blossom-core/PKGBUILD"
+        ).read_text(encoding="utf-8")
+        physical_verifier = (
+            ROOT / "scripts/distribution/verify_physical_candidate_image.sh"
+        ).read_text(encoding="utf-8")
+        physical_builder = (
+            ROOT / "scripts/distribution/build_physical_candidate.sh"
+        ).read_text(encoding="utf-8")
+        rule_name = "49-blossom-model-effect-qualification.rules"
+        self.assertIn(rule_name, qualification_package)
+        self.assertNotIn(rule_name, core_package)
+        self.assertNotIn(rule_name, physical_verifier)
+        self.assertIn("physical root must never contain the qualification polkit bypass", physical_builder)
+        self.assertIn("VM qualification root is missing its closed polkit bypass", physical_builder)
+        driver = (ROOT / "scripts/qualify_agent_pipeline.py").read_text(encoding="utf-8")
+        self.assertIn('"qualification_polkit_bypass"', driver)
 
 
 if __name__ == "__main__":

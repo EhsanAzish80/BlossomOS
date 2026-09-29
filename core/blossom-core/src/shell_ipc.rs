@@ -462,6 +462,8 @@ pub enum ShellActivityCategory {
     PolicyAllow,
     PolicyDenied,
     ApprovalIssued,
+    AuthenticationAuthorized,
+    AuthenticationRejected,
     ApprovalRejected,
     ApprovedOnce,
     Denied,

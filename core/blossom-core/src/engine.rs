@@ -586,6 +586,21 @@ impl<
         &self.audit
     }
 
+    pub fn record_approval_authentication(
+        &mut self,
+        request_id: &crate::RequestId,
+        action: &str,
+        preview_sha256: &str,
+        outcome: crate::ApprovalAuthenticationOutcome,
+    ) {
+        self.audit.append(AuditEvent::ApprovalAuthentication {
+            request_id: request_id.as_str().into(),
+            action: action.into(),
+            preview_sha256: preview_sha256.into(),
+            outcome,
+        });
+    }
+
     fn execute(
         &mut self,
         prepared: PreparedToolRequest,
