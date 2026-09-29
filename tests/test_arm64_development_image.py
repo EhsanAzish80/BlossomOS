@@ -52,6 +52,14 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "BLOSSOM_LLAMA_RUNTIME_ARCHIVE",
             "BLOSSOM_LLAMA_MODEL",
             "BLOSSOM_LLAMA_MODEL_LICENSE",
+            "BLOSSOM_ARM64_MIN_FREE_GIB",
+            "trap cleanup_build EXIT",
+            "trap 'exit 130' INT",
+            "trap 'exit 143' TERM",
+            'rm -f "$raw" "$qcow" "$output/image/SHA256SUMS"',
+            'rm -rf "$image_work"',
+            "available_kib",
+            "build_complete=true",
         ):
             self.assertIn(required, text)
         self.assertNotIn("github", text.lower())

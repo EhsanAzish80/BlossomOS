@@ -48,6 +48,40 @@ case "$output" in
   "$repo"/*) ;;
   *) echo "error: output must remain inside the repository" >&2; exit 2 ;;
 esac
+raw="$output/image/blossom-os-arm64-development.raw"
+qcow="$output/image/blossom-os-arm64-development.qcow2"
+image_work="$output/work/arm64-image"
+build_complete=false
+cleanup_build() {
+  local status=$?
+  trap - EXIT INT TERM
+  rm -rf "$image_work"
+  if [[ $build_complete != true ]]; then
+    rm -f "$raw" "$qcow" "$output/image/SHA256SUMS"
+  fi
+  exit "$status"
+}
+trap cleanup_build EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# A local image build temporarily needs the populated raw filesystem, its
+# compressed qcow2 successor, and builder-VM growth at the same time. Refuse to
+# start unless the host has enough real headroom, and discard any prior
+# candidate/work directory before measuring it.
+rm -rf "$image_work"
+rm -f "$raw" "$qcow" "$output/image/SHA256SUMS"
+minimum_free_gib=${BLOSSOM_ARM64_MIN_FREE_GIB:-20}
+[[ $minimum_free_gib =~ ^[1-9][0-9]*$ ]] || {
+  echo "error: BLOSSOM_ARM64_MIN_FREE_GIB must be a positive integer" >&2
+  exit 2
+}
+available_kib=$(df -Pk "$output" | awk 'NR == 2 {print $4}')
+required_kib=$((minimum_free_gib * 1024 * 1024))
+if (( available_kib < required_kib )); then
+  echo "error: ARM64 image build requires at least ${minimum_free_gib} GiB free; available: $((available_kib / 1024 / 1024)) GiB" >&2
+  exit 1
+fi
 rootfs="$output/cache/$rootfs_name"
 fetch_exact "$rootfs_url" "$rootfs_sha256" "$rootfs"
 
@@ -73,9 +107,6 @@ if [[ "$server_arch" != aarch64 && "$server_arch" != arm64 ]]; then
   exit 2
 fi
 
-raw="$output/image/blossom-os-arm64-development.raw"
-qcow="$output/image/blossom-os-arm64-development.qcow2"
-rm -f "$raw" "$qcow"
 docker --context "$context" run --rm --platform linux/arm64 --privileged \
   --dns 1.1.1.1 \
   --env BLOSSOM_IMAGE_COMMIT="$source_commit" \
@@ -99,4 +130,5 @@ qemu-img convert -f raw -O qcow2 -c "$raw" "$qcow"
 qemu-img check "$qcow"
 shasum -a 256 "$qcow" >"$output/image/SHA256SUMS"
 rm -f "$raw"
+build_complete=true
 echo "ARM64 development image ready: $qcow"
