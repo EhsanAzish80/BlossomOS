@@ -2,6 +2,9 @@
 set -euo pipefail
 
 result_device=/dev/virtio-ports/org.blossomos.qualification
+activation="BLOSSOM_ARM64_TRUSTED_APPROVAL_ACTIVATED"
+echo "$activation" | systemd-cat -t blossom-trusted-approval-qualification
+echo "$activation" >/dev/console
 exec >"$result_device" 2>&1
 started=${SECONDS}
 runtime=/run/user/1000
@@ -25,14 +28,25 @@ user_systemctl() {
   as_blossom systemctl --user "$@"
 }
 
+session_id=""
 for _ in {1..90}; do
-  if systemctl is-active --quiet blossom-shell-broker@1000.service \
+  session_id=$(loginctl list-sessions --no-legend 2>/dev/null \
+    | awk '$3 == "blossom" { print $1; exit }')
+  if [[ -n $session_id ]] \
+      && [[ $(loginctl show-session "$session_id" -p Active --value) == yes ]] \
+      && [[ $(loginctl show-session "$session_id" -p State --value) == active ]] \
+      && systemctl is-active --quiet blossom-shell-broker@1000.service \
       && user_systemctl is-active --quiet blossom-shell-ui.service \
       && systemctl is-active --quiet blossom-model-gateway.service; then
     break
   fi
   sleep 2
 done
+[[ -n $session_id ]] || fail invalid-environment-no-session
+[[ $(loginctl show-session "$session_id" -p Active --value) == yes ]] \
+  || fail invalid-environment-inactive-session
+[[ $(loginctl show-session "$session_id" -p State --value) == active ]] \
+  || fail invalid-environment-session-state
 systemctl is-active --quiet blossom-shell-broker@1000.service || fail broker
 user_systemctl is-active --quiet blossom-shell-ui.service || fail shell-ui
 systemctl is-active --quiet blossom-model-gateway.service || fail gateway
@@ -58,5 +72,5 @@ missing_result=$(as_blossom /usr/lib/blossom-os/probe-trusted-approval --case mi
 
 echo "$self_result"
 echo "$missing_result"
-echo "BLOSSOM_ARM64_TRUSTED_APPROVAL_READY self_approval=denied missing_agent=denied effects=0 executor_starts=0 bypass=absent seconds=$((SECONDS - started))"
+echo "BLOSSOM_ARM64_TRUSTED_APPROVAL_READY session_active=yes self_approval=challenged missing_agent=challenged effects=0 executor_starts=0 bypass=absent seconds=$((SECONDS - started))"
 systemctl poweroff

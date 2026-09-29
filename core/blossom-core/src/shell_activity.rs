@@ -210,6 +210,33 @@ fn project_event(
             ShellActivityKind::Approval,
             ShellActivityCategory::AuthenticationAuthorized,
         ),
+        AuditEvent::ApprovalAuthentication {
+            request_id,
+            outcome: crate::ApprovalAuthenticationOutcome::ChallengeExpired,
+            ..
+        } => (
+            request_id,
+            ShellActivityKind::Approval,
+            ShellActivityCategory::AuthenticationChallengeExpired,
+        ),
+        AuditEvent::ApprovalAuthentication {
+            request_id,
+            outcome: crate::ApprovalAuthenticationOutcome::ChallengeUnavailable,
+            ..
+        } => (
+            request_id,
+            ShellActivityKind::Approval,
+            ShellActivityCategory::AuthenticationChallengeUnavailable,
+        ),
+        AuditEvent::ApprovalAuthentication {
+            request_id,
+            outcome: crate::ApprovalAuthenticationOutcome::InvalidEnvironment,
+            ..
+        } => (
+            request_id,
+            ShellActivityKind::Approval,
+            ShellActivityCategory::AuthenticationInvalidEnvironment,
+        ),
         AuditEvent::ApprovalAuthentication { request_id, .. } => (
             request_id,
             ShellActivityKind::Approval,
