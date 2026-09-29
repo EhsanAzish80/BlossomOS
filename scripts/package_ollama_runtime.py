@@ -186,6 +186,8 @@ def registry_bytes(lock: dict) -> bytes:
         "profile_version": 5,
         "profile": "ollama_cpu_v1",
         "architecture": lock["architecture"],
+        "constraint_schema_sha256": None,
+        "constraint_grammar_sha256": None,
         "provider": "ollama",
         "logical_model": LOGICAL_MODEL,
         "gateway_protocol_version": 1,
