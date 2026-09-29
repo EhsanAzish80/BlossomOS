@@ -12,7 +12,7 @@ reported as one.
 Use the ARM64 trusted-approval image only after its automated gate reports:
 
 ```text
-BLOSSOM_ARM64_TRUSTED_APPROVAL_READY self_approval=denied missing_agent=denied effects=0 executor_starts=0 bypass=absent
+BLOSSOM_ARM64_TRUSTED_APPROVAL_READY session_active=yes self_approval=challenged missing_agent=challenged effects=0 executor_starts=0 bypass=absent
 ```
 
 Before testing, confirm in the guest that `blossom-qualification` is not

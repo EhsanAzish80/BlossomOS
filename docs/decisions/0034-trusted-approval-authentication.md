@@ -165,10 +165,20 @@ or could not be served because the agent was absent.
 The first attempted automated image exposed a separate startup error: a
 `Type=oneshot` qualification service was ordered after and wanted by
 `graphical.target`, so it held that target open while waiting for the session
-broker. The broker was inactive because the greetd session had not completed.
-The corrected service is non-blocking, waits for greetd, never pulls up
+broker. The corrected service is non-blocking, waits for greetd, never pulls up
 `user@1000.service` or the broker itself, and fails with `invalid_environment`
 unless the real session has activated both.
+
+Live inspection of the corrected image then established why the broker itself
+remained inactive. Greetd had created a real active Wayland session, the user
+manager and polkit agent were running, and the broker was attached to
+`user@1000.service`. The broker's `ExecCondition` nevertheless exited at the
+namespace step with `226/NAMESPACE`: its writable `BindPaths` source did not
+exist because `/home/blossom/Workspace` had never been provisioned. The account
+provisioners now create the workspace before a login can start the broker. The
+unit resolves the account home with systemd's `%h` specifier rather than a
+fixed username, so an installed owner selected in the graphical installer gets
+the same bounded workspace invariant.
 
 The remaining claim requires a single-tester manual check through the Blossom
 shell UI: correct authentication produces exactly one preview-matching effect;

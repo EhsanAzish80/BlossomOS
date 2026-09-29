@@ -50,6 +50,8 @@ def provision(
     destination = root / "home" / profile.username
     if source.is_dir():
         shutil.copytree(source, destination, dirs_exist_ok=True)
+    workspace = destination / "Workspace"
+    workspace.mkdir(parents=True, mode=0o700, exist_ok=True)
     hyprland = destination / ".config/hypr/hyprland.conf"
     if hyprland.is_file():
         contents = hyprland.read_text(encoding="utf-8")

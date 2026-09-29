@@ -11,7 +11,7 @@ ExecCondition=/usr/bin/test %i = 1000
 User=%i
 Group=%i
 SupplementaryGroups=blossom-ai
-Environment=HOME=/home/blossom
+Environment=HOME=%h
 Environment=XDG_RUNTIME_DIR=/run/user/%i
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%i/bus
 ExecStart=/usr/lib/blossom-os/blossom-shell-service
@@ -26,7 +26,7 @@ PrivateDevices=yes
 ProtectSystem=strict
 ProtectHome=tmpfs
 BindReadOnlyPaths=/run/user/%i/bus
-BindPaths=/home/blossom/Workspace
+BindPaths=%h/Workspace
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes

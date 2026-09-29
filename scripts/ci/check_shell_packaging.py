@@ -63,12 +63,12 @@ def check_evidence_lock() -> None:
 
 def check_unit() -> None:
     text = (PACKAGE / UNIT).read_text()
-    required = ["BindsTo=user@%i.service", "After=user@%i.service", "RequiresMountsFor=/run/user/%i", "Type=simple", "ExecCondition=/usr/bin/test %i = 1000", "User=%i", "Group=%i", "SupplementaryGroups=blossom-ai", "Environment=HOME=/home/blossom", "Environment=XDG_RUNTIME_DIR=/run/user/%i", "Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%i/bus", f"ExecStart={BINARY}", "Restart=no", "NoNewPrivileges=yes", "CapabilityBoundingSet=\n", "AmbientCapabilities=\n", "PrivateDevices=yes", "ProtectSystem=strict", "ProtectHome=tmpfs", "RestrictAddressFamilies=AF_UNIX AF_NETLINK", "MemoryDenyWriteExecute=yes", "IPAddressDeny=any"]
+    required = ["BindsTo=user@%i.service", "After=user@%i.service", "RequiresMountsFor=/run/user/%i", "Type=simple", "ExecCondition=/usr/bin/test %i = 1000", "User=%i", "Group=%i", "SupplementaryGroups=blossom-ai", "Environment=HOME=%h", "Environment=XDG_RUNTIME_DIR=/run/user/%i", "Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%i/bus", f"ExecStart={BINARY}", "Restart=no", "NoNewPrivileges=yes", "CapabilityBoundingSet=\n", "AmbientCapabilities=\n", "PrivateDevices=yes", "ProtectSystem=strict", "ProtectHome=tmpfs", "RestrictAddressFamilies=AF_UNIX AF_NETLINK", "MemoryDenyWriteExecute=yes", "IPAddressDeny=any"]
     for value in required:
         require(value in text, f"missing shell unit boundary: {value.strip()}")
     exposure = [line.strip() for line in text.splitlines()
                 if line.strip().startswith(("BindPaths=", "BindReadOnlyPaths=", "ReadWritePaths=", "ReadOnlyPaths=", "ProtectHome="))]
-    require(exposure == ["ProtectHome=tmpfs", "BindReadOnlyPaths=/run/user/%i/bus", "BindPaths=/home/blossom/Workspace"],
+    require(exposure == ["ProtectHome=tmpfs", "BindReadOnlyPaths=/run/user/%i/bus", "BindPaths=%h/Workspace"],
             "shell may expose only the session bus and bounded workspace through hidden homes")
     require("[Install]" not in text, "checkpoint must not be enableable")
     families = [line.strip() for line in text.splitlines()
