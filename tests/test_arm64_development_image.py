@@ -92,6 +92,7 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "image-source-commit",
             "blossom-model-runtime-b[0-9]*-aarch64.pkg.tar.*",
             'userdel blossom 2>/dev/null || true',
+            "groupadd --force blossom",
             "useradd --uid 1000 --gid blossom",
         ):
             self.assertIn(required, text)
