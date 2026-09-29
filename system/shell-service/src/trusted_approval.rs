@@ -12,7 +12,10 @@ const POLKIT_INTERFACE: &str = "org.freedesktop.PolicyKit1.Authority";
 const SYSTEM_BUS_ADDRESS: &str = "unix:path=/run/dbus/system_bus_socket";
 const ALLOW_USER_INTERACTION: u32 = 1;
 
-type AuthorizationResponse = Option<(bool, bool, HashMap<String, String>)>;
+// PolicyKit's CheckAuthorization result has the fixed D-Bus signature
+// `(bba{ss})`.  It is never an optional value; modeling it as Option changes
+// the expected wire shape and makes a real PolicyKit authority fail decoding.
+type AuthorizationResponse = (bool, bool, HashMap<String, String>);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrustedApprovalResult {
@@ -114,7 +117,7 @@ async fn check(address: &str, challenge: &ShellApprovalAuthentication) -> Truste
         ("blossom.effect", challenge.effect.into()),
         ("blossom.expires_at_ms", challenge.expires_at_ms.to_string()),
     ]);
-    let response: Result<AuthorizationResponse, zbus::Error> = authority
+    let response: Result<Option<AuthorizationResponse>, zbus::Error> = authority
         .call_with_flags(
             "CheckAuthorization",
             MethodFlags::NoAutoStart.into(),
@@ -141,6 +144,14 @@ mod tests {
     use std::process::{Child, Command, Stdio};
     use std::sync::{Arc, Mutex};
     use zbus::zvariant::OwnedValue;
+
+    #[test]
+    fn authorization_response_matches_polkit_wire_signature() {
+        assert_eq!(
+            <AuthorizationResponse as zbus::zvariant::Type>::SIGNATURE.to_string(),
+            "(bba{ss})"
+        );
+    }
 
     struct TestBus(Child);
 
