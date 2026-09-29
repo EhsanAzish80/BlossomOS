@@ -69,6 +69,13 @@ fn project_event(
         ),
         AuditEvent::RequestAccepted {
             request_id, tool, ..
+        } if tool == "system.network.connectivity" => (
+            request_id,
+            ShellActivityKind::Request,
+            ShellActivityCategory::Accepted,
+        ),
+        AuditEvent::RequestAccepted {
+            request_id, tool, ..
         } if tool == "files.write.create" => (
             request_id,
             ShellActivityKind::Request,
@@ -93,6 +100,15 @@ fn project_event(
         AuditEvent::PolicyEvaluated {
             request_id,
             capability: Capability::SystemReadBatterySummary,
+            decision: PolicyDecision::Allow,
+        } => (
+            request_id,
+            ShellActivityKind::Policy,
+            ShellActivityCategory::PolicyAllow,
+        ),
+        AuditEvent::PolicyEvaluated {
+            request_id,
+            capability: Capability::SystemReadNetworkConnectivity,
             decision: PolicyDecision::Allow,
         } => (
             request_id,
@@ -137,6 +153,14 @@ fn project_event(
         AuditEvent::NativeReadStarted {
             request_id,
             resource,
+        } if resource == "system.network.connectivity" => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadStarted,
+        ),
+        AuditEvent::NativeReadStarted {
+            request_id,
+            resource,
         } if resource.starts_with("file.content:sha256:") => (
             request_id,
             ShellActivityKind::Context,
@@ -148,6 +172,16 @@ fn project_event(
             ShellActivityCategory::ReadFinished,
         ),
         AuditEvent::BatterySummaryReadFailed { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadFailed,
+        ),
+        AuditEvent::NetworkConnectivityReadFinished { request_id, .. } => (
+            request_id,
+            ShellActivityKind::Context,
+            ShellActivityCategory::ReadFinished,
+        ),
+        AuditEvent::NetworkConnectivityReadFailed { request_id, .. } => (
             request_id,
             ShellActivityKind::Context,
             ShellActivityCategory::ReadFailed,
@@ -408,5 +442,43 @@ mod tests {
                 .iter()
                 .all(|item| item.kind != ShellActivityKind::Execution)
         );
+    }
+
+    #[test]
+    fn projects_desktop_network_probe_without_poisoning_activity() {
+        let request_id = "shell-0000000000000007-3";
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::RequestAccepted {
+            request_id: request_id.into(),
+            tool: "system.network.connectivity".into(),
+            origin: crate::RequestOrigin::InternalFixed,
+        });
+        audit.append(AuditEvent::PolicyEvaluated {
+            request_id: request_id.into(),
+            capability: Capability::SystemReadNetworkConnectivity,
+            decision: PolicyDecision::Allow,
+        });
+        audit.append(AuditEvent::NativeReadStarted {
+            request_id: request_id.into(),
+            resource: "system.network.connectivity".into(),
+        });
+        audit.append(AuditEvent::NetworkConnectivityReadFinished {
+            request_id: request_id.into(),
+            source: crate::ContextSource::SystemNetworkConnectivity,
+            schema_version: 1,
+        });
+        audit.append(AuditEvent::VerificationFinished {
+            request_id: request_id.into(),
+            verification: Verification {
+                succeeded: true,
+                reason: VerificationReason::ValidNetworkConnectivity,
+            },
+        });
+
+        let projected = project_shell_activity(&audit, None, 16).expect("projection");
+        assert_eq!(projected.len(), 5);
+        assert_eq!(projected[2].category, ShellActivityCategory::ReadStarted);
+        assert_eq!(projected[3].category, ShellActivityCategory::ReadFinished);
+        assert_eq!(projected[4].category, ShellActivityCategory::Verified);
     }
 }
