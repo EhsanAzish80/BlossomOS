@@ -1,6 +1,6 @@
 use blossom_core::ShellApprovalAuthentication;
-use std::collections::HashMap;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::collections::{HashMap, VecDeque};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zbus::proxy::{Builder as ProxyBuilder, CacheProperties};
 use zbus::zvariant::{OwnedObjectPath, Value};
 use zbus::{Proxy, connection};
@@ -15,6 +15,9 @@ const LOGIN1_MANAGER_INTERFACE: &str = "org.freedesktop.login1.Manager";
 const LOGIN1_SESSION_INTERFACE: &str = "org.freedesktop.login1.Session";
 const SYSTEM_BUS_ADDRESS: &str = "unix:path=/run/dbus/system_bus_socket";
 const ALLOW_USER_INTERACTION: u32 = 1;
+const CHALLENGE_LIMIT: usize = 3;
+const CHALLENGE_WINDOW: Duration = Duration::from_secs(60);
+const CHALLENGE_COOLDOWN: Duration = Duration::from_secs(120);
 
 // PolicyKit's CheckAuthorization result has the fixed D-Bus signature
 // `(bba{ss})`.  It is never an optional value; modeling it as Option changes
@@ -30,6 +33,7 @@ pub enum TrustedApprovalResult {
     ChallengeExpired,
     ChallengeUnavailable,
     InvalidEnvironment,
+    RateLimited,
 }
 
 pub trait TrustedApprovalAuthorizer: Send {
@@ -46,12 +50,14 @@ impl TrustedApprovalAuthorizer for DenyTrustedApproval {
 
 pub struct PolkitTrustedApproval {
     address: String,
+    challenge_limiter: SessionChallengeLimiter,
 }
 
 impl Default for PolkitTrustedApproval {
     fn default() -> Self {
         Self {
             address: SYSTEM_BUS_ADDRESS.into(),
+            challenge_limiter: SessionChallengeLimiter::default(),
         }
     }
 }
@@ -71,7 +77,45 @@ impl TrustedApprovalAuthorizer for PolkitTrustedApproval {
             &self.address,
             Duration::from_millis(remaining_ms),
             challenge,
+            &mut self.challenge_limiter,
         ))
+    }
+}
+
+#[derive(Default)]
+struct SessionChallengeLimiter {
+    session_id: Option<String>,
+    attempts: VecDeque<Instant>,
+    cooldown_until: Option<Instant>,
+}
+
+impl SessionChallengeLimiter {
+    fn admit(&mut self, session_id: &str, now: Instant) -> bool {
+        if self.session_id.as_deref() != Some(session_id) {
+            self.session_id = Some(session_id.into());
+            self.attempts.clear();
+            self.cooldown_until = None;
+        }
+        if let Some(until) = self.cooldown_until {
+            if now < until {
+                return false;
+            }
+            self.attempts.clear();
+            self.cooldown_until = None;
+        }
+        while self
+            .attempts
+            .front()
+            .is_some_and(|attempt| now.duration_since(*attempt) >= CHALLENGE_WINDOW)
+        {
+            self.attempts.pop_front();
+        }
+        if self.attempts.len() >= CHALLENGE_LIMIT {
+            self.cooldown_until = Some(now + CHALLENGE_COOLDOWN);
+            return false;
+        }
+        self.attempts.push_back(now);
+        true
     }
 }
 
@@ -79,20 +123,24 @@ async fn check_with_timeout(
     address: &str,
     timeout: Duration,
     challenge: &ShellApprovalAuthentication,
+    challenge_limiter: &mut SessionChallengeLimiter,
 ) -> TrustedApprovalResult {
     use futures_lite::future::race;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     let challenged = std::sync::Arc::new(AtomicBool::new(false));
     let observed = challenged.clone();
-    race(check(address, challenge, observed), async move {
-        async_io::Timer::after(timeout).await;
-        if challenged.load(Ordering::SeqCst) {
-            TrustedApprovalResult::ChallengeExpired
-        } else {
-            TrustedApprovalResult::Expired
-        }
-    })
+    race(
+        check(address, challenge, observed, challenge_limiter),
+        async move {
+            async_io::Timer::after(timeout).await;
+            if challenged.load(Ordering::SeqCst) {
+                TrustedApprovalResult::ChallengeExpired
+            } else {
+                TrustedApprovalResult::Expired
+            }
+        },
+    )
     .await
 }
 
@@ -100,6 +148,7 @@ async fn check(
     address: &str,
     challenge: &ShellApprovalAuthentication,
     challenged: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    challenge_limiter: &mut SessionChallengeLimiter,
 ) -> TrustedApprovalResult {
     let connection = match connection::Builder::address(address) {
         Ok(builder) => match builder
@@ -116,7 +165,42 @@ async fn check(
     let Some(session_id) = active_local_graphical_session(&connection).await else {
         return TrustedApprovalResult::InvalidEnvironment;
     };
-    check_for_session(&connection, challenge, challenged, &session_id).await
+    check_for_session(
+        &connection,
+        challenge,
+        challenged,
+        &session_id,
+        challenge_limiter,
+    )
+    .await
+}
+
+struct SessionCandidate {
+    id: String,
+    uid: u32,
+    seat: String,
+    active: bool,
+    remote: bool,
+    class: String,
+    kind: String,
+    state: String,
+}
+
+fn select_active_local_graphical_session(
+    expected_uid: u32,
+    candidates: impl IntoIterator<Item = SessionCandidate>,
+) -> Option<String> {
+    let mut eligible = candidates.into_iter().filter(|candidate| {
+        candidate.uid == expected_uid
+            && !candidate.seat.is_empty()
+            && candidate.active
+            && !candidate.remote
+            && candidate.class == "user"
+            && matches!(candidate.kind.as_str(), "wayland" | "x11")
+            && candidate.state == "active"
+    });
+    let selected = eligible.next()?.id;
+    eligible.next().is_none().then_some(selected)
 }
 
 async fn active_local_graphical_session(connection: &zbus::Connection) -> Option<String> {
@@ -134,7 +218,7 @@ async fn active_local_graphical_session(connection: &zbus::Connection) -> Option
     let sessions: Vec<(String, u32, String, String, OwnedObjectPath)> =
         manager.call("ListSessions", &()).await.ok()?;
     let expected_uid = nix::unistd::geteuid().as_raw();
-    let mut eligible = Vec::new();
+    let mut candidates = Vec::new();
     for (session_id, uid, _, seat, path) in sessions {
         if uid != expected_uid || seat.is_empty() {
             continue;
@@ -155,16 +239,18 @@ async fn active_local_graphical_session(connection: &zbus::Connection) -> Option
         let class: String = session.get_property("Class").await.ok()?;
         let kind: String = session.get_property("Type").await.ok()?;
         let state: String = session.get_property("State").await.ok()?;
-        if active
-            && !remote
-            && class == "user"
-            && matches!(kind.as_str(), "wayland" | "x11")
-            && state == "active"
-        {
-            eligible.push(session_id);
-        }
+        candidates.push(SessionCandidate {
+            id: session_id,
+            uid,
+            seat,
+            active,
+            remote,
+            class,
+            kind,
+            state,
+        });
     }
-    (eligible.len() == 1).then(|| eligible.remove(0))
+    select_active_local_graphical_session(expected_uid, candidates)
 }
 
 async fn check_for_session(
@@ -172,6 +258,7 @@ async fn check_for_session(
     challenge: &ShellApprovalAuthentication,
     challenged: std::sync::Arc<std::sync::atomic::AtomicBool>,
     session_id: &str,
+    challenge_limiter: &mut SessionChallengeLimiter,
 ) -> TrustedApprovalResult {
     let authority: Proxy<'_> = match ProxyBuilder::new(connection)
         .destination(POLKIT_DESTINATION)
@@ -211,6 +298,9 @@ async fn check_for_session(
         }
         Ok((false, false, _)) => return TrustedApprovalResult::InvalidEnvironment,
         Err(_) => return TrustedApprovalResult::Unavailable,
+    }
+    if !challenge_limiter.admit(session_id, Instant::now()) {
+        return TrustedApprovalResult::RateLimited;
     }
     let response: Result<AuthorizationResponse, zbus::Error> = authority
         .call("CheckAuthorization", &arguments(ALLOW_USER_INTERACTION))
@@ -344,6 +434,91 @@ mod tests {
         }
     }
 
+    fn session(id: &str) -> SessionCandidate {
+        SessionCandidate {
+            id: id.into(),
+            uid: 1_000,
+            seat: "seat0".into(),
+            active: true,
+            remote: false,
+            class: "user".into(),
+            kind: "wayland".into(),
+            state: "active".into(),
+        }
+    }
+
+    #[test]
+    fn session_selection_rejects_zero_sessions() {
+        assert_eq!(
+            select_active_local_graphical_session(1_000, Vec::<SessionCandidate>::new()),
+            None
+        );
+    }
+
+    #[test]
+    fn session_selection_rejects_two_graphical_sessions() {
+        assert_eq!(
+            select_active_local_graphical_session(
+                1_000,
+                vec![session("session-1"), session("session-2")],
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn session_selection_rejects_remote_only_session() {
+        let mut remote = session("remote-session");
+        remote.remote = true;
+        remote.seat.clear();
+        assert_eq!(
+            select_active_local_graphical_session(1_000, vec![remote]),
+            None
+        );
+    }
+
+    #[test]
+    fn session_selection_accepts_one_active_local_graphical_session() {
+        let mut remote = session("remote-session");
+        remote.remote = true;
+        assert_eq!(
+            select_active_local_graphical_session(1_000, vec![remote, session("session-1")],),
+            Some("session-1".into())
+        );
+    }
+
+    #[test]
+    fn challenge_limiter_allows_three_then_cools_down() {
+        let start = Instant::now();
+        let mut limiter = SessionChallengeLimiter::default();
+        for seconds in 0..CHALLENGE_LIMIT {
+            assert!(limiter.admit(
+                "session-1",
+                start + Duration::from_secs(seconds.try_into().unwrap())
+            ));
+        }
+        assert!(!limiter.admit("session-1", start + Duration::from_secs(3)));
+        assert!(!limiter.admit("session-1", start + Duration::from_secs(60)));
+        assert!(limiter.admit(
+            "session-1",
+            start + Duration::from_secs(3) + CHALLENGE_COOLDOWN
+        ));
+    }
+
+    #[test]
+    fn challenge_limiter_is_scoped_to_trusted_session() {
+        let start = Instant::now();
+        let mut limiter = SessionChallengeLimiter::default();
+        for seconds in 0..CHALLENGE_LIMIT {
+            assert!(limiter.admit(
+                "session-1",
+                start + Duration::from_secs(seconds.try_into().unwrap())
+            ));
+        }
+        assert!(!limiter.admit("session-1", start + Duration::from_secs(3)));
+        assert!(limiter.admit("session-2", start + Duration::from_secs(4)));
+    }
+
     fn test_bus() -> (TestBus, String) {
         let mut child = Command::new("dbus-daemon")
             .args(["--session", "--nofork", "--print-address=1"])
@@ -385,8 +560,15 @@ mod tests {
                 .unwrap();
             let challenged = Arc::new(std::sync::atomic::AtomicBool::new(false));
             let observed = challenged.clone();
+            let mut challenge_limiter = SessionChallengeLimiter::default();
             futures_lite::future::race(
-                check_for_session(&connection, &challenge(), observed, "session-1"),
+                check_for_session(
+                    &connection,
+                    &challenge(),
+                    observed,
+                    "session-1",
+                    &mut challenge_limiter,
+                ),
                 async move {
                     async_io::Timer::after(timeout).await;
                     if challenged.load(std::sync::atomic::Ordering::SeqCst) {

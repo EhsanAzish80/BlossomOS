@@ -467,6 +467,7 @@ pub enum ShellActivityCategory {
     AuthenticationChallengeExpired,
     AuthenticationChallengeUnavailable,
     AuthenticationInvalidEnvironment,
+    AuthenticationRateLimited,
     ApprovalRejected,
     ApprovedOnce,
     Denied,

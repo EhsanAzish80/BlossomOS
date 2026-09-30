@@ -97,12 +97,13 @@ input, and model-proposed actions can never be allowed automatically.
   inputs on macOS and Linux with no crashes. That shows malformed input does
   not crash this boundary; it does **not** show that the system is secure.
 - There has been **no independent security review**.
-- **Known limitation:** an approval proves that the decision came from the same
-  session connection that started the request, not that a human made it. Any
-  program running as the same user could start and approve its own request.
-  This is acceptable for the single low-impact action available today and must
-  be solved with a trusted approval path before any sensitive capability is
-  added. See [ADR-0021](docs/decisions/0021-shell-ipc-and-approval-surfaces.md).
+- Self-approval without authentication is proven to fail closed; the
+  interactive password path is pending manual verification. The remaining
+  check is maintained in
+  [trusted approval manual evidence](docs/TRUSTED_APPROVAL_MANUAL_EVIDENCE.md).
+  Overlay phishing and same-user authentication-agent substitution remain
+  documented risks; see
+  [ADR-0034](docs/decisions/0034-trusted-approval-authentication.md).
 
 Security researchers are welcome to try to break these boundaries. Please
 report findings through the [security policy](SECURITY.md).
