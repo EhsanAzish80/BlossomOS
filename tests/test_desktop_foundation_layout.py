@@ -32,7 +32,9 @@ class DesktopFoundationLayoutTests(unittest.TestCase):
         self.assertIn('WlrLayershell.namespace: "blossom-dock"', SHELL)
         self.assertIn("visible: BlossomBroker.liveEnvironment", SHELL)
         self.assertIn('text: "Continue to desktop"', SHELL)
-        self.assertIn("The desktop works without an active model", SHELL)
+        self.assertIn('placeholderText: "What should Blossom do?"', SHELL)
+        self.assertIn("BlossomBroker.requestAgentTurn(agentPrompt.text)", SHELL)
+        self.assertIn("The local agent is unavailable or rejected this request. Nothing was applied.", SHELL)
 
     def test_window_recovery_is_discoverable(self):
         self.assertIn("Super+Tab switches windows", SHELL)

@@ -35,6 +35,7 @@ public:
     [[nodiscard]] bool onboardingRequired() const;
 
     Q_INVOKABLE void requestSystemUname();
+    Q_INVOKABLE void requestAgentTurn(const QString &prompt);
     Q_INVOKABLE void approveOnce();
     Q_INVOKABLE void deny();
     Q_INVOKABLE void cancelPending();

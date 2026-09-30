@@ -36,6 +36,8 @@ int main(int argc, char **argv) {
     bool activityReceived = false;
     QObject::connect(&broker, &BlossomBroker::activityChanged, &app, [&] { activityReceived = true; });
     if (!observe(broker, [&] { broker.refreshActivity(); }, [&] { return activityReceived; })) return 2;
+    if (!observe(broker, [&] { broker.requestAgentTurn(QStringLiteral("fixture qualification")); },
+                 [&] { return broker.state() == "unavailable"; })) return 11;
     if (!observe(broker, [&] { broker.requestSystemUname(); }, [&] { return broker.state() == "waiting"; })) return 3;
     if (!observe(broker, [&] { broker.deny(); }, [&] { return broker.state() == "denied"; })) return 4;
     const auto deniedActivityCount = broker.activity().size();
@@ -46,6 +48,6 @@ int main(int argc, char **argv) {
     const auto cancelledActivityCount = broker.activity().size();
     if (!observe(broker, [] {}, [&] { return broker.activity().size() > cancelledActivityCount; })) return 9;
     if (broker.state() != "cancelled") return 10;
-    std::puts("Real Qt/Rust bus: activity, preview, denial, cancellation and post-decision refresh passed; no approval sent.");
+    std::puts("Real Qt/Rust bus: bounded agent request, fail-closed unavailable model, activity, preview, denial, cancellation and post-decision refresh passed; no approval sent.");
     return 0;
 }

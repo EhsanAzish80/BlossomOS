@@ -1,7 +1,8 @@
 # Narrow Blossom QML client plugin
 
 This Qt 6 QML module is an untrusted transport adapter for the fixed Phase 6
-surface plus the fixed Phase 7 battery and network projections. It exposes only start,
+surface plus the fixed Phase 7 battery and network projections. It exposes only diagnostic start,
+bounded local-agent turn start,
 approve-once, deny, pre-start cancellation, bounded activity refresh, and the
 fixed battery and network refreshes. Every D-Bus name, path, interface, method, protocol
 version, activity limit, and request shape is compiled into the plugin.
@@ -13,6 +14,10 @@ executor, verifier, or audit writer. A malformed, oversized, unknown, or failed
 reply fails closed. Battery and network replies additionally require their exact
 closed schemas and code-owned freshness bounds, and are cleared on expiry or
 service loss.
+
+The agent prompt is limited to the core protocol's 4 KiB UTF-8 bound before it
+crosses D-Bus. The model can propose only through the authoritative gateway and
+resolver path; the plugin cannot turn model text into an effect.
 
 QML receives the exact service-authored preview, redacted activity, and narrow
 battery and connectivity display projections only.

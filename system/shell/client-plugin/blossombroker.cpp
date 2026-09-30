@@ -17,6 +17,7 @@ constexpr auto ObjectPath = "/org/blossomos/Shell1";
 constexpr auto Interface = "org.blossomos.Shell1";
 constexpr quint16 ProtocolVersion = 1;
 constexpr qsizetype MaxReplyBytes = 32 * 1024;
+constexpr qsizetype MaxAgentPromptBytes = 4 * 1024;
 constexpr quint16 ActivityLimit = 64;
 constexpr qulonglong MaxApprovalDelayMs = 60 * 1000;
 constexpr qulonglong MaxBatteryLifetimeMs = 5 * 1000;
@@ -229,6 +230,40 @@ void BlossomBroker::requestSystemUname() {
     auto interface = fixedInterface();
     auto *watcher = new QDBusPendingCallWatcher(
         interface.asyncCall(QStringLiteral("StartSystemUname1"), QVariant::fromValue(ProtocolVersion)), this);
+    setState(QStringLiteral("requesting"));
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, generation] {
+        const QDBusPendingReply<QByteArray> reply = *watcher;
+        watcher->deleteLater();
+        if (generation != m_serviceGeneration) {
+            failClosed();
+            return;
+        }
+        if (reply.isError()) {
+            failClosed();
+            return;
+        }
+        handleOutcome(reply.value());
+    });
+}
+
+void BlossomBroker::requestAgentTurn(const QString &prompt) {
+    if (m_state == QStringLiteral("requesting") || m_state == QStringLiteral("waiting") ||
+        m_state == QStringLiteral("submitting") || m_state == QStringLiteral("cancelling")) {
+        return;
+    }
+    const QByteArray promptBytes = prompt.toUtf8();
+    if (promptBytes.isEmpty() || promptBytes.size() > MaxAgentPromptBytes ||
+        prompt.contains(QChar::Null)) {
+        failClosed();
+        return;
+    }
+    const QJsonObject request{{QStringLiteral("version"), ProtocolVersion},
+                              {QStringLiteral("prompt"), prompt}};
+    const quint64 generation = m_serviceGeneration;
+    auto interface = fixedInterface();
+    auto *watcher = new QDBusPendingCallWatcher(
+        interface.asyncCall(QStringLiteral("StartAgentTurn1"),
+                            QJsonDocument(request).toJson(QJsonDocument::Compact)), this);
     setState(QStringLiteral("requesting"));
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, generation] {
         const QDBusPendingReply<QByteArray> reply = *watcher;

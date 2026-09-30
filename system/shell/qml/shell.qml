@@ -256,7 +256,8 @@ ShellRoot {
                 anchor.window: dock
                 anchor.rect.x: Math.max(0, (dock.width - width) / 2)
                 anchor.rect.y: -height - 10
-                width: 520; height: 460
+                width: Math.min(600, dock.screen.width - 24)
+                height: Math.min(640, dock.screen.height - 140)
                 visible: root.activityVisible
                 grabFocus: true
                 color: "transparent"
@@ -264,8 +265,51 @@ ShellRoot {
                     anchors.fill: parent; radius: 18; color: "#f2171d27"; border { color: "#40536d"; width: 1 }
                     ColumnLayout {
                         anchors { fill: parent; margins: 20 } spacing: 10
-                        RowLayout { Layout.fillWidth: true; Label { Layout.fillWidth: true; text: "Agent activity"; color: "#f4f7fb"; font.pixelSize: 22; font.bold: true } BlossomButton { text: "System check"; enabled: !["requesting", "waiting", "submitting", "cancelling"].includes(BlossomBroker.state); Accessible.description: "Request the fixed kernel identity diagnostic."; onClicked: BlossomBroker.requestSystemUname() } BlossomIconButton { symbol: "×"; description: "Close agent activity"; onClicked: root.activityVisible = false } }
-                        Label { Layout.fillWidth: true; text: "The desktop works without an active model. Privileged agent actions still require explicit approval."; color: "#aebbd0"; wrapMode: Text.WordWrap }
+                        RowLayout { Layout.fillWidth: true; Label { Layout.fillWidth: true; text: "Blossom Agent"; color: "#f4f7fb"; font.pixelSize: 22; font.bold: true } BlossomButton { text: "System check"; enabled: !["requesting", "waiting", "submitting", "cancelling"].includes(BlossomBroker.state); Accessible.description: "Request the fixed kernel identity diagnostic."; onClicked: BlossomBroker.requestSystemUname() } BlossomIconButton { symbol: "×"; description: "Close Blossom Agent"; onClicked: root.activityVisible = false } }
+                        Label {
+                            Layout.fillWidth: true
+                            text: BlossomBroker.state === "requesting" ? "The local model is preparing a proposal…"
+                                : BlossomBroker.state === "waiting" ? "Review the exact proposed effect in the approval window."
+                                : BlossomBroker.state === "submitting" ? "Authenticating and applying the approved effect…"
+                                : BlossomBroker.state === "unavailable" ? "The local agent is unavailable or rejected this request. Nothing was applied."
+                                : "Ask the local agent for one bounded action. Proposed effects never run without exact approval."
+                            color: BlossomBroker.state === "unavailable" ? "#ff9b93" : "#aebbd0"
+                            wrapMode: Text.WordWrap
+                            Accessible.role: Accessible.AlertMessage
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: 112
+                            radius: 12
+                            color: "#222b38"
+                            border { color: agentPrompt.activeFocus ? "#8dd7c7" : "#40536d"; width: 1 }
+                            TextArea {
+                                id: agentPrompt
+                                anchors { fill: parent; margins: 8 }
+                                placeholderText: "What should Blossom do?"
+                                color: "#f4f7fb"
+                                placeholderTextColor: "#8190a5"
+                                wrapMode: TextEdit.Wrap
+                                selectByMouse: true
+                                enabled: !["requesting", "waiting", "submitting", "cancelling"].includes(BlossomBroker.state)
+                                Accessible.name: "Agent request"
+                                Accessible.description: "Describe one bounded action for the local Blossom agent."
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Item { Layout.fillWidth: true }
+                            Label { text: agentPrompt.length + " / 4096 characters (UTF-8 byte limit also applies)"; color: agentPrompt.length > 4096 ? "#ff9b93" : "#8190a5" }
+                            BlossomButton {
+                                text: BlossomBroker.state === "requesting" ? "Thinking…" : "Send"
+                                primary: true
+                                enabled: agentPrompt.text.trim().length > 0 && agentPrompt.length <= 4096
+                                    && !["requesting", "waiting", "submitting", "cancelling"].includes(BlossomBroker.state)
+                                Accessible.description: "Send this request to the local model through the Blossom gateway."
+                                onClicked: BlossomBroker.requestAgentTurn(agentPrompt.text)
+                            }
+                        }
+                        Label { Layout.fillWidth: true; text: "Recent authoritative activity"; color: "#8dd7c7"; font.bold: true }
                         ListView {
                             Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 8; model: BlossomBroker.activity
                             delegate: Rectangle { required property var modelData; width: ListView.view.width; height: entry.implicitHeight + 16; radius: 8; color: "#222b38"; Label { id: entry; anchors { fill: parent; margins: 8 } color: "#dbe5f5"; wrapMode: Text.Wrap; text: "#" + modelData.sequence + "  " + modelData.kind + "\n" + modelData.category } }

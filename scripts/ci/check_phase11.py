@@ -407,10 +407,10 @@ for required in (
 for required in ("Welcome to Blossom OS", "Install Blossom OS", "External disks are excluded"):
     if required not in shell_qml:
         fail(f"Blossom welcome surface is incomplete: {required}")
-for required in ("liveEnvironment", "openTerminal", "openInstaller"):
+for required in ("liveEnvironment", "openTerminal", "openInstaller", "requestAgentTurn"):
     if required not in broker_header:
         fail(f"Blossom shell broker action is missing: {required}")
-for required in ("openTerminal", "openInstaller", 'QStringLiteral("Launch1")'):
+for required in ("openTerminal", "openInstaller", "requestAgentTurn", 'QStringLiteral("StartAgentTurn1")', 'QStringLiteral("Launch1")'):
     if required not in broker_source:
         fail(f"Blossom shell broker action is missing: {required}")
 for required in ('subject.user == "blossom"', 'action.lookup("program") == "/usr/local/libexec/blossom-graphical-install-backend"'):
