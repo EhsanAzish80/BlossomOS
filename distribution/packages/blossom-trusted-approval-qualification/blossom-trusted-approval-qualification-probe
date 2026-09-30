@@ -63,8 +63,8 @@ self_result=$(as_blossom /usr/lib/blossom-os/probe-trusted-approval --case self_
 [[ ! -e $target ]] || fail self-approval-effect
 
 user_systemctl stop blossom-polkit-agent.service || true
-pkill -u blossom -x lxqt-policykit-agent 2>/dev/null || true
-pgrep -u blossom -x lxqt-policykit-agent >/dev/null && fail agent-still-running
+pkill -u blossom -f '^/usr/bin/lxqt-policykit-agent$' 2>/dev/null || true
+pgrep -u blossom -f '^/usr/bin/lxqt-policykit-agent$' >/dev/null && fail agent-still-running
 rm -f "$target"
 missing_result=$(as_blossom /usr/lib/blossom-os/probe-trusted-approval --case missing_agent) \
   || fail missing-agent

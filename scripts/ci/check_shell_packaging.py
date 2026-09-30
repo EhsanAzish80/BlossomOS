@@ -181,6 +181,47 @@ def check_polkit_helper_preset() -> None:
             "the crashing Hyprtoolkit PolicyKit agent must not return")
 
 
+def check_real_pam_qualification() -> None:
+    driver = (ROOT / "scripts/qualify_trusted_approval_pam.py").read_text()
+    orchestrator = (ROOT / "scripts/run_trusted_approval_pam_gate.py").read_text()
+    qualification_package = (
+        ROOT / "distribution/packages/blossom-trusted-approval-qualification/PKGBUILD"
+    ).read_text()
+    for value in [
+        'f"{self.compositor[0]},{self.compositor[1]}"',
+        '"--notify-fd={ready_write}"',
+        "pty.fork()",
+        "os.O_APPEND",
+        "os.fsync(descriptor)",
+        '"prompt_count"',
+        '"authentication_rate_limited"',
+        '"missing_agent"',
+    ]:
+        require(value in driver, f"real-PAM driver is missing: {value}")
+    for value in [
+        "secrets.token_urlsafe(32)",
+        '["chpasswd"]',
+        "pass_fds=(read_fd,)",
+        '["passwd", "--lock", USER]',
+        '"faillock", "--user", USER, "--reset"',
+    ]:
+        require(value in orchestrator, f"real-PAM orchestrator is missing: {value}")
+    for forbidden in ["blossom:blossom", "PASSWORD=", "shell=True"]:
+        require(forbidden not in driver + orchestrator,
+                f"real-PAM qualification contains forbidden secret handling: {forbidden}")
+    for path in [
+        "scripts/qualify_trusted_approval_pam.py",
+        "scripts/run_trusted_approval_pam_gate.py",
+    ]:
+        require(path in qualification_package,
+                f"qualification-only package omits {path}")
+    production_packages = (
+        ROOT / "distribution/packages/blossom-core/PKGBUILD"
+    ).read_text() + (ROOT / "distribution/packages/blossom-shell/PKGBUILD").read_text()
+    require("qualify-trusted-approval-pam" not in production_packages,
+            "real-PAM qualification driver must not ship in production packages")
+
+
 def check_policy() -> None:
     root = ET.parse(PACKAGE / POLICY).getroot()
     actions = root.findall("action")
@@ -212,6 +253,7 @@ def main() -> None:
     check_recovery()
     check_polkit_agent_unit()
     check_polkit_helper_preset()
+    check_real_pam_qualification()
     check_policy()
 
 
