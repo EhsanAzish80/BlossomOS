@@ -1,6 +1,6 @@
 # Phase 6 shell surface
 
-This is the minimal graphical client for the fixed diagnostic slice. It renders
+This is the minimal graphical client for the fixed diagnostic and local-agent slices. It renders
 the complete service-authored security preview, offers only `Approve once` and
 `Deny`, cancels pending work on Escape, and shows the bounded redacted activity
 projection. It does not infer success from a D-Bus reply: the displayed state
@@ -20,6 +20,9 @@ reveals the complete layer-shell desktop rather than closing the shell.
 The QML imports the narrow `Blossom.Shell` native plugin. It does not import
 `Quickshell.Io`, launch processes, read files, choose D-Bus identifiers, call
 Hyprland IPC, handle approval tokens, or construct capabilities and scopes.
+The Agent panel accepts one bounded prompt and sends it through the fixed shell
+D-Bus method. Model proposals still resolve, enter policy, and require the
+separate exact-preview approval ceremony before any effect.
 
 The approval overlay focuses denial as its safe default, cycles Tab and Backtab
 only between the two decision controls, maps assistive press actions to the same

@@ -35,6 +35,7 @@ def main() -> None:
         require(f'label: "{field}"' in qml, f"missing security field: {field}")
     for action in [
         "BlossomBroker.requestSystemUname()",
+        "BlossomBroker.requestAgentTurn(agentPrompt.text)",
         "BlossomBroker.approveOnce()",
         "BlossomBroker.deny()",
         "BlossomBroker.cancelPending()",
@@ -99,6 +100,7 @@ def main() -> None:
         'Accessible.description: "Deny this request without starting execution."',
         'Accessible.description: "Approve only this exact request for one execution."',
         'Accessible.description: "Request the fixed kernel identity diagnostic."',
+        'Accessible.description: "Send this request to the local model through the Blossom gateway."',
         'Accessible.description: "Open the Blossom OS application launcher."',
     ]:
         require(snippet in qml, f"missing accessibility contract: {snippet}")

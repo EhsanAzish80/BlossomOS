@@ -20,6 +20,7 @@ def main() -> None:
         '"org.blossomos.Shell1"',
         '"/org/blossomos/Shell1"',
         '"StartSystemUname1"',
+        '"StartAgentTurn1"',
         '"SubmitDecision1"',
         '"CancelPending1"',
         '"ReadActivity1"',
@@ -48,7 +49,7 @@ def main() -> None:
     ]:
         require(forbidden not in text, f"forbidden client authority: {forbidden}")
     header = (PLUGIN / "blossombroker.h").read_text()
-    require(header.count("Q_INVOKABLE") == 25, "client invokable surface drift")
+    require(header.count("Q_INVOKABLE") == 26, "client invokable surface drift")
     require("onboardingRequired" in header and "dismissOnboarding" in header,
             "fixed onboarding surface is missing")
     client = (PLUGIN / "blossombroker.cpp").read_text()
@@ -79,8 +80,11 @@ def main() -> None:
             "native client must watch for loss of the fixed service owner")
     require("QDBusServiceWatcher::serviceUnregistered" in client,
             "service owner loss must trigger a fail-closed client transition")
-    require("++m_serviceGeneration" in client and client.count("generation != m_serviceGeneration") == 6,
+    require("++m_serviceGeneration" in client and client.count("generation != m_serviceGeneration") == 7,
             "all asynchronous replies must fail closed after service owner loss")
+    require("MaxAgentPromptBytes" in client and "prompt.toUtf8()" in client and
+            "prompt.contains(QChar::Null)" in client,
+            "agent prompt must be UTF-8 bounded before crossing D-Bus")
     require('setState(QStringLiteral("requesting"))' in client,
             "request start must close the rapid-click race")
     cmake = (PLUGIN / "CMakeLists.txt").read_text()
@@ -100,6 +104,10 @@ def main() -> None:
             "UI host must provide the standard Qt accessibility runtime")
     require("argc" in host and "argv" in host,
             "UI host must initialize Qt from the process arguments")
+    bus_test = (ROOT / "system" / "shell" / "tests" / "client_bus.cpp").read_text()
+    require('requestAgentTurn(QStringLiteral("fixture qualification"))' in bus_test and
+            'broker.state() == "unavailable"' in bus_test,
+            "real client bus test must exercise the agent method and fail closed without a model")
 
 
 if __name__ == "__main__":

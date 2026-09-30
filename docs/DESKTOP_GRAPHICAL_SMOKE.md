@@ -16,13 +16,15 @@ Capture one lossless screenshot and the associated service log for each state:
 4. Files and Terminal open together, with a discoverable close/switch path.
 5. Graphical network editor showing disconnected or connected state.
 6. Live installer terminal open, or a visible accessible launch failure.
-7. Agent activity open without hiding or replacing ordinary applications.
-8. Centred restart confirmation and centred shutdown confirmation.
-9. Installed-mode desktop with no Install action.
-10. Installed second session with onboarding still dismissed.
-11. Quick Settings with Wi-Fi/Ethernet, volume/mute, Bluetooth, notifications
+7. Agent composer open without hiding or replacing ordinary applications.
+8. One bounded request reaches the local model and produces an exact approval
+   preview in the separate security window.
+9. Centred restart confirmation and centred shutdown confirmation.
+10. Installed-mode desktop with no Install action.
+11. Installed second session with onboarding still dismissed.
+12. Quick Settings with Wi-Fi/Ethernet, volume/mute, Bluetooth, notifications
     and battery/AC states visible without horizontal clipping.
-12. Centred logout confirmation followed by the graphical login screen and a
+13. Centred logout confirmation followed by the graphical login screen and a
     successful login with the installer-created account.
 
 ## Layout matrix
@@ -54,6 +56,9 @@ background must never receive focus or an active-window border.
 - Logout returns to ReGreet, a wrong password is rejected, and the selected
   installer-created account can start a fresh Blossom session.
 - A rejected desktop launch produces an accessibility alert.
+- An unavailable model produces a visible fail-closed message and no effect.
+- The agent Send control cannot bypass the service-authored preview or the
+  password-backed approval window.
 - Approval remains in the standard Qt accessibility host and denial remains the
   safe default.
 
