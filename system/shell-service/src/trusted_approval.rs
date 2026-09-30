@@ -1,5 +1,7 @@
 use blossom_core::ShellApprovalAuthentication;
 use std::collections::{HashMap, VecDeque};
+use std::fs;
+use std::path::Path;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zbus::proxy::{Builder as ProxyBuilder, CacheProperties};
 use zbus::zvariant::{OwnedObjectPath, Value};
@@ -18,6 +20,7 @@ const ALLOW_USER_INTERACTION: u32 = 1;
 const CHALLENGE_LIMIT: usize = 3;
 const CHALLENGE_WINDOW: Duration = Duration::from_secs(60);
 const CHALLENGE_COOLDOWN: Duration = Duration::from_secs(120);
+const TRUSTED_COMPOSITOR: &str = "/usr/bin/Hyprland";
 
 // PolicyKit's CheckAuthorization result has the fixed D-Bus signature
 // `(bba{ss})`.  It is never an optional value; modeling it as Option changes
@@ -165,14 +168,73 @@ async fn check(
     let Some(session_id) = active_local_graphical_session(&connection).await else {
         return TrustedApprovalResult::InvalidEnvironment;
     };
+    let expected_uid = nix::unistd::geteuid().as_raw();
+    let Some(process) = trusted_session_process(&session_id, expected_uid) else {
+        return TrustedApprovalResult::InvalidEnvironment;
+    };
     check_for_session(
         &connection,
         challenge,
         challenged,
         &session_id,
+        &process,
         challenge_limiter,
     )
     .await
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct TrustedSessionProcess {
+    pid: u32,
+    uid: i32,
+    start_time: u64,
+}
+
+fn proc_start_time(stat: &str) -> Option<u64> {
+    let after_name = stat.rsplit_once(')')?.1.trim_start();
+    after_name.split_whitespace().nth(19)?.parse().ok()
+}
+
+fn proc_real_uid(status: &str) -> Option<u32> {
+    status.lines().find_map(|line| {
+        line.strip_prefix("Uid:")?
+            .split_whitespace()
+            .next()?
+            .parse()
+            .ok()
+    })
+}
+
+fn cgroup_matches_session(cgroup: &str, session_id: &str) -> bool {
+    let suffix = format!("/session-{session_id}.scope");
+    cgroup.lines().any(|line| line.ends_with(&suffix))
+}
+
+fn trusted_session_process(session_id: &str, expected_uid: u32) -> Option<TrustedSessionProcess> {
+    let mut matches = fs::read_dir("/proc")
+        .ok()?
+        .filter_map(Result::ok)
+        .filter_map(|entry| entry.file_name().to_str()?.parse::<u32>().ok())
+        .filter_map(|pid| {
+            let root = Path::new("/proc").join(pid.to_string());
+            let first_stat = fs::read_to_string(root.join("stat")).ok()?;
+            let start_time = proc_start_time(&first_stat)?;
+            let status = fs::read_to_string(root.join("status")).ok()?;
+            (proc_real_uid(&status)? == expected_uid).then_some(())?;
+            let executable = fs::read_link(root.join("exe")).ok()?;
+            (executable == Path::new(TRUSTED_COMPOSITOR)).then_some(())?;
+            let cgroup = fs::read_to_string(root.join("cgroup")).ok()?;
+            cgroup_matches_session(&cgroup, session_id).then_some(())?;
+            let second_stat = fs::read_to_string(root.join("stat")).ok()?;
+            (proc_start_time(&second_stat)? == start_time).then_some(())?;
+            Some(TrustedSessionProcess {
+                pid,
+                uid: expected_uid.try_into().ok()?,
+                start_time,
+            })
+        });
+    let selected = matches.next()?;
+    matches.next().is_none().then_some(selected)
 }
 
 struct SessionCandidate {
@@ -258,6 +320,7 @@ async fn check_for_session(
     challenge: &ShellApprovalAuthentication,
     challenged: std::sync::Arc<std::sync::atomic::AtomicBool>,
     session_id: &str,
+    process: &TrustedSessionProcess,
     challenge_limiter: &mut SessionChallengeLimiter,
 ) -> TrustedApprovalResult {
     let authority: Proxy<'_> = match ProxyBuilder::new(connection)
@@ -271,8 +334,16 @@ async fn check_for_session(
         },
         Err(_) => return TrustedApprovalResult::Unavailable,
     };
-    let subject_details = HashMap::from([("session-id", Value::from(session_id))]);
-    let subject = ("unix-session", subject_details);
+    // The D-Bus API accepts unix-session subjects, but polkit's JavaScript
+    // authority cannot convert them for rule evaluation. Bind authorization to
+    // the uniquely verified compositor process inside the already selected
+    // active local graphical session instead.
+    let subject_details = HashMap::from([
+        ("pid", Value::from(process.pid)),
+        ("uid", Value::from(process.uid)),
+        ("start-time", Value::from(process.start_time)),
+    ]);
+    let subject = ("unix-process", subject_details);
     let details = HashMap::from([
         ("blossom.request_id", challenge.request_id.clone()),
         ("blossom.preview_sha256", challenge.preview_sha256.clone()),
@@ -374,15 +445,27 @@ mod tests {
             flags: u32,
             cancellation_id: String,
         ) -> Result<(bool, bool, HashMap<String, String>), AuthorityError> {
-            let session_id = subject
+            let pid = subject
                 .1
-                .get("session-id")
+                .get("pid")
                 .and_then(|value| value.try_clone().ok())
-                .and_then(|value| String::try_from(value).ok());
+                .and_then(|value| u32::try_from(value).ok());
+            let uid = subject
+                .1
+                .get("uid")
+                .and_then(|value| value.try_clone().ok())
+                .and_then(|value| i32::try_from(value).ok());
+            let start_time = subject
+                .1
+                .get("start-time")
+                .and_then(|value| value.try_clone().ok())
+                .and_then(|value| u64::try_from(value).ok());
             let (valid, behavior) = {
                 let mut seen = self.0.lock().unwrap();
-                let valid = subject.0 == "unix-session"
-                    && session_id.as_deref() == Some("session-1")
+                let valid = subject.0 == "unix-process"
+                    && pid == Some(463)
+                    && uid == Some(1_000)
+                    && start_time == Some(12_345)
                     && action == MODEL_EFFECT_POLKIT_ACTION
                     && details.get("blossom.request_id").map(String::as_str) == Some("request-1")
                     && details.get("blossom.preview_sha256").map(String::as_str)
@@ -488,6 +571,24 @@ mod tests {
     }
 
     #[test]
+    fn parses_process_identity_fields_used_by_polkit() {
+        let stat = "463 (Hyprland) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 12345 20";
+        assert_eq!(proc_start_time(stat), Some(12_345));
+        assert_eq!(
+            proc_real_uid("Name:\tHyprland\nUid:\t1000\t1000\t1000\t1000\n"),
+            Some(1_000)
+        );
+        assert!(cgroup_matches_session(
+            "0::/user.slice/user-1000.slice/session-1.scope\n",
+            "1"
+        ));
+        assert!(!cgroup_matches_session(
+            "0::/user.slice/user-1000.slice/user@1000.service\n",
+            "1"
+        ));
+    }
+
+    #[test]
     fn challenge_limiter_allows_three_then_cools_down() {
         let start = Instant::now();
         let mut limiter = SessionChallengeLimiter::default();
@@ -561,12 +662,18 @@ mod tests {
             let challenged = Arc::new(std::sync::atomic::AtomicBool::new(false));
             let observed = challenged.clone();
             let mut challenge_limiter = SessionChallengeLimiter::default();
+            let process = TrustedSessionProcess {
+                pid: 463,
+                uid: 1_000,
+                start_time: 12_345,
+            };
             futures_lite::future::race(
                 check_for_session(
                     &connection,
                     &challenge(),
                     observed,
                     "session-1",
+                    &process,
                     &mut challenge_limiter,
                 ),
                 async move {

@@ -18,7 +18,7 @@ executables=(
   usr/bin/grim
   usr/bin/mako
   usr/bin/notify-send
-  usr/lib/hyprpolkitagent/hyprpolkitagent
+  usr/bin/lxqt-policykit-agent
   usr/lib/xdg-desktop-portal
   usr/lib/xdg-desktop-portal-gtk
   usr/lib/xdg-desktop-portal-hyprland

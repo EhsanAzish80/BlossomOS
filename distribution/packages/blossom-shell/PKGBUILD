@@ -1,10 +1,10 @@
 pkgname=blossom-shell
 pkgver=0.9.0
-pkgrel=1
+pkgrel=2
 pkgdesc='Blossom OS narrow desktop shell surface'
 arch=('x86_64' 'aarch64')
 license=('Apache-2.0')
-depends=('blossom-core' 'grim' 'hyprland' 'hyprpolkitagent' 'libnotify' 'mako'
+depends=('blossom-core' 'grim' 'hyprland' 'lxqt-policykit' 'libnotify' 'mako'
          'quickshell' 'qt6-base' 'qt6-declarative' 'qt6-wayland'
          'xdg-desktop-portal' 'xdg-desktop-portal-gtk'
          'xdg-desktop-portal-hyprland')
@@ -13,7 +13,7 @@ source=()
 sha256sums=()
 
 build() {
-  local repo_root="$startdir/../../.."
+  local repo_root="${BLOSSOM_REPO_ROOT:-$startdir/../../..}"
   cmake -S "$repo_root/system/shell/client-plugin" -B "$srcdir/client-build" \
     -G Ninja -DCMAKE_BUILD_TYPE=Release
   cmake --build "$srcdir/client-build"
@@ -26,7 +26,7 @@ build() {
 }
 
 package() {
-  local repo_root="$startdir/../../.."
+  local repo_root="${BLOSSOM_REPO_ROOT:-$startdir/../../..}"
   install -d "$pkgdir/usr/share/blossom-os/shell"
   cp -a "$repo_root/system/shell/qml/." \
     "$pkgdir/usr/share/blossom-os/shell/"
@@ -51,6 +51,8 @@ package() {
     "$pkgdir/usr/lib/systemd/user/blossom-desktop-shell.service"
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-recovery.service" \
     "$pkgdir/usr/lib/systemd/user/blossom-shell-recovery.service"
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-polkit-agent.service" \
+    "$pkgdir/usr/lib/systemd/user/blossom-polkit-agent.service"
   install -Dm0644 "$repo_root/system/desktop-launcher/blossom-desktop-launcher.service" \
     "$pkgdir/usr/lib/systemd/user/blossom-desktop-launcher.service"
   install -Dm0644 "$repo_root/system/desktop-launcher/org.blossomos.Desktop1.service" \

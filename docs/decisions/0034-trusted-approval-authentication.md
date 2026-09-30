@@ -124,7 +124,7 @@ compositor, polkit agent, kernel, root or firmware remains outside this
 boundary.
 
 The authentication agent is also a same-user process. A malicious process can
-kill `hyprpolkitagent`, register a substitute agent and present a convincing
+kill `lxqt-policykit-agent`, register a substitute agent and present a convincing
 lookalike challenge. It still cannot authorize the broker's request without the
 real password, but it can phish for that password. This agent-substitution route
 is a second expression of the same overlay-phishing risk, not trusted pixels.
@@ -181,12 +181,29 @@ The first complete production-policy run proved that the preceding subject was
 still wrong. The graphical logind session was active, but the system-managed
 broker process is not a member of that session. Consequently a
 `system-bus-name` subject for the broker was classified as inactive and polkit
-returned a flat denial. The broker now discovers the one active, local,
-non-remote graphical logind session for its own UID and supplies that trusted
-`unix-session` identity to polkit. Zero or multiple eligible sessions fail as
-`invalid_environment`; neither the model nor the session-bus client supplies
-the session identifier. This makes `allow_active=auth_self` evaluate the real
-desktop session where the authentication agent is registered.
+returned a flat denial.
+
+The first interactive ARM64 run then exposed a second interoperability limit:
+PolicyKit's JavaScript backend aborts when asked to evaluate a `unix-session`
+subject, even though that subject exists in the public API. The broker therefore
+keeps the session as the trust anchor but submits a verified graphical-process
+subject. It first discovers exactly one active, local, non-remote Wayland
+session for its own UID. Within that session's scope it resolves exactly one
+`/usr/bin/Hyprland` process, reads its UID, PID, executable, cgroup and kernel
+start time, then re-reads the start time before constructing the subject. The
+PolicyKit `unix-process` tuple contains PID, UID and start time; PID alone is
+never accepted. Neither the model nor the session-bus client supplies any of
+those values. Zero or multiple eligible sessions or graphical processes fail
+as `invalid_environment`.
+
+The graphical authentication agent is `lxqt-policykit-agent`, managed by a
+systemd user unit tied to `graphical-session.target` with restart-on-failure.
+The previously selected Hyprland agent crashed in Hyprtoolkit while allocating
+the ARM64 QEMU password window. `blossom-core` also ships a systemd preset for
+`polkit-agent-helper.socket`; modern non-setuid PolicyKit helpers cannot perform
+password authentication when that socket is absent. These lifecycle choices
+change only presentation and helper activation. They do not weaken `auth_self`
+or move password handling into Blossom.
 
 The closed selector is tested explicitly with zero sessions, two eligible
 graphical sessions and a remote-only session. All three environments fail
