@@ -33,7 +33,10 @@ class DesktopFoundationLayoutTests(unittest.TestCase):
         self.assertIn("visible: BlossomBroker.liveEnvironment", SHELL)
         self.assertIn('text: "Continue to desktop"', SHELL)
         self.assertIn('placeholderText: "What should Blossom do?"', SHELL)
+        self.assertIn('background: Rectangle {\n                                    color: "transparent"', SHELL)
         self.assertIn("BlossomBroker.requestAgentTurn(agentPrompt.text)", SHELL)
+        self.assertIn('text: BlossomBroker.state === "requesting" ? "Request sent', SHELL)
+        self.assertIn("ApprovalPanel {}", SHELL)
         self.assertIn("The local agent is unavailable or rejected this request. Nothing was applied.", SHELL)
 
     def test_window_recovery_is_discoverable(self):

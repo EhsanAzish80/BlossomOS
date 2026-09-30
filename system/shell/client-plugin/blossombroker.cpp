@@ -477,6 +477,7 @@ void BlossomBroker::handleOutcome(const QByteArray &bytes) {
         emit previewChanged();
         setState(QStringLiteral("waiting"));
         armExpiryTimer();
+        refreshActivity();
         return;
     }
     if (status == QStringLiteral("denied") || status == QStringLiteral("cancelled") ||
