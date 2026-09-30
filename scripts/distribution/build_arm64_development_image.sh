@@ -283,12 +283,31 @@ rm -rf "$work/root/opt/blossom-source"
 sync
 
 # pacman-key may leave per-root GnuPG helpers alive briefly. Stop them before
-# detaching the image and use one recursive unmount so an overlooked bind mount
-# cannot invalidate an otherwise complete build.
+# detaching the image. A successful build must never use a lazy unmount: the
+# host may otherwise start converting the raw image while detached references
+# are still flushing writes into it.
 chroot "$work/root" gpgconf --kill all 2>/dev/null || true
 
-umount -R "$work/root" || umount -R -l "$work/root"
+umount "$work/root/opt/blossom-inputs"
+umount "$work/root/var/cache/pacman/pkg"
+umount -R "$work/root/run"
+umount -R "$work/root/dev"
+umount -R "$work/root/proc"
+umount -R "$work/root/sys"
+umount "$work/root/boot"
+umount "$work/root"
 mounted=false
+sync
+# e2fsck exit code 1 means it safely corrected the unmounted filesystem. Any
+# higher result is a build failure and the candidate is never converted.
+set +e
+e2fsck -f -p "$root_loop"
+fsck_status=$?
+set -e
+(( fsck_status <= 1 )) || {
+  echo "error: assembled ARM64 root filesystem failed offline validation" >&2
+  exit 1
+}
 losetup -d "$efi_loop"
 losetup -d "$root_loop"
 trap - EXIT INT TERM
