@@ -64,6 +64,14 @@ preview mutation or digest mismatch removes the prepared request and produces
 zero effects. Authentication is never cached across model-proposed effects in
 the first version.
 
+The broker also limits interactive authentication challenges per trusted
+graphical session. It permits at most three challenges in a rolling 60-second
+window; the next request starts a 120-second cooldown. Requests during cooldown
+fail closed before the interactive PolicyKit call and produce the visible
+`authentication_rate_limited` activity category. The broker never evicts an
+older approval to make room. Changing to a newly verified graphical session
+starts a new limiter scope.
+
 The shell remains a presentation client. It may request that the broker expose
 a preview surface, but it never supplies preview text, authorization identity,
 the prepared request or the final decision binding. The broker is the sole source of preview data.
@@ -121,6 +129,13 @@ lookalike challenge. It still cannot authorize the broker's request without the
 real password, but it can phish for that password. This agent-substitution route
 is a second expression of the same overlay-phishing risk, not trusted pixels.
 
+Using the active graphical session as the PolicyKit subject also permits a
+background or remote same-user process to cause a password prompt to appear on
+that desktop. Repeated prompts can be used to wear down attention and increase
+phishing risk. The per-session challenge limit bounds that pressure and exposes
+the cooldown in activity, but it cannot prove which same-user process had
+benign intent and it resets when the broker restarts.
+
 ## Qualification requirements
 
 Before the path is enabled in a physical candidate, installed Linux evidence
@@ -172,6 +187,10 @@ non-remote graphical logind session for its own UID and supplies that trusted
 `invalid_environment`; neither the model nor the session-bus client supplies
 the session identifier. This makes `allow_active=auth_self` evaluate the real
 desktop session where the authentication agent is registered.
+
+The closed selector is tested explicitly with zero sessions, two eligible
+graphical sessions and a remote-only session. All three environments fail
+closed without displaying an authentication challenge.
 
 The first attempted automated image exposed a separate startup error: a
 `Type=oneshot` qualification service was ordered after and wanted by

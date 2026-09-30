@@ -322,6 +322,9 @@ impl ShellBusService {
                 TrustedApprovalResult::InvalidEnvironment => {
                     blossom_core::ApprovalAuthenticationOutcome::InvalidEnvironment
                 }
+                TrustedApprovalResult::RateLimited => {
+                    blossom_core::ApprovalAuthenticationOutcome::RateLimited
+                }
             };
             self.handler
                 .lock()

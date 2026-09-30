@@ -237,6 +237,15 @@ fn project_event(
             ShellActivityKind::Approval,
             ShellActivityCategory::AuthenticationInvalidEnvironment,
         ),
+        AuditEvent::ApprovalAuthentication {
+            request_id,
+            outcome: crate::ApprovalAuthenticationOutcome::RateLimited,
+            ..
+        } => (
+            request_id,
+            ShellActivityKind::Approval,
+            ShellActivityCategory::AuthenticationRateLimited,
+        ),
         AuditEvent::ApprovalAuthentication { request_id, .. } => (
             request_id,
             ShellActivityKind::Approval,
@@ -430,6 +439,25 @@ mod tests {
         assert_eq!(
             project_shell_activity(&audit, None, 1),
             Err(ShellActivityError::UnexpectedAuditEvent)
+        );
+    }
+
+    #[test]
+    fn authentication_rate_limit_is_visible_in_activity() {
+        let request_id = "shell-0000000000000007-4";
+        let mut audit = AuditLog::default();
+        audit.append(AuditEvent::ApprovalAuthentication {
+            request_id: request_id.into(),
+            action: "org.blossomos.shell.approve-model-effect".into(),
+            preview_sha256: "4".repeat(64),
+            outcome: crate::ApprovalAuthenticationOutcome::RateLimited,
+        });
+        let projected = project_shell_activity(&audit, None, 1).expect("projection");
+        assert_eq!(projected.len(), 1);
+        assert_eq!(projected[0].kind, ShellActivityKind::Approval);
+        assert_eq!(
+            projected[0].category,
+            ShellActivityCategory::AuthenticationRateLimited
         );
     }
 

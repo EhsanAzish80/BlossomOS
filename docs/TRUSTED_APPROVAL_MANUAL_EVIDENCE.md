@@ -43,6 +43,16 @@ Use the Blossom shell UI, never the qualification driver.
 5. Request another create, leave the password dialog open beyond the preview's
    30-second expiry, then authenticate. Confirm the request is expired and
    produces zero effects.
+6. Within one minute, request four model-proposed effects without completing
+   them. Confirm the first three may open a PolicyKit challenge and the fourth
+   does not. Confirm the activity panel shows
+   `authentication_rate_limited`, then wait through the 120-second cooldown
+   before continuing any other case.
+
+The cases above intentionally exceed the challenge limit. Run them in separate
+groups of at most three prompts and wait 120 seconds after a rate-limit result;
+otherwise the limiter, rather than the password behavior under test, will
+correctly refuse the next case.
 
 ## Screenshot evidence
 
@@ -52,6 +62,7 @@ Preserve screenshots locally with private data excluded:
 - system PolicyKit password prompt: pending
 - second consecutive password prompt: pending
 - expired or rejected activity result: pending
+- visible rate-limit activity result: pending
 
 Screenshots show what this tester saw. They do not prove the absence of a
 lookalike overlay or establish behavior for other users or hardware.
