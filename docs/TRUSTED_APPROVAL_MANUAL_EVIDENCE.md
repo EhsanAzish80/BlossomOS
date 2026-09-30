@@ -72,3 +72,24 @@ lookalike overlay or establish behavior for other users or hardware.
 Pending. Do not claim that model effects require a human password until every
 case above has an observed result and the corresponding audit/effect counts are
 recorded here.
+
+## 2026-09-30 exact-effect and focus finding
+
+The single-tester clean-image check reached the real LXQt PolicyKit password
+dialog and completed one authenticated workspace publication. The tester needed
+several attempts because the generated overlay password was long and focus
+returned to the full-screen VM between attempts. This is usability evidence,
+not a successful focus-behavior qualification.
+
+More importantly, the approved effect did not match the typed request. The
+request asked for `manual-proof.txt` containing
+`clean image password approval works`; the model instead proposed a file named
+`clean-image-password-approval` containing `manual-proof.txt`. The old approval
+layout truncated the security fields, so the swap was not visible enough to
+catch before authentication. Exact-effect approval therefore remained
+unqualified even though password authentication and final verification worked.
+
+The follow-up fix must expose the complete original request, destination,
+content, and byte length without elision, and must prove the literal create
+request maps to the requested name and content before this finding can be
+closed.

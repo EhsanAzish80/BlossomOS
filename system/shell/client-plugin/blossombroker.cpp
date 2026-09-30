@@ -297,7 +297,11 @@ void BlossomBroker::requestAgentTurn(const QString &prompt) {
             return;
         }
         if (reply.isError()) {
-            failClosed();
+            if (reply.error().type() == QDBusError::InvalidArgs) {
+                failClosed(QStringLiteral("The direct create request has an invalid file name or content."));
+            } else {
+                failClosed();
+            }
             return;
         }
         handleOutcome(reply.value());

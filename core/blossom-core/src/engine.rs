@@ -1058,7 +1058,11 @@ fn effective_policy_decision(
     origin: crate::RequestOrigin,
     configured: PolicyDecision,
 ) -> PolicyDecision {
-    if origin == crate::RequestOrigin::ModelProposed && configured == PolicyDecision::Allow {
+    if matches!(
+        origin,
+        crate::RequestOrigin::ModelProposed | crate::RequestOrigin::UserPromptResolved
+    ) && configured == PolicyDecision::Allow
+    {
         PolicyDecision::Ask
     } else {
         configured
@@ -2234,6 +2238,7 @@ mod tests {
     fn audit_preserves_cli_and_model_request_origins() {
         for origin in [
             crate::RequestOrigin::UserCli,
+            crate::RequestOrigin::UserPromptResolved,
             crate::RequestOrigin::ModelProposed,
         ] {
             let mut engine = engine(PolicyDecision::Deny, ScriptedExecutor::successful());

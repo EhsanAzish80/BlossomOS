@@ -8,7 +8,7 @@ Label {
 
     Layout.fillWidth: true
     color: "#dbe5f5"
-    elide: Text.ElideMiddle
+    wrapMode: Text.WrapAnywhere
     textFormat: Text.PlainText
     text: label + ":  " + value
     Accessible.role: Accessible.StaticText

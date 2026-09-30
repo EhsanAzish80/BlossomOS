@@ -1,3 +1,4 @@
+use crate::DirectWorkspaceCreateParse;
 use crate::{
     BatterySummaryProvider, BeginOutcome, BlossomEngine, EngineError, Executor, PolicyDecision,
     PolicyEngine, PolicyRule, PreparedApprovalStore, RequestId, RequestOrigin, SessionContext,
@@ -44,6 +45,7 @@ pub enum AgentTurnError {
     UnexpectedGatewayIdentity,
     Protocol,
     InferenceFailed,
+    InvalidDirectRequest,
 }
 
 impl fmt::Display for AgentTurnError {
@@ -53,6 +55,7 @@ impl fmt::Display for AgentTurnError {
             Self::UnexpectedGatewayIdentity => "model gateway identity is unexpected",
             Self::Protocol => "model gateway protocol failed closed",
             Self::InferenceFailed => "model inference did not complete",
+            Self::InvalidDirectRequest => "direct create request has an invalid name or content",
         })
     }
 }
@@ -170,27 +173,49 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
         let catalogue =
             TurnIntentCatalogue::from_code_owned_eligible([ModelIntentKind::FilesWriteCreate])
                 .map_err(|_| ShellServiceError::Agent(AgentTurnError::Protocol))?;
-        let completion = if let Some(data) = untrusted_data.as_deref() {
-            self.agent_turn
-                .complete_with_untrusted_data(&inference_id, prompt, data, &catalogue)
+        let deterministic = if untrusted_data.is_none() {
+            crate::parse_obvious_workspace_create(prompt)
         } else {
-            self.agent_turn.complete(&inference_id, prompt, &catalogue)
+            DirectWorkspaceCreateParse::NoMatch
         };
-        let completion = match completion {
-            Ok(completion) => completion,
-            Err(AgentTurnError::Protocol) => return Ok(ShellServiceOutcome::Denied),
-            Err(error) => return Err(ShellServiceError::Agent(error)),
+        let (proposal, origin) = match deterministic {
+            DirectWorkspaceCreateParse::Valid(proposal) => {
+                (proposal, RequestOrigin::UserPromptResolved)
+            }
+            DirectWorkspaceCreateParse::Invalid(_) => {
+                return Err(ShellServiceError::Agent(
+                    AgentTurnError::InvalidDirectRequest,
+                ));
+            }
+            DirectWorkspaceCreateParse::NoMatch => {
+                let completion = if let Some(data) = untrusted_data.as_deref() {
+                    self.agent_turn.complete_with_untrusted_data(
+                        &inference_id,
+                        prompt,
+                        data,
+                        &catalogue,
+                    )
+                } else {
+                    self.agent_turn.complete(&inference_id, prompt, &catalogue)
+                };
+                let completion = match completion {
+                    Ok(completion) => completion,
+                    Err(AgentTurnError::Protocol) => return Ok(ShellServiceOutcome::Denied),
+                    Err(error) => return Err(ShellServiceError::Agent(error)),
+                };
+                let NormalizedCompletion::ToolIntents { intents } = completion else {
+                    return Ok(ShellServiceOutcome::Denied);
+                };
+                if intents.len() != 1 {
+                    return Ok(ShellServiceOutcome::Denied);
+                }
+                let proposal = intents[0]
+                    .workspace_create()
+                    .ok_or(ShellServiceError::Agent(AgentTurnError::Protocol))?
+                    .clone();
+                (proposal, RequestOrigin::ModelProposed)
+            }
         };
-        let NormalizedCompletion::ToolIntents { intents } = completion else {
-            return Ok(ShellServiceOutcome::Denied);
-        };
-        if intents.len() != 1 {
-            return Ok(ShellServiceOutcome::Denied);
-        }
-        let intent = &intents[0];
-        let proposal = intent
-            .workspace_create()
-            .ok_or(ShellServiceError::Agent(AgentTurnError::Protocol))?;
         let expires_at_ms = now_ms.saturating_add(SHELL_APPROVAL_TTL_MS);
         let destination = std::path::Path::new(&self.agent_workspace)
             .join(&proposal.name)
@@ -199,15 +224,19 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
         let preview = ShellApprovalPreview::workspace_create(
             &request_id,
             expires_at_ms,
+            prompt,
             destination,
             &proposal.content,
+            origin,
         );
         match self.engine.begin_wire(
-            ToolRequestWire::from_model_intent(request_id.clone(), intent)
-                .map_err(|_| ShellServiceError::Agent(AgentTurnError::Protocol))?,
+            ToolRequestWire::WorkspaceCreate {
+                request_id: request_id.clone(),
+                proposal,
+            },
             SessionContext {
                 workspace_root: &self.agent_workspace,
-                origin: RequestOrigin::ModelProposed,
+                origin,
             },
             Some(preview.preview_sha256.clone()),
             now_ms,
@@ -933,6 +962,21 @@ mod tests {
     }
 
     #[cfg(target_os = "linux")]
+    struct ModelMustNotRun;
+
+    #[cfg(target_os = "linux")]
+    impl AgentTurnProvider for ModelMustNotRun {
+        fn complete(
+            &mut self,
+            _: &InferenceRequestId,
+            _: &str,
+            _: &TurnIntentCatalogue,
+        ) -> Result<NormalizedCompletion, AgentTurnError> {
+            panic!("obvious create request unexpectedly reached model inference")
+        }
+    }
+
+    #[cfg(target_os = "linux")]
     fn indirect_workspace(contents: &str) -> (std::path::PathBuf, String) {
         use std::time::{SystemTime, UNIX_EPOCH};
         let nonce = SystemTime::now()
@@ -999,6 +1043,73 @@ mod tests {
         assert!(!audit.contains("WorkspaceFileCreated"));
         assert!(!audit.contains("ExecutionStarted"));
         std::fs::remove_dir_all(workspace).expect("remove fixture workspace");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn obvious_create_request_bypasses_model_but_still_requires_exact_approval() {
+        let (workspace, workspace_text) = indirect_workspace("fixture");
+        let owner = peer(":1.91");
+        let prompt = "create manual-proof.txt containing clean image password approval works";
+        let mut service = production_like_service(Rc::new(Cell::new(0)))
+            .with_agent_workspace(workspace_text)
+            .with_agent_turn_provider(ModelMustNotRun);
+        let ShellServiceOutcome::AwaitingApproval(preview) = service
+            .begin_agent_turn(owner.clone(), prompt, 4_000)
+            .expect("deterministic proposal asks")
+        else {
+            panic!("deterministic proposal did not ask")
+        };
+        let expected_destination = workspace
+            .join("manual-proof.txt")
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(preview.user_request.as_deref(), Some(prompt));
+        assert_eq!(
+            preview.destination.as_deref(),
+            Some(expected_destination.as_str())
+        );
+        assert_eq!(
+            preview.content.as_deref(),
+            Some("clean image password approval works")
+        );
+        assert_eq!(preview.content_bytes, Some(35));
+        assert!(!workspace.join("manual-proof.txt").exists());
+        assert_eq!(
+            service
+                .handle_client_request(&owner, decision(&preview, "deny"), 4_001)
+                .expect("deny deterministic proposal"),
+            ShellServiceOutcome::Denied
+        );
+        assert!(!workspace.join("manual-proof.txt").exists());
+        assert!(format!("{:?}", service.audit().records()).contains("UserPromptResolved"));
+        std::fs::remove_dir_all(workspace).expect("remove deterministic workspace");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn matched_invalid_direct_create_is_rejected_without_model_repair() {
+        let (workspace, workspace_text) = indirect_workspace("fixture");
+        let mut service = production_like_service(Rc::new(Cell::new(0)))
+            .with_agent_workspace(workspace_text)
+            .with_agent_turn_provider(ModelMustNotRun);
+        assert_eq!(
+            service.begin_agent_turn(
+                peer(":1.92"),
+                "create Bad Name.txt containing do not repair this",
+                4_000,
+            ),
+            Err(ShellServiceError::Agent(
+                AgentTurnError::InvalidDirectRequest
+            ))
+        );
+        assert_eq!(
+            std::fs::read_dir(&workspace)
+                .expect("workspace readable")
+                .count(),
+            0
+        );
+        std::fs::remove_dir_all(workspace).expect("remove invalid direct workspace");
     }
 
     #[test]
