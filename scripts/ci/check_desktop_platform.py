@@ -35,7 +35,7 @@ required_packages = {
     "bluez",
     "bluez-utils",
     "grim",
-    "hyprpolkitagent",
+    "lxqt-policykit",
     "libnotify",
     "mako",
     "networkmanager",
@@ -70,7 +70,7 @@ for config in (live_mako, installed_mako):
 
 for value in (
     "dbus-update-activation-environment --systemd",
-    "hyprpolkitagent.service",
+    "blossom-polkit-agent.service",
     "mako.service",
     "xdg-desktop-portal.service",
     "xdg-desktop-portal-hyprland.service",

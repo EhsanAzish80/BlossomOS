@@ -24,7 +24,7 @@ fi
 # The compositor owns this session's lifecycle, so start the concrete shell
 # unit and let its PartOf= relationship stop it with the graphical session.
 systemctl --user start \
-  hyprpolkitagent.service \
+  blossom-polkit-agent.service \
   mako.service \
   xdg-desktop-portal.service \
   xdg-desktop-portal-hyprland.service

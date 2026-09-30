@@ -58,7 +58,7 @@ fi
 
 pacstrap -K -C "$repo/distribution/archiso/pacman.conf" "$rootfs" \
   adwaita-cursors base blueman bluez bluez-utils brightnessctl broadcom-wl-dkms bubblewrap dbus-broker dosfstools foot \
-  dkms firefox gptfdisk greetd grim gvfs hyprland hyprpolkitagent intel-ucode iputils libnotify linux-firmware linux-lts linux-lts-headers mako mesa mousepad networkmanager \
+  dkms firefox gptfdisk greetd grim gvfs hyprland lxqt-policykit intel-ucode iputils libnotify linux-firmware linux-lts linux-lts-headers mako mesa mousepad networkmanager \
   network-manager-applet nm-connection-editor noto-fonts noto-fonts-emoji openssh openssl pavucontrol pipewire pipewire-alsa \
   pipewire-pulse polkit python quickshell greetd-regreet qt6-base qt6-declarative qt6-wayland slurp sof-firmware sudo systemd systemd-ukify thunar \
   tumbler upower vulkan-intel wireplumber wpa_supplicant xdg-desktop-portal xdg-desktop-portal-gtk \

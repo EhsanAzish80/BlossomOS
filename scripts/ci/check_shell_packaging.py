@@ -17,6 +17,7 @@ UI_UNIT = "blossom-shell-ui.service"
 DESKTOP_UNIT = "blossom-desktop-shell.service"
 RECOVERY_UNIT = "blossom-shell-recovery.service"
 RECOVERY = "blossom-shell-recovery"
+POLKIT_AGENT_UNIT = "blossom-polkit-agent.service"
 POLICY = "org.blossomos.shell.policy"
 MODEL_EFFECT_ACTION = "org.blossomos.shell.approve-model-effect"
 
@@ -149,6 +150,79 @@ def check_recovery() -> None:
         require(value not in script, f"forbidden recovery authority: {value}")
 
 
+def check_polkit_agent_unit() -> None:
+    text = (PACKAGE / POLKIT_AGENT_UNIT).read_text()
+    for value in [
+        "PartOf=graphical-session.target",
+        "After=graphical-session.target",
+        "ConditionEnvironment=WAYLAND_DISPLAY",
+        "ExecStart=/usr/bin/lxqt-policykit-agent",
+        "Slice=session.slice",
+        "Restart=on-failure",
+        "RestartSec=1sec",
+        "WantedBy=graphical-session.target",
+    ]:
+        require(value in text, f"missing PolicyKit agent lifecycle rule: {value}")
+    for value in ["User=root", "sudo", "pkexec", "/bin/sh", "sh -c", "bash -c"]:
+        require(value not in text, f"forbidden PolicyKit agent authority: {value}")
+
+
+def check_polkit_helper_preset() -> None:
+    preset = (PACKAGE / "50-blossom-core.preset").read_text()
+    require(preset == "enable polkit-agent-helper.socket\n",
+            "PolicyKit helper socket preset must remain exact and enabled")
+    core_package = (ROOT / "distribution/packages/blossom-core/PKGBUILD").read_text()
+    require("$pkgdir/usr/lib/systemd/system-preset/50-blossom-core.preset" in core_package,
+            "blossom-core must ship the PolicyKit helper socket preset")
+    shell_package = (ROOT / "distribution/packages/blossom-shell/PKGBUILD").read_text()
+    require("'lxqt-policykit'" in shell_package,
+            "blossom-shell must depend on the reviewed graphical PolicyKit agent")
+    require("hyprpolkitagent" not in shell_package,
+            "the crashing Hyprtoolkit PolicyKit agent must not return")
+
+
+def check_real_pam_qualification() -> None:
+    driver = (ROOT / "scripts/qualify_trusted_approval_pam.py").read_text()
+    orchestrator = (ROOT / "scripts/run_trusted_approval_pam_gate.py").read_text()
+    qualification_package = (
+        ROOT / "distribution/packages/blossom-trusted-approval-qualification/PKGBUILD"
+    ).read_text()
+    for value in [
+        'f"{self.compositor[0]},{self.compositor[1]}"',
+        '"--notify-fd={ready_write}"',
+        "pty.fork()",
+        "os.O_APPEND",
+        "os.fsync(descriptor)",
+        '"prompt_count"',
+        '"authentication_rate_limited"',
+        '"cooldown_reset"',
+        '"missing_agent"',
+    ]:
+        require(value in driver, f"real-PAM driver is missing: {value}")
+    for value in [
+        "secrets.token_urlsafe(32)",
+        '["chpasswd"]',
+        "pass_fds=(read_fd,)",
+        '["passwd", "--lock", USER]',
+        '"faillock", "--user", USER, "--reset"',
+    ]:
+        require(value in orchestrator, f"real-PAM orchestrator is missing: {value}")
+    for forbidden in ["blossom:blossom", "PASSWORD=", "shell=True"]:
+        require(forbidden not in driver + orchestrator,
+                f"real-PAM qualification contains forbidden secret handling: {forbidden}")
+    for path in [
+        "scripts/qualify_trusted_approval_pam.py",
+        "scripts/run_trusted_approval_pam_gate.py",
+    ]:
+        require(path in qualification_package,
+                f"qualification-only package omits {path}")
+    production_packages = (
+        ROOT / "distribution/packages/blossom-core/PKGBUILD"
+    ).read_text() + (ROOT / "distribution/packages/blossom-shell/PKGBUILD").read_text()
+    require("qualify-trusted-approval-pam" not in production_packages,
+            "real-PAM qualification driver must not ship in production packages")
+
+
 def check_policy() -> None:
     root = ET.parse(PACKAGE / POLICY).getroot()
     actions = root.findall("action")
@@ -167,7 +241,10 @@ def check_policy() -> None:
 
 
 def main() -> None:
-    expected = {"README.md", UNIT, UI_UNIT, DESKTOP_UNIT, RECOVERY_UNIT, RECOVERY, POLICY}
+    expected = {
+        "README.md", UNIT, UI_UNIT, DESKTOP_UNIT, RECOVERY_UNIT, RECOVERY,
+        POLKIT_AGENT_UNIT, "50-blossom-core.preset", POLICY,
+    }
     require({path.name for path in PACKAGE.iterdir()} == expected, "unexpected shell package surface")
     check_lock()
     check_evidence_lock()
@@ -175,6 +252,9 @@ def main() -> None:
     check_ui_unit()
     check_desktop_unit()
     check_recovery()
+    check_polkit_agent_unit()
+    check_polkit_helper_preset()
+    check_real_pam_qualification()
     check_policy()
 
 

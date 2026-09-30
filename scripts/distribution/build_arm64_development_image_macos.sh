@@ -126,7 +126,7 @@ docker --context "$context" run --rm --platform linux/arm64 --privileged \
   ubuntu:24.04 bash -euo pipefail -c '
     export DEBIAN_FRONTEND=noninteractive
     apt-get update
-    apt-get install -y --no-install-recommends ca-certificates curl dosfstools e2fsprogs gdisk libarchive-tools mount rsync util-linux
+    apt-get install -y --no-install-recommends ca-certificates curl dosfstools e2fsprogs gdisk libarchive-tools mount psmisc rsync util-linux
     scripts/distribution/build_arm64_development_image.sh \
       /output/cache/ArchLinuxARM-aarch64-latest.tar.gz \
       /output/image/blossom-os-arm64-development.raw \

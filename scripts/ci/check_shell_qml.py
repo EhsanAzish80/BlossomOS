@@ -2,6 +2,7 @@
 """Validate that the Phase 6 QML remains a narrow presentation surface."""
 
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[2]
 QML = ROOT / "system" / "shell" / "qml"
@@ -76,6 +77,21 @@ def main() -> None:
     require("PanelWindow" not in security_qml,
             "security controls must not use the inaccessible proxy-window hierarchy")
     shell = (QML / "shell.qml").read_text()
+    require(re.search(
+        r'if\s*\(root\.activityVisible\)\s*root\.agentHiddenForApproval\s*=\s*true',
+        shell,
+    ) is not None, "approval must remember an agent panel hidden for review")
+    require(re.search(
+        r'root\.agentHiddenForApproval\s*=\s*false\s*root\.activityVisible\s*=\s*true',
+        shell,
+    ) is not None, "finished approval must reopen the previously visible agent panel")
+    require(re.search(
+        r'\[\s*"waiting"\s*,\s*"submitting"\s*,\s*"cancelling"\s*\]'
+        r'\.includes\(BlossomBroker\.state\)',
+        shell,
+    ) is not None, "approval must dismiss shell popups before presenting its standard Qt window")
+    require("BlossomBroker.failureReason" in shell,
+            "agent failure surface must report the bounded broker reason")
     require("};" not in shell,
             "shell QML must not terminate grouped properties, child objects, or handlers with semicolons")
     for required in (

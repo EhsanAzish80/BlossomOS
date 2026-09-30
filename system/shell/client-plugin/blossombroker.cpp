@@ -1,5 +1,6 @@
 #include "blossombroker.h"
 
+#include <QDBusError>
 #include <QDBusInterface>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
@@ -22,6 +23,7 @@ constexpr quint16 ActivityLimit = 64;
 constexpr qulonglong MaxApprovalDelayMs = 60 * 1000;
 constexpr qulonglong MaxBatteryLifetimeMs = 5 * 1000;
 constexpr qulonglong MaxNetworkLifetimeMs = 5 * 1000;
+constexpr qsizetype MaxFailureReasonCharacters = 240;
 
 QDBusInterface fixedInterface() {
     return QDBusInterface(QString::fromLatin1(BusName), QString::fromLatin1(ObjectPath),
@@ -47,6 +49,27 @@ QJsonObject boundedObject(const QByteArray &bytes, bool *ok) {
     }
     *ok = true;
     return document.object();
+}
+
+QString boundedFailureReason(const QString &reason) {
+    QString result;
+    result.reserve(qMin(reason.size(), MaxFailureReasonCharacters));
+    for (const auto character : reason.left(MaxFailureReasonCharacters)) {
+        if (character.isPrint() || character == QLatin1Char(' ')) {
+            result.append(character);
+        } else {
+            result.append(QChar::Space);
+        }
+    }
+    return result.simplified();
+}
+
+QString decisionFailureReason(const QDBusError &error) {
+    if (error.type() == QDBusError::AccessDenied) {
+        return QStringLiteral("The approval was rejected or expired.");
+    }
+    const QString detail = boundedFailureReason(error.message());
+    return detail.isEmpty() ? QStringLiteral("The approval service became unavailable.") : detail;
 }
 } // namespace
 
@@ -81,6 +104,7 @@ bool BlossomBroker::liveEnvironment() const {
     return qEnvironmentVariableIsSet("BLOSSOM_LIVE");
 }
 QString BlossomBroker::desktopMessage() const { return m_desktopMessage; }
+QString BlossomBroker::failureReason() const { return m_failureReason; }
 bool BlossomBroker::onboardingRequired() const { return m_onboardingRequired; }
 
 void BlossomBroker::openTerminal() {
@@ -297,6 +321,7 @@ void BlossomBroker::submitDecision(const QString &decision) {
     auto interface = fixedInterface();
     auto *watcher = new QDBusPendingCallWatcher(
         interface.asyncCall(QStringLiteral("SubmitDecision1"), QJsonDocument(request).toJson(QJsonDocument::Compact)), this);
+    clearFailureReason();
     setState(QStringLiteral("submitting"));
     connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, generation] {
         const QDBusPendingReply<QByteArray> reply = *watcher;
@@ -306,7 +331,8 @@ void BlossomBroker::submitDecision(const QString &decision) {
             return;
         }
         if (reply.isError()) {
-            failClosed();
+            failClosed(decisionFailureReason(reply.error()));
+            refreshActivity();
             return;
         }
         handleOutcome(reply.value());
@@ -371,9 +397,6 @@ void BlossomBroker::refreshActivity(qulonglong afterSequence, bool hasCursor) {
         }
         m_activity = document.array().toVariantList();
         emit activityChanged();
-        if (m_state == QStringLiteral("unavailable")) {
-            setState(QStringLiteral("idle"));
-        }
     });
 }
 
@@ -473,10 +496,12 @@ void BlossomBroker::handleOutcome(const QByteArray &bytes) {
     }
     const auto status = object.value(QStringLiteral("status")).toString();
     if (status == QStringLiteral("awaiting_approval") && object.value(QStringLiteral("preview")).isObject()) {
+        clearFailureReason();
         m_preview = object.value(QStringLiteral("preview")).toObject().toVariantMap();
         emit previewChanged();
         setState(QStringLiteral("waiting"));
         armExpiryTimer();
+        refreshActivity();
         return;
     }
     if (status == QStringLiteral("denied") || status == QStringLiteral("cancelled") ||
@@ -484,6 +509,7 @@ void BlossomBroker::handleOutcome(const QByteArray &bytes) {
         status == QStringLiteral("verified") || status == QStringLiteral("verification_failed")) {
         m_preview.clear();
         emit previewChanged();
+        clearFailureReason();
         setState(status);
         refreshActivity();
         return;
@@ -491,13 +517,29 @@ void BlossomBroker::handleOutcome(const QByteArray &bytes) {
     failClosed();
 }
 
-void BlossomBroker::failClosed() {
+void BlossomBroker::failClosed(const QString &reason) {
     m_expiryTimer.stop();
     m_preview.clear();
     emit previewChanged();
+    const QString boundedReason = boundedFailureReason(reason);
+    const QString visibleReason = boundedReason.isEmpty()
+        ? QStringLiteral("The request was rejected or the local service became unavailable.")
+        : boundedReason;
+    if (m_failureReason != visibleReason) {
+        m_failureReason = visibleReason;
+        emit failureReasonChanged();
+    }
     clearBattery();
     clearNetwork();
     setState(QStringLiteral("unavailable"));
+}
+
+void BlossomBroker::clearFailureReason() {
+    if (m_failureReason.isEmpty()) {
+        return;
+    }
+    m_failureReason.clear();
+    emit failureReasonChanged();
 }
 
 void BlossomBroker::clearBattery() {

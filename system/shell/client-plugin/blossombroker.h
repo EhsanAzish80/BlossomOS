@@ -18,6 +18,7 @@ class BlossomBroker final : public QObject {
     Q_PROPERTY(QVariantMap network READ network NOTIFY networkChanged FINAL)
     Q_PROPERTY(QVariantMap quickStatus READ quickStatus NOTIFY quickStatusChanged FINAL)
     Q_PROPERTY(QString desktopMessage READ desktopMessage NOTIFY desktopMessageChanged FINAL)
+    Q_PROPERTY(QString failureReason READ failureReason NOTIFY failureReasonChanged FINAL)
     Q_PROPERTY(bool onboardingRequired READ onboardingRequired NOTIFY onboardingRequiredChanged FINAL)
     Q_PROPERTY(bool liveEnvironment READ liveEnvironment CONSTANT FINAL)
 
@@ -32,6 +33,7 @@ public:
     [[nodiscard]] QVariantMap quickStatus() const;
     [[nodiscard]] bool liveEnvironment() const;
     [[nodiscard]] QString desktopMessage() const;
+    [[nodiscard]] QString failureReason() const;
     [[nodiscard]] bool onboardingRequired() const;
 
     Q_INVOKABLE void requestSystemUname();
@@ -69,6 +71,7 @@ signals:
     void networkChanged();
     void quickStatusChanged();
     void desktopMessageChanged();
+    void failureReasonChanged();
     void onboardingRequiredChanged();
 
 private:
@@ -76,7 +79,8 @@ private:
     void armExpiryTimer();
     void submitDecision(const QString &decision);
     void handleOutcome(const QByteArray &bytes);
-    void failClosed();
+    void failClosed(const QString &reason = QString());
+    void clearFailureReason();
     void clearBattery();
     void clearNetwork();
     void clearQuickStatus();
@@ -92,6 +96,7 @@ private:
                               {QStringLiteral("muted"), false},
                               {QStringLiteral("bluetooth"), QStringLiteral("unavailable")}};
     QString m_desktopMessage;
+    QString m_failureReason;
     bool m_onboardingRequired = true;
     QDBusServiceWatcher m_serviceWatcher;
     QTimer m_expiryTimer;

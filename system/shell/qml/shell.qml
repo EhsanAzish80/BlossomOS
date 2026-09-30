@@ -10,6 +10,7 @@ ShellRoot {
     property bool launcherVisible: false
     property bool welcomeVisible: BlossomBroker.onboardingRequired
     property bool activityVisible: false
+    property bool agentHiddenForApproval: false
     property bool quickVisible: false
     property bool powerVisible: false
     property bool installerRequested: false
@@ -43,6 +44,22 @@ ShellRoot {
     }
     Connections {
         target: BlossomBroker
+        function onStateChanged() {
+            const busy = ["waiting", "submitting", "cancelling"].includes(BlossomBroker.state)
+            const finished = ["unavailable", "verified", "verification_failed", "cancelled", "expired"]
+                .includes(BlossomBroker.state)
+            if (busy) {
+                if (root.activityVisible)
+                    root.agentHiddenForApproval = true
+                root.activityVisible = false
+                root.launcherVisible = false
+                root.quickVisible = false
+                root.powerVisible = false
+            } else if (root.agentHiddenForApproval && finished) {
+                root.agentHiddenForApproval = false
+                root.activityVisible = true
+            }
+        }
         function onDesktopMessageChanged() {
             if (!root.installerRequested)
                 return
@@ -53,6 +70,11 @@ ShellRoot {
                 root.installerRequested = false
         }
     }
+
+    // The approval must live in the client connection that started the
+    // request.  The separate accessibility host has its own D-Bus peer and
+    // therefore cannot adopt or decide this pending request.
+    ApprovalPanel {}
 
     Variants {
         model: root.desktopScreens
@@ -271,7 +293,7 @@ ShellRoot {
                             text: BlossomBroker.state === "requesting" ? "The local model is preparing a proposal…"
                                 : BlossomBroker.state === "waiting" ? "Review the exact proposed effect in the approval window."
                                 : BlossomBroker.state === "submitting" ? "Authenticating and applying the approved effect…"
-                                : BlossomBroker.state === "unavailable" ? "The local agent is unavailable or rejected this request. Nothing was applied."
+                                : BlossomBroker.state === "unavailable" ? BlossomBroker.failureReason + " Nothing was applied."
                                 : "Ask the local agent for one bounded action. Proposed effects never run without exact approval."
                             color: BlossomBroker.state === "unavailable" ? "#ff9b93" : "#aebbd0"
                             wrapMode: Text.WordWrap
@@ -289,6 +311,11 @@ ShellRoot {
                                 placeholderText: "What should Blossom do?"
                                 color: "#f4f7fb"
                                 placeholderTextColor: "#8190a5"
+                                selectionColor: "#2f8f83"
+                                selectedTextColor: "#ffffff"
+                                background: Rectangle {
+                                    color: "transparent"
+                                }
                                 wrapMode: TextEdit.Wrap
                                 selectByMouse: true
                                 enabled: !["requesting", "waiting", "submitting", "cancelling"].includes(BlossomBroker.state)
@@ -307,6 +334,32 @@ ShellRoot {
                                     && !["requesting", "waiting", "submitting", "cancelling"].includes(BlossomBroker.state)
                                 Accessible.description: "Send this request to the local model through the Blossom gateway."
                                 onClicked: BlossomBroker.requestAgentTurn(agentPrompt.text)
+                            }
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            implicitHeight: agentStatus.implicitHeight + 18
+                            radius: 9
+                            color: BlossomBroker.state === "waiting" ? "#213b3a"
+                                : BlossomBroker.state === "unavailable" ? "#442b31" : "#222b38"
+                            Label {
+                                id: agentStatus
+                                anchors { fill: parent; margins: 9 }
+                                text: BlossomBroker.state === "requesting" ? "Request sent · waiting for the local model…"
+                                    : BlossomBroker.state === "waiting" ? "Approval required · review the exact proposal in the approval window."
+                                    : BlossomBroker.state === "submitting" ? "Approval received · authenticating and verifying the effect…"
+                                    : BlossomBroker.state === "verified" ? "Completed and verified."
+                                    : BlossomBroker.state === "denied" ? "Denied · nothing was applied."
+                                    : BlossomBroker.state === "cancelled" ? "Cancelled · nothing was applied."
+                                    : BlossomBroker.state === "expired" ? "Expired · nothing was applied."
+                                    : BlossomBroker.state === "verification_failed" ? "Verification failed · review the activity below."
+                                    : BlossomBroker.state === "unavailable" ? "Request failed closed · " + BlossomBroker.failureReason
+                                    : "Ready"
+                                color: BlossomBroker.state === "waiting" || BlossomBroker.state === "verified"
+                                    ? "#8dd7c7" : BlossomBroker.state === "unavailable" || BlossomBroker.state === "verification_failed"
+                                    ? "#ff9b93" : "#dbe5f5"
+                                wrapMode: Text.WordWrap
+                                Accessible.role: Accessible.AlertMessage
                             }
                         }
                         Label { Layout.fillWidth: true; text: "Recent authoritative activity"; color: "#8dd7c7"; font.bold: true }

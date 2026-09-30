@@ -60,6 +60,7 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             'rm -rf "$image_work"',
             "available_kib",
             "build_complete=true",
+            "psmisc",
         ):
             self.assertIn(required, text)
         self.assertNotIn("github", text.lower())
@@ -83,7 +84,11 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "graphical.target.wants/blossom-arm64-qualification.service",
             "virtio_console",
             'gpgconf --kill all',
-            'umount -R "$work/root"',
+            'fuser -km -M "$work/root"',
+            'umount "$work/root/opt/blossom-inputs"',
+            'umount -R "$work/root/dev"',
+            'e2fsck -f -p "$root_loop"',
+            "fsck_status <= 1",
             "blossom-model-runtime-",
             "blossom-qualification-",
             "--verify-installed-root /",
@@ -96,6 +101,7 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "useradd --uid 1000 --gid blossom",
         ):
             self.assertIn(required, text)
+        self.assertNotIn('umount -R "$work/root" || umount -R -l "$work/root"', text)
         self.assertNotIn("blossom-model-runtime-[0-9]*-aarch64", text)
 
     def test_launcher_uses_hvf_without_intel_emulation(self):
