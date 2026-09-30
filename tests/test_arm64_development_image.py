@@ -60,6 +60,7 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             'rm -rf "$image_work"',
             "available_kib",
             "build_complete=true",
+            "psmisc",
         ):
             self.assertIn(required, text)
         self.assertNotIn("github", text.lower())
@@ -83,6 +84,7 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "graphical.target.wants/blossom-arm64-qualification.service",
             "virtio_console",
             'gpgconf --kill all',
+            'fuser -km -M "$work/root"',
             'umount "$work/root/opt/blossom-inputs"',
             'umount -R "$work/root/dev"',
             'e2fsck -f -p "$root_loop"',

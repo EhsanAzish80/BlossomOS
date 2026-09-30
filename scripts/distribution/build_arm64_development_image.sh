@@ -287,6 +287,11 @@ sync
 # host may otherwise start converting the raw image while detached references
 # are still flushing writes into it.
 chroot "$work/root" gpgconf --kill all 2>/dev/null || true
+# Package hooks can leave short-lived helpers rooted inside the image. They
+# have no role after assembly and must be gone before any mounted filesystem is
+# detached. -M refuses to act unless the target is still a mount point.
+fuser -km -M "$work/root" 2>/dev/null || true
+sleep 1
 
 umount "$work/root/opt/blossom-inputs"
 umount "$work/root/var/cache/pacman/pkg"
