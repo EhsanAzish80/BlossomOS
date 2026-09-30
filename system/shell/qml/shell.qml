@@ -10,6 +10,7 @@ ShellRoot {
     property bool launcherVisible: false
     property bool welcomeVisible: BlossomBroker.onboardingRequired
     property bool activityVisible: false
+    property bool agentHiddenForApproval: false
     property bool quickVisible: false
     property bool powerVisible: false
     property bool installerRequested: false
@@ -43,6 +44,22 @@ ShellRoot {
     }
     Connections {
         target: BlossomBroker
+        function onStateChanged() {
+            const busy = ["waiting", "submitting", "cancelling"].includes(BlossomBroker.state)
+            const finished = ["unavailable", "verified", "verification_failed", "cancelled", "expired"]
+                .includes(BlossomBroker.state)
+            if (busy) {
+                if (root.activityVisible)
+                    root.agentHiddenForApproval = true
+                root.activityVisible = false
+                root.launcherVisible = false
+                root.quickVisible = false
+                root.powerVisible = false
+            } else if (root.agentHiddenForApproval && finished) {
+                root.agentHiddenForApproval = false
+                root.activityVisible = true
+            }
+        }
         function onDesktopMessageChanged() {
             if (!root.installerRequested)
                 return
@@ -276,7 +293,7 @@ ShellRoot {
                             text: BlossomBroker.state === "requesting" ? "The local model is preparing a proposal…"
                                 : BlossomBroker.state === "waiting" ? "Review the exact proposed effect in the approval window."
                                 : BlossomBroker.state === "submitting" ? "Authenticating and applying the approved effect…"
-                                : BlossomBroker.state === "unavailable" ? "The local agent is unavailable or rejected this request. Nothing was applied."
+                                : BlossomBroker.state === "unavailable" ? BlossomBroker.failureReason + " Nothing was applied."
                                 : "Ask the local agent for one bounded action. Proposed effects never run without exact approval."
                             color: BlossomBroker.state === "unavailable" ? "#ff9b93" : "#aebbd0"
                             wrapMode: Text.WordWrap
@@ -336,7 +353,7 @@ ShellRoot {
                                     : BlossomBroker.state === "cancelled" ? "Cancelled · nothing was applied."
                                     : BlossomBroker.state === "expired" ? "Expired · nothing was applied."
                                     : BlossomBroker.state === "verification_failed" ? "Verification failed · review the activity below."
-                                    : BlossomBroker.state === "unavailable" ? "Request failed closed · nothing was applied."
+                                    : BlossomBroker.state === "unavailable" ? "Request failed closed · " + BlossomBroker.failureReason
                                     : "Ready"
                                 color: BlossomBroker.state === "waiting" || BlossomBroker.state === "verified"
                                     ? "#8dd7c7" : BlossomBroker.state === "unavailable" || BlossomBroker.state === "verification_failed"

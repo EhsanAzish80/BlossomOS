@@ -2,6 +2,7 @@
 """Keep the QML client plugin narrower than the authoritative shell service."""
 
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "system" / "shell" / "client-plugin"
@@ -87,6 +88,20 @@ def main() -> None:
             "agent prompt must be UTF-8 bounded before crossing D-Bus")
     require('setState(QStringLiteral("requesting"))' in client,
             "request start must close the rapid-click race")
+    require("MaxFailureReasonCharacters" in client and "boundedFailureReason" in client,
+            "client-visible failure reasons must be bounded and stripped of controls")
+    require("decisionFailureReason(reply.error())" in client and
+            'error.type() == QDBusError::AccessDenied' in client and
+            "emit failureReasonChanged()" in client,
+            "decision failures must expose a bounded, classified reason")
+    require(re.search(
+        r"failClosed\s*\(\s*decisionFailureReason\s*\(\s*reply\.error\(\)\s*\)\s*\)\s*;"
+        r"\s*refreshActivity\s*\(\s*\)\s*;",
+        client,
+    ) is not None,
+            "decision failure must refresh authoritative activity")
+    require('if (m_state == QStringLiteral("unavailable"))' not in client,
+            "activity refresh must not erase a visible fail-closed outcome")
     cmake = (PLUGIN / "CMakeLists.txt").read_text()
     for setting in [
         "if(COMMAND qt_policy)",
