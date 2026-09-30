@@ -264,7 +264,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--case",
-        choices=("correct", "wrong", "cancel", "expiry", "repeated", "rate_limit", "missing_agent"),
+        choices=(
+            "correct", "wrong", "cancel", "expiry", "repeated", "rate_limit",
+            "cooldown_reset", "missing_agent",
+        ),
         required=True,
     )
     parser.add_argument("--password-fd", type=int, required=True)
@@ -281,12 +284,14 @@ def main() -> int:
     connection = Gio.bus_get_sync(Gio.BusType.SESSION, None)
     _, baseline = read_activity(connection, 0, 10)
     compositor = compositor_identity()
-    response = args.case
+    response = "cancel" if args.case == "cooldown_reset" else args.case
     iterations = 2 if args.case == "repeated" else (4 if args.case == "rate_limit" else 1)
     request_ids: set[str] = set()
     errors: list[str] = []
     started = time.monotonic()
     prompt_count = 0
+    if args.case == "cooldown_reset":
+        time.sleep(121)
     if args.case == "missing_agent":
         preview = start_request(connection, "pam-missing-agent-1.txt")
         request_ids.add(preview["request_id"])

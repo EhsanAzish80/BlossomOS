@@ -11,7 +11,10 @@ import secrets
 import subprocess
 import time
 
-CASES = ("correct", "wrong", "cancel", "expiry", "repeated", "rate_limit", "missing_agent")
+CASES = (
+    "correct", "wrong", "cancel", "expiry", "repeated", "rate_limit",
+    "cooldown_reset", "missing_agent",
+)
 USER = "blossom"
 UID = 1000
 RUNTIME = f"/run/user/{UID}"
@@ -83,8 +86,11 @@ def main() -> int:
     try:
         for case in CASES:
             run(["faillock", "--user", USER, "--reset"])
-            run(["systemctl", "restart", f"blossom-shell-broker@{UID}.service"])
-            time.sleep(1)
+            # cooldown_reset must observe the limiter state left by rate_limit;
+            # restarting here would turn the case into a false pass.
+            if case != "cooldown_reset":
+                run(["systemctl", "restart", f"blossom-shell-broker@{UID}.service"])
+                time.sleep(1)
             if case == "missing_agent":
                 user_systemctl("stop", "blossom-polkit-agent.service", check=False)
                 subprocess.run(

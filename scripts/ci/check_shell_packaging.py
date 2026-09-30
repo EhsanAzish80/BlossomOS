@@ -195,6 +195,7 @@ def check_real_pam_qualification() -> None:
         "os.fsync(descriptor)",
         '"prompt_count"',
         '"authentication_rate_limited"',
+        '"cooldown_reset"',
         '"missing_agent"',
     ]:
         require(value in driver, f"real-PAM driver is missing: {value}")
