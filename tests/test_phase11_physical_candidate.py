@@ -46,7 +46,7 @@ class PhysicalCandidateTests(unittest.TestCase):
             self.assertIn(f"\n{package}\n", f"\n{packages}")
             self.assertIn(package, builder)
         for package in (
-            "grim", "hyprpolkitagent", "libnotify", "mako", "qt6-wayland",
+            "grim", "lxqt-policykit", "libnotify", "mako", "qt6-wayland",
             "slurp", "xdg-desktop-portal", "xdg-desktop-portal-gtk",
             "xdg-desktop-portal-hyprland", "xorg-xwayland",
         ):
@@ -126,7 +126,7 @@ class PhysicalCandidateTests(unittest.TestCase):
         self.assertNotIn("org.blossomos.Shell1.service", core_package)
         self.assertIn("dbus-update-activation-environment --systemd", session_command)
         for service in (
-            "hyprpolkitagent.service", "mako.service",
+            "blossom-polkit-agent.service", "mako.service",
             "xdg-desktop-portal.service", "xdg-desktop-portal-hyprland.service",
         ):
             self.assertIn(service, session_command)

@@ -37,7 +37,8 @@ class DesktopFoundationLayoutTests(unittest.TestCase):
         self.assertIn("BlossomBroker.requestAgentTurn(agentPrompt.text)", SHELL)
         self.assertIn('text: BlossomBroker.state === "requesting" ? "Request sent', SHELL)
         self.assertIn("ApprovalPanel {}", SHELL)
-        self.assertIn("The local agent is unavailable or rejected this request. Nothing was applied.", SHELL)
+        self.assertIn('BlossomBroker.failureReason + " Nothing was applied."', SHELL)
+        self.assertIn('"Request failed closed · " + BlossomBroker.failureReason', SHELL)
 
     def test_window_recovery_is_discoverable(self):
         self.assertIn("Super+Tab switches windows", SHELL)

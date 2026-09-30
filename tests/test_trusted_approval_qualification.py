@@ -57,7 +57,8 @@ class TrustedApprovalQualificationTests(unittest.TestCase):
         for required in (
             "--case self_approval",
             "systemctl --user",
-            "stop hyprpolkitagent.service",
+            "stop blossom-polkit-agent.service",
+            "lxqt-policykit-agent",
             "--case missing_agent",
             "loginctl show-session",
             "invalid-environment-inactive-session",
