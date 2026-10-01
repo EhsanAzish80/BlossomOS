@@ -177,6 +177,7 @@ impl ValidatedPlan {
             }
             let request_id = derived_request_id(&plan_id, &correlation_id, index)?;
             let request = match kind {
+                ModelIntentKind::Unsupported => return Err(PlanError::IntentNotEligible),
                 ModelIntentKind::SystemOsIdentity => ToolRequest::SystemOsIdentity { request_id },
                 ModelIntentKind::SystemUptime => ToolRequest::SystemUptime { request_id },
                 ModelIntentKind::SystemMemorySummary => {

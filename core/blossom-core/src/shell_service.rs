@@ -170,9 +170,11 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
         let request_id = self.next_request_id()?;
         let inference_id = InferenceRequestId::parse(request_id.as_str().into())
             .map_err(|_| ShellServiceError::Agent(AgentTurnError::Protocol))?;
-        let catalogue =
-            TurnIntentCatalogue::from_code_owned_eligible([ModelIntentKind::FilesWriteCreate])
-                .map_err(|_| ShellServiceError::Agent(AgentTurnError::Protocol))?;
+        let catalogue = TurnIntentCatalogue::from_code_owned_eligible([
+            ModelIntentKind::Unsupported,
+            ModelIntentKind::FilesWriteCreate,
+        ])
+        .map_err(|_| ShellServiceError::Agent(AgentTurnError::Protocol))?;
         let deterministic = if untrusted_data.is_none() {
             crate::parse_obvious_workspace_create(prompt)
         } else {
@@ -208,6 +210,11 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
                 };
                 if intents.len() != 1 {
                     return Ok(ShellServiceOutcome::Denied);
+                }
+                if intents[0].kind() == ModelIntentKind::Unsupported
+                    && intents[0].workspace_create().is_none()
+                {
+                    return Ok(ShellServiceOutcome::Unsupported);
                 }
                 let proposal = intents[0]
                     .workspace_create()
@@ -686,6 +693,7 @@ pub enum ShellServiceOutcome {
     Expired,
     Verified,
     VerificationFailed,
+    Unsupported,
 }
 
 #[derive(Debug)]
@@ -974,6 +982,39 @@ mod tests {
         ) -> Result<NormalizedCompletion, AgentTurnError> {
             panic!("obvious create request unexpectedly reached model inference")
         }
+    }
+
+    struct UnsupportedAgentProvider;
+
+    impl AgentTurnProvider for UnsupportedAgentProvider {
+        fn complete(
+            &mut self,
+            _: &InferenceRequestId,
+            _: &str,
+            catalogue: &TurnIntentCatalogue,
+        ) -> Result<NormalizedCompletion, AgentTurnError> {
+            crate::validate_provider_completion(
+                br#"{"kind":"tool_intents","intents":[{"name":"blossom.unsupported","arguments":{}}]}"#,
+                catalogue,
+            )
+            .map_err(|_| AgentTurnError::Protocol)
+        }
+    }
+
+    #[test]
+    fn closed_unsupported_agent_result_has_no_proposal_or_pending_approval() {
+        let calls = Rc::new(Cell::new(0));
+        let owner = peer(":1.89");
+        let mut service = service(calls.clone()).with_agent_turn_provider(UnsupportedAgentProvider);
+
+        assert_eq!(
+            service
+                .begin_agent_turn(owner.clone(), "Organize my downloads", 1_000)
+                .unwrap(),
+            ShellServiceOutcome::Unsupported
+        );
+        assert_eq!(calls.get(), 0);
+        assert!(!service.sessions.has_pending(&owner));
     }
 
     #[cfg(target_os = "linux")]
