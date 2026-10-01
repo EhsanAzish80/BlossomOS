@@ -517,3 +517,144 @@ until a separate fail-closed disk-safety increment is reviewed and tested.
 Exit: one exact physical target completes the reviewed safety, installation,
 hardware, update, rollback, and recovery matrix. No broader hardware claim is
 implied.
+
+## Phase 12: Desktop fine-tuning
+
+Status: planned. Starts after the folder-authority resolver and the compositor
+decision (12.0). Phase 12 turns the qualified security core into a desktop a
+non-technical user can live in every day. It adds no new agent capability and
+widens no trust boundary.
+
+Rules for every Phase 12 item:
+
+- Settings are user actions, never agent capabilities. Exposing any setting
+  to the agent needs its own ADR.
+- System-wide changes go through existing systemd/freedesktop D-Bus services
+  (`timedated`, `localed`, `hostnamed`, AccountsService, power-profiles-daemon,
+  NetworkManager) with polkit. No new privileged helper and no generic shell.
+- Every persistent setting survives A/B updates and rollback: user settings live
+  in the home directory on the state partition; system settings are added to the
+  closed slot-sync set (ADR-0029) or moved to the state partition, with a test.
+- Petal tokens and icons only. No Unicode glyph icons, text at 4.5:1 contrast or
+  better, and every control reachable by keyboard and AT-SPI.
+- Each item is verified in the fast loop (disposable overlay, packages installed
+  with `pacman -U`) before it is included in an image gate.
+
+### 12.0 Compositor decision (prerequisite)
+
+- [ ] One-day labwc spike in a disposable overlay: shell renders, command-bar
+  keybinding works over a focused app, dock lists and closes/minimizes windows,
+  approval window stays above all windows with password-dialog focus, and the
+  compositor-PID polkit subject is re-verified.
+- [ ] Accept an ADR choosing labwc, or Hyprland with floating rules, title bars,
+  and mouse move/resize, including the security re-verification it requires.
+
+### 12.1 Petal shell completion
+
+- [ ] Replace every Unicode glyph in the top bar, dock, and panels with the
+  Petal 24-icon set (24 grid, 1.75 stroke, `currentColor`).
+- [ ] Top bar as designed: flower and workspace on the left, date and time in
+  the centre, one combined quick-settings button (network, sound, Bluetooth,
+  battery percentage) and power on the right.
+- [ ] Quick-settings panel: Wi-Fi, Bluetooth, and Do-not-disturb tiles, one
+  volume slider, agent status line ("No agent actions pending"), and
+  "All settings".
+- [ ] Dock: Apps, Files, Browser, Terminal | Agent, with running-app dots and
+  hover labels.
+- [ ] Status pills, activity rows, and the monospace security field (digests
+  grouped in fours) from the Petal components board.
+- [ ] "Dark shell, light apps": a Petal light GTK and Qt theme, Petal cursor and
+  icon theme for apps, Petal-styled notifications.
+- [ ] Ship a Firefox `policies.json`: no telemetry, no studies, no Pocket, no
+  first-run or post-update pages, no default-browser check, a privacy-respecting
+  default search engine.
+
+### 12.2 Window management
+
+- [ ] Windows open floating and centred at a sensible size.
+- [ ] Title bars with close, minimize, and maximize; drag to move; edge resize.
+- [ ] Snap to left/right half and maximize by dragging to screen edges.
+- [ ] Minimized windows restorable from the dock; Alt+Tab window switcher.
+- [ ] Usability check: two windows of the same app never auto-tile or cascade
+  off-screen.
+
+### 12.3 Applications catalogue
+
+- [ ] Applications panel backed by broker discovery: every installed app's icon
+  and name, search using command-bar routing, launch by opaque row ID.
+- [ ] Row IDs bound to a catalogue generation; a rescan (for example after
+  installing Chrome) reloads the panel and stale IDs fail closed.
+- [ ] Bounded catalogue (512 entries); system entries first, user-installed
+  entries labelled; icons resolved by theme name only, never by path.
+
+### 12.4 Settings v1
+
+- [ ] Settings app in Petal with a sidebar and search.
+- [ ] Appearance: wallpaper picker, light/dark apps, accent preview, text size.
+- [ ] Date & time: timezone, automatic time (NTP), 24-hour clock, date format,
+  via `timedated`. Timezone persists across slots.
+- [ ] Keyboard & language: layouts and switching shortcut, system language and
+  formats, via `localed`.
+- [ ] Mouse & touchpad: pointer speed, natural scrolling, tap to click.
+- [ ] Notifications: Do-not-disturb, per-app on/off.
+- [ ] Default apps: browser, file manager, text editor.
+- [ ] Users & password: change password and display name through
+  AccountsService/polkit.
+- [ ] Agent & privacy: workspace folder, model in use and its memory use,
+  activity log viewer and clear, durable notes on/off.
+- [ ] Sound, Network, Bluetooth: native pages, or links to pavucontrol,
+  nm-connection-editor, and blueman until native pages exist.
+- [ ] About: Blossom version, active slot, hardware summary, licences.
+
+### 12.5 Lock, idle, and power (security-relevant)
+
+- [ ] Screen lock with a Petal lock screen; manual lock with Super+L and from
+  the system menu.
+- [ ] Automatic lock after idle (default 5 minutes), on lid close, and before
+  suspend. Locking cannot be disabled without the user's password.
+- [ ] Screen off after idle; suspend on lid close; configurable timeouts.
+- [ ] Power profiles (power saver, balanced, performance) via
+  power-profiles-daemon; low-battery warning and critical action.
+- [ ] Screensaver: a simple Petal idle animation before screen-off, optional.
+- [ ] Gate: lock engages after idle and lid close in the VM and on the physical
+  target; the approval and password dialogs never appear above the lock screen.
+
+### 12.6 Display
+
+- [ ] Resolution, refresh rate, and scaling (including fractional HiDPI) per
+  output, applied live with a 15-second "keep these settings?" revert.
+- [ ] Multi-monitor arrangement and primary display; settings persisted per
+  output.
+- [ ] Brightness (keyboard keys and slider) and Night Light with a schedule.
+- [ ] Gate: settings survive reboot and A/B slot switch; a bad mode reverts
+  automatically.
+
+### 12.7 Storage and performance
+
+- [ ] Storage page: usage of the active root slot, inactive slot, and state
+  partition; largest folders in the workspace; low-space warning on the state
+  partition at a fixed threshold.
+- [ ] Bounded growth: journald size cap on the state partition, pacman cache
+  cleanup timer (`paccache`), thumbnail and browser cache caps, model cache
+  accounted for.
+- [ ] SSD health: `fstrim.timer` enabled; `noatime` on root and state; ext4
+  error behaviour documented.
+- [ ] Memory: zram swap via `zram-generator`; `systemd-oomd` policy that
+  protects the shell, broker, and lock screen and sacrifices the model provider
+  first; model provider unloads after an idle period and reloads on demand.
+- [ ] Performance budgets measured in every image gate and recorded in the
+  evidence: boot to desktop, idle RAM and CPU with and without the model loaded,
+  command bar open latency, app launch latency, model cold and warm latency.
+- [ ] Gate: budgets met in the ARM64 VM and on the MacBookPro11,1 target, with
+  numbers recorded per architecture.
+
+### 12.8 Accessibility
+
+- [ ] Text size and high-contrast mode; reduced motion respected by the shell.
+- [ ] Every shell surface passes the AT-SPI check; screen-reader (Orca) smoke
+  test for the command bar, approval window, and Settings.
+
+Exit: a fresh install in the generic VM and on the physical target passes the
+desktop usability matrix (window controls, Settings v1, lock and idle, display
+changes with revert, storage page, performance budgets) with recorded evidence,
+and every setting survives reboot and an A/B slot switch.
