@@ -164,10 +164,29 @@ void BlossomBroker::queryCommandBar(const QString &query) {
         m_commandRows.clear();
         emit commandRowsChanged();
     }
-    auto *watcher = new QDBusPendingCallWatcher(
-        fixedInterface().asyncCall(QStringLiteral("QueryCommandBar1"),
-            QJsonDocument(request).toJson(QJsonDocument::Compact)), this);
+    const auto call = fixedInterface().asyncCall(QStringLiteral("QueryCommandBar1"),
+        QJsonDocument(request).toJson(QJsonDocument::Compact));
     setCommandState(QStringLiteral("querying"));
+    watchCommandRows(call, commandGeneration);
+}
+
+void BlossomBroker::queryCommandSuggestions() {
+    const quint64 commandGeneration = ++m_commandGeneration;
+    if (!m_commandRows.isEmpty()) {
+        m_commandRows.clear();
+        emit commandRowsChanged();
+    }
+    const auto call = fixedInterface().asyncCall(QStringLiteral("QueryCommandSuggestions1"),
+        QVariant::fromValue(ProtocolVersion));
+    setCommandState(QStringLiteral("querying"));
+    watchCommandRows(call, commandGeneration);
+}
+
+void BlossomBroker::watchCommandRows(
+    const QDBusPendingCall &call,
+    quint64 commandGeneration
+) {
+    auto *watcher = new QDBusPendingCallWatcher(call, this);
     connect(watcher, &QDBusPendingCallWatcher::finished, this,
             [this, watcher, commandGeneration] {
         const QDBusPendingReply<QByteArray> reply = *watcher;
@@ -186,7 +205,7 @@ void BlossomBroker::queryCommandBar(const QString &query) {
         }
         QVariantList rows;
         const QStringList kinds{QStringLiteral("application"), QStringLiteral("workspace_file"),
-            QStringLiteral("create"), QStringLiteral("ask_blossom"),
+            QStringLiteral("workspace_create"), QStringLiteral("ask_blossom"),
             QStringLiteral("invalid_create"), QStringLiteral("unsupported")};
         for (const auto value : document.array()) {
             if (!value.isObject()) { rows.clear(); break; }
@@ -195,7 +214,19 @@ void BlossomBroker::queryCommandBar(const QString &query) {
             const QString kind = row.value(QStringLiteral("kind")).toString();
             const QString title = row.value(QStringLiteral("title")).toString();
             const QString detail = row.value(QStringLiteral("detail")).toString();
-            if (row.size() != 4 || !validRowId(id) || !kinds.contains(kind) ||
+            const auto badges = row.value(QStringLiteral("badges")).toArray();
+            bool validBadges = badges.size() <= 3;
+            const QStringList tones{QStringLiteral("local"), QStringLiteral("approval"),
+                QStringLiteral("model"), QStringLiteral("neutral")};
+            for (const auto badgeValue : badges) {
+                if (!badgeValue.isObject()) { validBadges = false; break; }
+                const auto badge = badgeValue.toObject();
+                if (badge.size() != 2 || !safeDisplayText(badge.value(QStringLiteral("text")).toString(), 128) ||
+                    !tones.contains(badge.value(QStringLiteral("tone")).toString())) {
+                    validBadges = false; break;
+                }
+            }
+            if (row.size() != 5 || !validRowId(id) || !kinds.contains(kind) || !validBadges ||
                 !safeDisplayText(title, 512) || !safeDisplayText(detail, 4096)) {
                 rows.clear(); break;
             }
@@ -236,7 +267,15 @@ void BlossomBroker::activateCommandRow(const QString &rowId) {
             return;
         }
         handleOutcome(reply.value());
-        setCommandState(QStringLiteral("completed"));
+        if (m_state == QStringLiteral("unsupported")) {
+            setCommandState(QStringLiteral("result"),
+                QStringLiteral("Blossom can't do this yet. Today it can create one file in your workspace."));
+        } else if (m_state == QStringLiteral("model_failed")) {
+            setCommandState(QStringLiteral("result"),
+                QStringLiteral("Blossom couldn't work out that request. Nothing was done."));
+        } else {
+            setCommandState(QStringLiteral("completed"));
+        }
     });
 }
 

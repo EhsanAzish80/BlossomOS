@@ -170,7 +170,7 @@ class Arm64AgentContractTests(unittest.TestCase):
             declaration = declaration[:declaration.index(";") + 1]
             self.assertNotIn("{", declaration, handler)
         self.assertNotIn("fn start_agent", trait.split(";")[-1])
-        for method in ("QueryCommandBar1", "ActivateCommandRow1"):
+        for method in ("QueryCommandBar1", "QueryCommandSuggestions1", "ActivateCommandRow1"):
             self.assertIn(f'#[zbus(name = "{method}")]', source)
         self.assertIn("decode_command_query(&input)", source)
         self.assertIn("decode_command_activation(&input)", source)

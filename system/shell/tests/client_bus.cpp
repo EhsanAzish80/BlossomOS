@@ -56,7 +56,13 @@ int main(int argc, char **argv) {
         })) return 12;
     const auto commandRow = broker.commandRows().first().toMap();
     if (commandRow.value(QStringLiteral("kind")) != QStringLiteral("ask_blossom") ||
-        commandRow.value(QStringLiteral("id")).toString().size() != 32) return 13;
+        commandRow.value(QStringLiteral("id")).toString().size() != 32 ||
+        commandRow.value(QStringLiteral("badges")).toList().size() != 1) return 13;
+    if (!observeCommand(broker, [&] { broker.queryCommandSuggestions(); }, [&] {
+            return broker.commandState() == "ready" && !broker.commandRows().isEmpty();
+        })) return 14;
+    if (broker.commandRows().first().toMap().value(QStringLiteral("kind")) !=
+        QStringLiteral("application")) return 15;
     bool activityReceived = false;
     QObject::connect(&broker, &BlossomBroker::activityChanged, &app, [&] { activityReceived = true; });
     if (!observe(broker, [&] { broker.refreshActivity(); }, [&] { return activityReceived; })) return 2;

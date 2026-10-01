@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QDBusPendingCall>
 #include <QDBusServiceWatcher>
 #include <QQmlEngine>
 #include <QTimer>
@@ -45,6 +46,7 @@ public:
     Q_INVOKABLE void requestSystemUname();
     Q_INVOKABLE void requestAgentTurn(const QString &prompt);
     Q_INVOKABLE void queryCommandBar(const QString &query);
+    Q_INVOKABLE void queryCommandSuggestions();
     Q_INVOKABLE void activateCommandRow(const QString &rowId);
     Q_INVOKABLE void approveOnce();
     Q_INVOKABLE void deny();
@@ -97,6 +99,7 @@ private:
     void clearQuickStatus();
     void setState(const QString &value);
     void setCommandState(const QString &state, const QString &message = QString());
+    void watchCommandRows(const QDBusPendingCall &call, quint64 commandGeneration);
 
     QString m_state = QStringLiteral("idle");
     QVariantMap m_preview;

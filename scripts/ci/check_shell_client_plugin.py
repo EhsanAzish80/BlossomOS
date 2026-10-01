@@ -23,6 +23,7 @@ def main() -> None:
         '"StartSystemUname1"',
         '"StartAgentTurn1"',
         '"QueryCommandBar1"',
+        '"QueryCommandSuggestions1"',
         '"ActivateCommandRow1"',
         '"SubmitDecision1"',
         '"CancelPending1"',
@@ -52,11 +53,11 @@ def main() -> None:
     ]:
         require(forbidden not in text, f"forbidden client authority: {forbidden}")
     header = (PLUGIN / "blossombroker.h").read_text()
-    require(header.count("Q_INVOKABLE") == 28, "client invokable surface drift")
+    require(header.count("Q_INVOKABLE") == 29, "client invokable surface drift")
     require("onboardingRequired" in header and "dismissOnboarding" in header,
             "fixed onboarding surface is missing")
     client = (PLUGIN / "blossombroker.cpp").read_text()
-    require(client.count("QVariant::fromValue(ProtocolVersion)") == 4,
+    require(client.count("QVariant::fromValue(ProtocolVersion)") == 5,
             "all version arguments must preserve unsigned 16-bit wire type")
     require("QVariant::fromValue(ActivityLimit)" in client,
             "activity limit must preserve unsigned 16-bit wire type")
@@ -129,6 +130,7 @@ def main() -> None:
             'broker.state() == "unavailable"' in bus_test,
             "real client bus test must exercise the agent method and fail closed without a model")
     require('queryCommandBar(QStringLiteral("fixture"))' in bus_test and
+            "queryCommandSuggestions()" in bus_test and
             'QStringLiteral("ask_blossom")' in bus_test,
             "real client bus test must validate broker-authored opaque command rows")
 

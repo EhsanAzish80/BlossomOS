@@ -26,7 +26,7 @@ def contrast_ratio(first: str, second: str) -> float:
 
 
 def main() -> None:
-    expected = {"shell.qml", "quickshell.qml", "SecurityHost.qml", "wallpaper.svg", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "BlossomButton.qml", "BlossomIconButton.qml", "BlossomDockItem.qml", "icon-apps.svg", "icon-files.svg", "icon-browser.svg", "icon-terminal.svg", "icon-agent.svg", "README.md", "Petal"}
+    expected = {"shell.qml", "quickshell.qml", "CommandBar.qml", "SecurityHost.qml", "wallpaper.svg", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "BlossomButton.qml", "BlossomIconButton.qml", "BlossomDockItem.qml", "icon-apps.svg", "icon-files.svg", "icon-browser.svg", "icon-terminal.svg", "icon-agent.svg", "README.md", "Petal"}
     require({path.name for path in QML.iterdir()} == expected, "unexpected QML surface")
     qml = "\n".join((QML / name).read_text() for name in expected if name.endswith(".qml"))
     petal = QML / "Petal"
@@ -47,6 +47,9 @@ def main() -> None:
         ("textSecondary", "surface"),
         ("text", "raised"),
         ("textSecondary", "raised"),
+        ("verified", "surface"),
+        ("decision", "surface"),
+        ("blossom", "surface"),
     ):
         require(contrast_ratio(colors[foreground], colors[background]) >= 4.5,
                 f"Petal contrast below 4.5:1: {foreground} on {background}")
@@ -133,6 +136,7 @@ def main() -> None:
     require('import "Petal"' not in approval_qml and "Theme." not in approval_qml,
             "approval presentation must remain independent from the Petal theme")
     shell = (QML / "shell.qml").read_text()
+    command_bar = (QML / "CommandBar.qml").read_text()
     theme = (QML / "Petal" / "Theme.qml").read_text()
     require("property color on" not in theme,
             "Petal token names must not be parsed as QML signal handlers")
@@ -152,8 +156,30 @@ def main() -> None:
     require("BlossomBroker.failureReason" in shell,
             "agent failure surface must report the bounded broker reason")
     require('appid: "blossom"' in shell and 'name: "command-bar"' in shell and
-            "GlobalShortcut" in shell,
+            "GlobalShortcut" in shell and "onPressed: commandBar.toggle()" in shell,
             "command bar must register its Hyprland global shortcut")
+    for required in (
+        'text: "Open an app, find a file, or ask Blossom"',
+        "input.clear()",
+        'BlossomBroker.queryCommandBar("")',
+        "BlossomBroker.queryCommandBar(input.text)",
+        "BlossomBroker.queryCommandSuggestions()",
+        "BlossomBroker.activateCommandRow(id)",
+        'source: "Petal/icons/search.svg"',
+        "WlrKeyboardFocus.Exclusive",
+        "width: Math.min(720, parent.width - 48)",
+        "closeForActivation()",
+        "modelData.badges || []",
+    ):
+        require(required in command_bar, f"command-bar presentation contract missing: {required}")
+    require('text: "Ask Blossom or open something"' not in command_bar,
+            "command bar must not restore the obsolete heading")
+    require("selectAll()" not in command_bar,
+            "command bar must not retain and select prompt history")
+    require("#" not in command_bar and "Qt.rgba" not in command_bar,
+            "command bar colors must come only from Petal tokens")
+    require("onClicked: commandBar.show()" in shell and shell.count("commandBar.show()") == 2,
+            "both Blossom flower controls must open the command bar")
     require("};" not in shell,
             "shell QML must not terminate grouped properties, child objects, or handlers with semicolons")
     for required in (
@@ -163,7 +189,7 @@ def main() -> None:
         'WlrLayershell.namespace: "blossom-dock"',
         'source: "wallpaper.svg"',
         'text: "Continue to desktop"',
-        'text: "Agent"',
+        'text: "Activity"',
         "visible: BlossomBroker.liveEnvironment",
     ):
         require(required in shell, f"desktop foundation surface missing: {required}")

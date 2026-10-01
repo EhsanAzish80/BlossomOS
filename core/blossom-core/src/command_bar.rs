@@ -462,6 +462,35 @@ pub fn route_command(
     CommandRoute::from_rows(rows)
 }
 
+/// Produces a small, trusted empty-state list without invoking the model.
+/// Suggestions are executable only through the same opaque broker row store
+/// and launch-time checks as typed application matches.
+pub fn suggest_commands(applications: &[LocalApplication]) -> CommandRoute {
+    let mut applications = applications.to_vec();
+    applications.sort_by(|left, right| {
+        let left_firefox = left.name.eq_ignore_ascii_case("firefox");
+        let right_firefox = right.name.eq_ignore_ascii_case("firefox");
+        right_firefox
+            .cmp(&left_firefox)
+            .then_with(|| {
+                (left.origin != ApplicationOrigin::System)
+                    .cmp(&(right.origin != ApplicationOrigin::System))
+            })
+            .then_with(|| {
+                left.name
+                    .to_ascii_lowercase()
+                    .cmp(&right.name.to_ascii_lowercase())
+            })
+    });
+    CommandRoute::from_rows(
+        applications
+            .into_iter()
+            .take(3)
+            .map(CommandRow::OpenApplication)
+            .collect(),
+    )
+}
+
 /// Produces the terminal display state only after trusted orchestration has
 /// accepted the model's closed `unsupported` result. Routing never guesses
 /// support from words in the user's query.
@@ -561,6 +590,13 @@ pub struct BrokerCommandRow {
     pub kind: &'static str,
     pub title: String,
     pub detail: String,
+    pub badges: Vec<BrokerCommandBadge>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct BrokerCommandBadge {
+    pub text: &'static str,
+    pub tone: &'static str,
 }
 
 #[derive(Debug, Deserialize)]
@@ -649,13 +685,14 @@ impl BrokerCommandStore {
         let mut projection = Vec::new();
         for (index, row) in route.rows.into_iter().take(MAX_COMMAND_RESULTS).enumerate() {
             let id = random_row_id(&peer, generation, index)?;
-            let (kind, title, detail) = row_projection(&row);
+            let (kind, title, detail, badges) = row_projection(&row);
             actions.insert(id.clone(), activate_command(&row));
             projection.push(BrokerCommandRow {
                 id,
                 kind,
                 title,
                 detail,
+                badges,
             });
         }
         self.peers.insert(
@@ -719,7 +756,8 @@ fn random_row_id(
         .collect())
 }
 
-fn row_projection(row: &CommandRow) -> (&'static str, String, String) {
+fn row_projection(row: &CommandRow) -> (&'static str, String, String, Vec<BrokerCommandBadge>) {
+    let badge = |text, tone| BrokerCommandBadge { text, tone };
     match row {
         CommandRow::OpenApplication(application) => (
             "application",
@@ -728,31 +766,46 @@ fn row_projection(row: &CommandRow) -> (&'static str, String, String) {
                 ApplicationOrigin::System => "System application · no model".into(),
                 ApplicationOrigin::UserInstalled => "User-installed application · no model".into(),
             },
+            vec![badge(
+                match application.origin {
+                    ApplicationOrigin::System => "Local app · no model",
+                    ApplicationOrigin::UserInstalled => "User-installed · no model",
+                },
+                "local",
+            )],
         ),
         CommandRow::OpenWorkspaceFile(file) => (
             "workspace_file",
             file.display_name.clone(),
             file.relative_path.clone(),
+            vec![badge("Workspace file · no model", "local")],
         ),
         CommandRow::CreateWorkspaceFile(proposal) => (
             "workspace_create",
             format!("Create {}", proposal.name),
             "Parsed directly · approval required".into(),
+            vec![
+                badge("Parsed directly", "local"),
+                badge("Approval required", "approval"),
+            ],
         ),
         CommandRow::AskBlossom { prompt } => (
             "ask_blossom",
             format!("Ask Blossom: {prompt}"),
             "Uses the local model".into(),
+            vec![badge("Uses the local model", "model")],
         ),
         CommandRow::InvalidCreate(_) => (
             "invalid_create",
             "Invalid create request".into(),
             "Nothing will run".into(),
+            vec![badge("Nothing will run", "neutral")],
         ),
         CommandRow::Unsupported { message } => (
             "unsupported",
             (*message).into(),
             "No action available".into(),
+            vec![badge("No action available", "neutral")],
         ),
     }
 }
@@ -1068,6 +1121,57 @@ mod tests {
             }
         );
         assert_eq!(CREATE_FILE_TEMPLATE, "create  containing ");
+    }
+
+    #[test]
+    fn empty_state_suggestions_are_local_bounded_and_prefer_firefox() {
+        let route = suggest_commands(&applications());
+        assert!(route.rows.len() <= 3);
+        assert!(
+            matches!(route.rows.first(), Some(CommandRow::OpenApplication(app)) if app.name == "Firefox")
+        );
+        assert!(
+            route
+                .rows
+                .iter()
+                .all(|row| matches!(row, CommandRow::OpenApplication(_)))
+        );
+    }
+
+    #[test]
+    fn broker_projects_bounded_trust_badges_for_every_row_kind() {
+        let peer = ShellPeerId::from_bus_unique_name(":1.150").unwrap();
+        let mut store = BrokerCommandStore::default();
+        let application_rows = store
+            .replace(
+                peer.clone(),
+                "fire",
+                route_command("fire", &applications(), &files()),
+            )
+            .unwrap();
+        assert_eq!(application_rows[0].badges.len(), 1);
+        assert_eq!(application_rows[0].badges[0].tone, "local");
+        assert!(application_rows.iter().all(|row| row.badges.len() <= 3));
+
+        let create_rows = store
+            .replace(
+                peer,
+                "create notes.txt containing hi",
+                route_command("create notes.txt containing hi", &[], &[]),
+            )
+            .unwrap();
+        assert_eq!(create_rows[0].kind, "workspace_create");
+        assert_eq!(
+            create_rows[0]
+                .badges
+                .iter()
+                .map(|badge| (badge.text, badge.tone))
+                .collect::<Vec<_>>(),
+            vec![
+                ("Parsed directly", "local"),
+                ("Approval required", "approval")
+            ]
+        );
     }
 
     #[test]

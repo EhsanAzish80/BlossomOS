@@ -50,7 +50,7 @@ pub use command_bar::{
     MAX_COMMAND_QUERY_BYTES, MAX_COMMAND_RESULTS, MAX_DESKTOP_ENTRIES, MAX_DESKTOP_ENTRY_BYTES,
     UNSUPPORTED_RESPONSE, WorkspaceFile, activate_command, decode_command_activation,
     decode_command_query, discover_local_applications, parse_desktop_entry, route_command,
-    unsupported_command_result,
+    suggest_commands, unsupported_command_result,
 };
 pub use context::{
     BATTERY_MAX_AGE_MS, BATTERY_MIN_POLL_INTERVAL_MS, CONTEXT_PROTOCOL_VERSION, ContextObservation,

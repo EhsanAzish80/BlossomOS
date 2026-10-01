@@ -5,7 +5,7 @@ use blossom_core::{
     LocalApplication, SHELL_INTERFACE, SHELL_PROTOCOL_VERSION, ShellClientRequest,
     ShellDiagnosticService, ShellPeerId, WorkspaceFile, decode_command_activation,
     decode_command_query, decode_shell_agent_turn_request, decode_shell_client_request,
-    route_command,
+    route_command, suggest_commands,
 };
 #[cfg(feature = "production-dbus-service")]
 use blossom_core::{
@@ -392,6 +392,24 @@ impl ShellBusService {
         let rows = commands
             .store
             .replace(peer, &request.query, route)
+            .map_err(|_| denied())?;
+        encode(&rows).map_err(handler_error)
+    }
+
+    #[zbus(name = "QueryCommandSuggestions1")]
+    async fn query_command_suggestions1(
+        &self,
+        version: u16,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> zbus::fdo::Result<Vec<u8>> {
+        check_version(version)?;
+        let peer = authenticated_peer(&header, connection).await?;
+        let mut commands = self.commands.lock().map_err(|_| failed())?;
+        let route = suggest_commands(&commands.applications);
+        let rows = commands
+            .store
+            .replace(peer, "<trusted-suggestions>", route)
             .map_err(|_| denied())?;
         encode(&rows).map_err(handler_error)
     }

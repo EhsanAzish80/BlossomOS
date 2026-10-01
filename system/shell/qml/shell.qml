@@ -12,7 +12,6 @@ ShellRoot {
     property bool launcherVisible: false
     property bool welcomeVisible: BlossomBroker.onboardingRequired
     property bool activityVisible: false
-    property bool commandBarVisible: false
     property bool agentHiddenForApproval: false
     property bool quickVisible: false
     property bool powerVisible: false
@@ -37,14 +36,14 @@ ShellRoot {
             root.quickVisible = false
             root.powerVisible = false
             root.powerAction = ""
-            root.commandBarVisible = false
+            commandBar.hide()
         }
     }
     GlobalShortcut {
         appid: "blossom"
         name: "command-bar"
         description: "Open the Blossom command bar"
-        onPressed: root.commandBarVisible = true
+        onPressed: commandBar.toggle()
     }
     Component.onCompleted: {
         BlossomBroker.refreshActivity()
@@ -85,6 +84,7 @@ ShellRoot {
     // request.  The separate accessibility host has its own D-Bus peer and
     // therefore cannot adopt or decide this pending request.
     ApprovalPanel {}
+    CommandBar { id: commandBar }
 
     Variants {
         model: root.desktopScreens
@@ -119,7 +119,7 @@ ShellRoot {
             RowLayout {
                 anchors { fill: parent; leftMargin: 14; rightMargin: 14 }
                 spacing: 12
-                BlossomButton { text: "✦  Blossom OS"; onClicked: root.commandBarVisible = true; Accessible.description: "Open the Blossom command bar." }
+                BlossomButton { text: "✦  Blossom OS"; onClicked: commandBar.show(); Accessible.description: "Open the Blossom command bar." }
                 Label { text: BlossomBroker.liveEnvironment ? "Live session" : "Workspace"; color: Theme.textSecondary; font.family: Theme.sans }
                 Item { Layout.fillWidth: true }
                 BlossomIconButton { symbol: BlossomBroker.quickStatus.network === "ethernet" ? "↔" : "≋"; description: BlossomBroker.quickStatus.network === "wifi" ? "Wi-Fi connected" : BlossomBroker.quickStatus.network === "ethernet" ? "Ethernet connected" : "Network " + BlossomBroker.network.connectivity; selected: root.quickVisible; onClicked: { root.quickVisible = !root.quickVisible; root.powerVisible = false } }
@@ -275,13 +275,13 @@ ShellRoot {
                 RowLayout {
                     anchors { fill: parent; margins: 10 } spacing: 8
                     Item { Layout.fillWidth: true }
-                    BlossomDockItem { iconSource: "icon-agent.svg"; text: "Blossom"; description: "Blossom command bar"; selected: root.commandBarVisible; accent: true; onClicked: root.commandBarVisible = true }
+                    BlossomDockItem { iconSource: "icon-agent.svg"; text: "Blossom"; description: "Blossom command bar"; selected: commandBar.open; accent: true; onClicked: commandBar.show() }
                     BlossomDockItem { iconSource: "icon-apps.svg"; text: "Applications"; description: "Applications"; selected: root.launcherVisible; onClicked: root.launcherVisible = !root.launcherVisible }
                     BlossomDockItem { iconSource: "icon-files.svg"; text: "Files"; description: "Files"; onClicked: BlossomBroker.openFiles() }
                     BlossomDockItem { iconSource: "icon-browser.svg"; text: "Browser"; description: "Web Browser"; onClicked: BlossomBroker.openBrowser() }
                     BlossomDockItem { iconSource: "icon-terminal.svg"; text: "Terminal"; description: "Terminal"; onClicked: BlossomBroker.openTerminal() }
                     Rectangle { width: 1; height: 34; color: Theme.lineStrong }
-                    BlossomDockItem { iconSource: "icon-agent.svg"; text: "Agent"; description: "Blossom Agent"; selected: root.activityVisible; onClicked: root.activityVisible = !root.activityVisible }
+                    BlossomDockItem { symbol: "≡"; text: "Activity"; description: "Blossom Agent activity"; selected: root.activityVisible; onClicked: root.activityVisible = !root.activityVisible }
                     Item { Layout.fillWidth: true }
                 }
             }
@@ -385,124 +385,6 @@ ShellRoot {
                             Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 8; model: BlossomBroker.activity
                             delegate: Rectangle { required property var modelData; width: ListView.view.width; height: entry.implicitHeight + 16; radius: Theme.radiusControl; color: Theme.raised; Label { id: entry; anchors { fill: parent; margins: 8 } color: Theme.text; font.family: Theme.sans; wrapMode: Text.Wrap; text: "#" + modelData.sequence + "  " + modelData.kind + "\n" + modelData.category } }
                         }
-                    }
-                }
-            }
-        }
-    }
-
-    Variants {
-        model: root.desktopScreens
-        PanelWindow {
-            id: commandOverlay
-            required property var modelData
-            property int selectedRow: 0
-            screen: modelData
-            anchors { top: true; bottom: true; left: true; right: true }
-            aboveWindows: true
-            focusable: true
-            exclusiveZone: 0
-            exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.namespace: "blossom-command-bar"
-            visible: root.commandBarVisible
-            color: Theme.scrim
-
-            onVisibleChanged: {
-                if (visible) {
-                    commandInput.forceActiveFocus()
-                    commandInput.selectAll()
-                } else {
-                    commandDebounce.stop()
-                    BlossomBroker.queryCommandBar("")
-                }
-            }
-
-            Timer {
-                id: commandDebounce
-                interval: 140
-                repeat: false
-                onTriggered: BlossomBroker.queryCommandBar(commandInput.text)
-            }
-
-            Rectangle {
-                width: Math.min(680, commandOverlay.width - 40)
-                height: Math.min(520, commandOverlay.height - 120)
-                anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 96 }
-                radius: Theme.radiusPanel
-                color: Theme.panelFill
-                border { color: Theme.lineStrong; width: 1 }
-
-                ColumnLayout {
-                    anchors { fill: parent; margins: Theme.s5 }
-                    spacing: Theme.s3
-                    Label { text: "Ask Blossom or open something"; color: Theme.text; font.family: Theme.sans; font.pixelSize: Theme.title; font.bold: true }
-                    TextField {
-                        id: commandInput
-                        Layout.fillWidth: true
-                        placeholderText: "Type an app, workspace file, or create notes.txt containing…"
-                        color: Theme.text
-                        placeholderTextColor: Theme.textSecondary
-                        font.family: Theme.sans
-                        selectByMouse: true
-                        Accessible.name: "Blossom command"
-                        Accessible.description: "Search local apps and workspace files, or ask the local Blossom agent."
-                        background: Rectangle { radius: Theme.radiusControl; color: Theme.raised; border { color: commandInput.activeFocus ? Theme.blossom : Theme.lineStrong; width: commandInput.activeFocus ? Theme.focusRing : 1 } }
-                        onTextChanged: {
-                            commandOverlay.selectedRow = 0
-                            commandDebounce.restart()
-                        }
-                        Keys.onUpPressed: commandOverlay.selectedRow = Math.max(0, commandOverlay.selectedRow - 1)
-                        Keys.onDownPressed: commandOverlay.selectedRow = Math.min(BlossomBroker.commandRows.length - 1, commandOverlay.selectedRow + 1)
-                        Keys.onReturnPressed: {
-                            if (BlossomBroker.commandRows.length > 0) {
-                                BlossomBroker.activateCommandRow(BlossomBroker.commandRows[commandOverlay.selectedRow].id)
-                                root.commandBarVisible = false
-                            }
-                        }
-                        Keys.onEscapePressed: root.commandBarVisible = false
-                    }
-                    Label {
-                        Layout.fillWidth: true
-                        visible: BlossomBroker.commandMessage.length > 0
-                        text: BlossomBroker.commandMessage
-                        color: BlossomBroker.commandState === "error" ? Theme.danger : Theme.textSecondary
-                        font.family: Theme.sans
-                        wrapMode: Text.WordWrap
-                        Accessible.role: Accessible.AlertMessage
-                    }
-                    ListView {
-                        id: commandResults
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        spacing: Theme.s2
-                        model: BlossomBroker.commandRows
-                        delegate: Button {
-                            id: commandRow
-                            required property var modelData
-                            required property int index
-                            width: ListView.view.width
-                            height: 64
-                            Accessible.name: modelData.title
-                            Accessible.description: modelData.detail
-                            onClicked: {
-                                BlossomBroker.activateCommandRow(commandRow.modelData.id)
-                                root.commandBarVisible = false
-                            }
-                            contentItem: Column {
-                                anchors { left: parent.left; leftMargin: Theme.s3; verticalCenter: parent.verticalCenter }
-                                Label { text: commandRow.modelData.title; color: Theme.text; font.family: Theme.sans; font.bold: true }
-                                Label { text: commandRow.modelData.detail; color: Theme.textSecondary; font.family: Theme.sans; font.pixelSize: Theme.caption }
-                            }
-                            background: Rectangle { radius: Theme.radiusControl; color: commandRow.index === commandOverlay.selectedRow ? Theme.blossomTint : commandRow.hovered ? Theme.hover : Theme.raised; border { color: commandRow.index === commandOverlay.selectedRow ? Theme.blossom : Theme.line; width: 1 } }
-                        }
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Label { text: BlossomBroker.commandState === "querying" ? "Searching locally…" : "Super+Space to open · Enter to run · Esc to close"; color: Theme.textSecondary; font.family: Theme.sans; font.pixelSize: Theme.caption }
-                        Item { Layout.fillWidth: true }
-                        BlossomButton { text: "Create a file"; onClicked: { commandInput.text = "create  containing "; commandInput.cursorPosition = 7; commandInput.forceActiveFocus() } }
                     }
                 }
             }
