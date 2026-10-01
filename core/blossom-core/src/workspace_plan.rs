@@ -7,6 +7,8 @@
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::{
     Arc,
@@ -232,6 +234,669 @@ pub enum WorkspacePlanError {
     DigestEncoding,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+pub struct WorkspacePlanDirectoryIdentity {
+    mount_id: u64,
+    inode: u64,
+}
+
+impl WorkspacePlanDirectoryIdentity {
+    pub fn mount_id(&self) -> u64 {
+        self.mount_id
+    }
+
+    pub fn inode(&self) -> u64 {
+        self.inode
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize)]
+pub struct WorkspacePlanFileIdentity {
+    mount_id: u64,
+    device_major: u32,
+    device_minor: u32,
+    inode: u64,
+    size: u64,
+    mtime_seconds: i64,
+    mtime_nanoseconds: u32,
+    ctime_seconds: i64,
+    ctime_nanoseconds: u32,
+    content_sha256: String,
+}
+
+impl WorkspacePlanFileIdentity {
+    pub fn mount_id(&self) -> u64 {
+        self.mount_id
+    }
+
+    pub fn inode(&self) -> u64 {
+        self.inode
+    }
+
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
+    pub fn content_sha256(&self) -> &str {
+        &self.content_sha256
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case", tag = "authority")]
+pub enum WorkspacePlanParentAuthority {
+    Existing { directory_index: usize },
+    Planned { effect_index: usize },
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum PreparedWorkspacePlanEffect {
+    CreateDirectory {
+        path: WorkspaceRelativePath,
+        parent: WorkspacePlanParentAuthority,
+        name: String,
+    },
+    MoveFile {
+        source: WorkspaceRelativePath,
+        source_parent_index: usize,
+        source_name: String,
+        destination: WorkspaceRelativePath,
+        destination_parent: WorkspacePlanParentAuthority,
+        destination_name: String,
+        source_identity: WorkspacePlanFileIdentity,
+    },
+}
+
+impl PreparedWorkspacePlanEffect {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Self::CreateDirectory { .. } => "create_directory",
+            Self::MoveFile { .. } => "move_file",
+        }
+    }
+
+    pub fn source(&self) -> Option<&WorkspaceRelativePath> {
+        match self {
+            Self::CreateDirectory { .. } => None,
+            Self::MoveFile { source, .. } => Some(source),
+        }
+    }
+
+    pub fn destination(&self) -> &WorkspaceRelativePath {
+        match self {
+            Self::CreateDirectory { path, .. } => path,
+            Self::MoveFile { destination, .. } => destination,
+        }
+    }
+
+    pub fn source_identity(&self) -> Option<&WorkspacePlanFileIdentity> {
+        match self {
+            Self::CreateDirectory { .. } => None,
+            Self::MoveFile {
+                source_identity, ..
+            } => Some(source_identity),
+        }
+    }
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+#[derive(Debug)]
+struct RetainedWorkspaceDirectory {
+    relative_path: String,
+    identity: WorkspacePlanDirectoryIdentity,
+    descriptor: std::fs::File,
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+#[derive(Debug)]
+struct RetainedWorkspaceDirectory;
+
+/// Prepared authority is intentionally neither cloneable nor serializable.
+/// Approval storage must own this value and execution must consume it by value.
+#[derive(Debug)]
+pub struct PreparedWorkspacePlan {
+    workspace_root: String,
+    workspace_identity: WorkspacePlanDirectoryIdentity,
+    origin: WorkspacePlanOrigin,
+    proposal_sha256: String,
+    plan_sha256: String,
+    created_at_ms: u64,
+    expires_at_ms: u64,
+    effects: Vec<PreparedWorkspacePlanEffect>,
+    directories: Vec<RetainedWorkspaceDirectory>,
+    _reservation: WorkspacePlanCapacityReservation,
+}
+
+impl PreparedWorkspacePlan {
+    pub fn workspace_root(&self) -> &str {
+        &self.workspace_root
+    }
+
+    pub fn workspace_identity(&self) -> &WorkspacePlanDirectoryIdentity {
+        &self.workspace_identity
+    }
+
+    pub fn origin(&self) -> WorkspacePlanOrigin {
+        self.origin
+    }
+
+    pub fn proposal_sha256(&self) -> &str {
+        &self.proposal_sha256
+    }
+
+    pub fn plan_sha256(&self) -> &str {
+        &self.plan_sha256
+    }
+
+    pub fn created_at_ms(&self) -> u64 {
+        self.created_at_ms
+    }
+
+    pub fn expires_at_ms(&self) -> u64 {
+        self.expires_at_ms
+    }
+
+    pub fn effects(&self) -> &[PreparedWorkspacePlanEffect] {
+        &self.effects
+    }
+
+    pub fn retained_directory_count(&self) -> usize {
+        self.directories.len()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkspacePlanPrepareError {
+    UnsupportedPlatform,
+    InvalidLifetime,
+    InvalidWorkspaceRoot,
+    WorkspaceOpenFailed,
+    StatxUnavailable,
+    PathResolutionFailed,
+    SourceNotRegularFile,
+    SourceReadFailed,
+    DestinationExists,
+    CrossMount,
+    IdentityOverlap,
+    TooManyFoldersSplitPlan,
+    DigestEncoding,
+}
+
+impl WorkspacePlanPrepareError {
+    pub fn user_message(self) -> &'static str {
+        match self {
+            Self::TooManyFoldersSplitPlan => "plan spans too many folders; split it",
+            Self::IdentityOverlap => "plan touches the same file more than once",
+            Self::SourceNotRegularFile => "plans may move regular files only",
+            Self::DestinationExists => "a plan destination already exists",
+            Self::CrossMount => "cross-filesystem moves are not supported",
+            _ => "workspace plan preparation failed closed",
+        }
+    }
+}
+
+pub struct WorkspacePlanAuthorityResolver;
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+impl WorkspacePlanAuthorityResolver {
+    pub fn prepare(
+        _: &str,
+        _: ValidatedWorkspacePlanProposal,
+        reservation: WorkspacePlanCapacityReservation,
+        _: u64,
+        _: u64,
+    ) -> Result<PreparedWorkspacePlan, WorkspacePlanPrepareError> {
+        drop(reservation);
+        Err(WorkspacePlanPrepareError::UnsupportedPlatform)
+    }
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn linux_prepare_plan(
+    workspace_root: &str,
+    proposal: ValidatedWorkspacePlanProposal,
+    reservation: WorkspacePlanCapacityReservation,
+    created_at_ms: u64,
+    expires_at_ms: u64,
+) -> Result<PreparedWorkspacePlan, WorkspacePlanPrepareError> {
+    use nix::fcntl::{OFlag, OpenHow, ResolveFlag, open, openat2};
+    use nix::sys::stat::Mode;
+    use std::fs::File;
+
+    if expires_at_ms <= created_at_ms {
+        return Err(WorkspacePlanPrepareError::InvalidLifetime);
+    }
+    crate::file_read::validate_selected_path(workspace_root)
+        .map_err(|_| WorkspacePlanPrepareError::InvalidWorkspaceRoot)?;
+    let relative_root = workspace_root
+        .strip_prefix('/')
+        .filter(|path| !path.is_empty())
+        .ok_or(WorkspacePlanPrepareError::InvalidWorkspaceRoot)?;
+    let slash = open(
+        "/",
+        OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC,
+        Mode::empty(),
+    )
+    .map_err(|_| WorkspacePlanPrepareError::WorkspaceOpenFailed)?;
+    let root_how = OpenHow::new()
+        .flags(OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC)
+        .resolve(
+            ResolveFlag::RESOLVE_BENEATH
+                | ResolveFlag::RESOLVE_NO_SYMLINKS
+                | ResolveFlag::RESOLVE_NO_MAGICLINKS,
+        );
+    let root = File::from(
+        openat2(&slash, relative_root, root_how)
+            .map_err(|_| WorkspacePlanPrepareError::WorkspaceOpenFailed)?,
+    );
+    let workspace_identity = plan_directory_identity(&root)?;
+    let mut directories = vec![RetainedWorkspaceDirectory {
+        relative_path: String::new(),
+        identity: workspace_identity.clone(),
+        descriptor: root,
+    }];
+    let mut directory_indices = HashMap::from([(String::new(), 0usize)]);
+    let mut planned_directories = HashMap::<String, usize>::new();
+    let mut source_identities = HashSet::<(u64, u64)>::new();
+    let mut prepared_effects = Vec::with_capacity(proposal.effects.len());
+
+    for (effect_index, effect) in proposal.effects.iter().enumerate() {
+        match effect {
+            ValidatedWorkspacePlanEffect::CreateDirectory { path } => {
+                let (parent_path, name) = split_relative(path.as_str());
+                let parent = if let Some(index) = planned_directories.get(parent_path) {
+                    WorkspacePlanParentAuthority::Planned {
+                        effect_index: *index,
+                    }
+                } else {
+                    let directory_index = retain_plan_directory(
+                        parent_path,
+                        &workspace_identity,
+                        &mut directories,
+                        &mut directory_indices,
+                    )?;
+                    ensure_destination_absent(&directories[directory_index].descriptor, name)?;
+                    WorkspacePlanParentAuthority::Existing { directory_index }
+                };
+                planned_directories.insert(path.as_str().to_owned(), effect_index);
+                prepared_effects.push(PreparedWorkspacePlanEffect::CreateDirectory {
+                    path: WorkspaceRelativePath(path.as_str().to_owned()),
+                    parent,
+                    name: name.to_owned(),
+                });
+            }
+            ValidatedWorkspacePlanEffect::MoveFile {
+                source,
+                destination,
+            } => {
+                let (source_parent, source_name) = split_relative(source.as_str());
+                let source_parent_index = retain_plan_directory(
+                    source_parent,
+                    &workspace_identity,
+                    &mut directories,
+                    &mut directory_indices,
+                )?;
+                let source_identity = read_plan_file_identity(
+                    &directories[source_parent_index].descriptor,
+                    source_name,
+                    workspace_identity.mount_id,
+                )?;
+                if !source_identities.insert((source_identity.mount_id, source_identity.inode)) {
+                    return Err(WorkspacePlanPrepareError::IdentityOverlap);
+                }
+
+                let (destination_parent_path, destination_name) =
+                    split_relative(destination.as_str());
+                let destination_parent =
+                    if let Some(index) = planned_directories.get(destination_parent_path) {
+                        WorkspacePlanParentAuthority::Planned {
+                            effect_index: *index,
+                        }
+                    } else {
+                        let directory_index = retain_plan_directory(
+                            destination_parent_path,
+                            &workspace_identity,
+                            &mut directories,
+                            &mut directory_indices,
+                        )?;
+                        ensure_destination_absent(
+                            &directories[directory_index].descriptor,
+                            destination_name,
+                        )?;
+                        WorkspacePlanParentAuthority::Existing { directory_index }
+                    };
+                prepared_effects.push(PreparedWorkspacePlanEffect::MoveFile {
+                    source: WorkspaceRelativePath(source.as_str().to_owned()),
+                    source_parent_index,
+                    source_name: source_name.to_owned(),
+                    destination: WorkspaceRelativePath(destination.as_str().to_owned()),
+                    destination_parent,
+                    destination_name: destination_name.to_owned(),
+                    source_identity,
+                });
+            }
+        }
+    }
+
+    let plan_sha256 = prepared_plan_digest(
+        workspace_root,
+        &workspace_identity,
+        proposal.origin,
+        &proposal.proposal_sha256,
+        created_at_ms,
+        expires_at_ms,
+        &prepared_effects,
+        &directories,
+    )?;
+    Ok(PreparedWorkspacePlan {
+        workspace_root: workspace_root.to_owned(),
+        workspace_identity,
+        origin: proposal.origin,
+        proposal_sha256: proposal.proposal_sha256,
+        plan_sha256,
+        created_at_ms,
+        expires_at_ms,
+        effects: prepared_effects,
+        directories,
+        _reservation: reservation,
+    })
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn split_relative(path: &str) -> (&str, &str) {
+    path.rsplit_once('/').unwrap_or(("", path))
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn retain_plan_directory(
+    relative_path: &str,
+    workspace_identity: &WorkspacePlanDirectoryIdentity,
+    directories: &mut Vec<RetainedWorkspaceDirectory>,
+    indices: &mut HashMap<String, usize>,
+) -> Result<usize, WorkspacePlanPrepareError> {
+    use nix::fcntl::{OFlag, OpenHow, ResolveFlag, openat2};
+    use std::fs::File;
+
+    if let Some(index) = indices.get(relative_path) {
+        return Ok(*index);
+    }
+    if directories.len() >= MAX_WORKSPACE_PLAN_DIRECTORY_AUTHORITIES {
+        return Err(WorkspacePlanPrepareError::TooManyFoldersSplitPlan);
+    }
+    let how = OpenHow::new()
+        .flags(OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC)
+        .resolve(
+            ResolveFlag::RESOLVE_BENEATH
+                | ResolveFlag::RESOLVE_NO_SYMLINKS
+                | ResolveFlag::RESOLVE_NO_MAGICLINKS
+                | ResolveFlag::RESOLVE_NO_XDEV,
+        );
+    let descriptor = File::from(
+        openat2(&directories[0].descriptor, relative_path, how)
+            .map_err(|_| WorkspacePlanPrepareError::PathResolutionFailed)?,
+    );
+    let identity = plan_directory_identity(&descriptor)?;
+    if identity.mount_id != workspace_identity.mount_id {
+        return Err(WorkspacePlanPrepareError::CrossMount);
+    }
+    let index = directories.len();
+    directories.push(RetainedWorkspaceDirectory {
+        relative_path: relative_path.to_owned(),
+        identity,
+        descriptor,
+    });
+    indices.insert(relative_path.to_owned(), index);
+    Ok(index)
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn ensure_destination_absent(
+    parent: &std::fs::File,
+    name: &str,
+) -> Result<(), WorkspacePlanPrepareError> {
+    use nix::errno::Errno;
+    use nix::fcntl::{OFlag, OpenHow, ResolveFlag, openat2};
+
+    let how = OpenHow::new()
+        .flags(OFlag::O_PATH | OFlag::O_CLOEXEC)
+        .resolve(
+            ResolveFlag::RESOLVE_BENEATH
+                | ResolveFlag::RESOLVE_NO_SYMLINKS
+                | ResolveFlag::RESOLVE_NO_MAGICLINKS
+                | ResolveFlag::RESOLVE_NO_XDEV,
+        );
+    match openat2(parent, name, how) {
+        Ok(_) => Err(WorkspacePlanPrepareError::DestinationExists),
+        Err(Errno::ENOENT) => Ok(()),
+        Err(_) => Err(WorkspacePlanPrepareError::PathResolutionFailed),
+    }
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn plan_statx(file: &std::fs::File) -> Result<rustix::fs::Statx, WorkspacePlanPrepareError> {
+    use rustix::fs::{AtFlags, StatxFlags, statx};
+
+    let wanted = StatxFlags::TYPE
+        | StatxFlags::INO
+        | StatxFlags::SIZE
+        | StatxFlags::MTIME
+        | StatxFlags::CTIME
+        | StatxFlags::MNT_ID;
+    let value = statx(file, "", AtFlags::EMPTY_PATH, wanted)
+        .map_err(|_| WorkspacePlanPrepareError::StatxUnavailable)?;
+    if StatxFlags::from_bits_retain(value.stx_mask).contains(wanted) {
+        Ok(value)
+    } else {
+        Err(WorkspacePlanPrepareError::StatxUnavailable)
+    }
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn plan_directory_identity(
+    file: &std::fs::File,
+) -> Result<WorkspacePlanDirectoryIdentity, WorkspacePlanPrepareError> {
+    let value = plan_statx(file)?;
+    if u32::from(value.stx_mode) & libc::S_IFMT != libc::S_IFDIR || value.stx_mnt_id == 0 {
+        return Err(WorkspacePlanPrepareError::PathResolutionFailed);
+    }
+    Ok(WorkspacePlanDirectoryIdentity {
+        mount_id: value.stx_mnt_id,
+        inode: value.stx_ino,
+    })
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn read_plan_file_identity(
+    parent: &std::fs::File,
+    name: &str,
+    expected_mount_id: u64,
+) -> Result<WorkspacePlanFileIdentity, WorkspacePlanPrepareError> {
+    use nix::fcntl::{OFlag, OpenHow, ResolveFlag, openat2};
+    use std::fs::File;
+    use std::io::Read;
+
+    let how = OpenHow::new()
+        .flags(OFlag::O_RDONLY | OFlag::O_CLOEXEC | OFlag::O_NONBLOCK)
+        .resolve(
+            ResolveFlag::RESOLVE_BENEATH
+                | ResolveFlag::RESOLVE_NO_SYMLINKS
+                | ResolveFlag::RESOLVE_NO_MAGICLINKS
+                | ResolveFlag::RESOLVE_NO_XDEV,
+        );
+    let mut file = File::from(
+        openat2(parent, name, how).map_err(|_| WorkspacePlanPrepareError::PathResolutionFailed)?,
+    );
+    let value = plan_statx(&file)?;
+    if u32::from(value.stx_mode) & libc::S_IFMT != libc::S_IFREG {
+        return Err(WorkspacePlanPrepareError::SourceNotRegularFile);
+    }
+    if value.stx_mnt_id != expected_mount_id {
+        return Err(WorkspacePlanPrepareError::CrossMount);
+    }
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .map_err(|_| WorkspacePlanPrepareError::SourceReadFailed)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    let after_read = plan_statx(&file)?;
+    if value.stx_mnt_id != after_read.stx_mnt_id
+        || value.stx_ino != after_read.stx_ino
+        || value.stx_size != after_read.stx_size
+        || value.stx_mtime.tv_sec != after_read.stx_mtime.tv_sec
+        || value.stx_mtime.tv_nsec != after_read.stx_mtime.tv_nsec
+        || value.stx_ctime.tv_sec != after_read.stx_ctime.tv_sec
+        || value.stx_ctime.tv_nsec != after_read.stx_ctime.tv_nsec
+    {
+        return Err(WorkspacePlanPrepareError::SourceReadFailed);
+    }
+    Ok(WorkspacePlanFileIdentity {
+        mount_id: value.stx_mnt_id,
+        device_major: value.stx_dev_major,
+        device_minor: value.stx_dev_minor,
+        inode: value.stx_ino,
+        size: value.stx_size,
+        mtime_seconds: value.stx_mtime.tv_sec,
+        mtime_nanoseconds: value.stx_mtime.tv_nsec,
+        ctime_seconds: value.stx_ctime.tv_sec,
+        ctime_nanoseconds: value.stx_ctime.tv_nsec,
+        content_sha256: hasher
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect(),
+    })
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn prepared_plan_digest(
+    workspace_root: &str,
+    workspace_identity: &WorkspacePlanDirectoryIdentity,
+    origin: WorkspacePlanOrigin,
+    proposal_sha256: &str,
+    created_at_ms: u64,
+    expires_at_ms: u64,
+    effects: &[PreparedWorkspacePlanEffect],
+    directories: &[RetainedWorkspaceDirectory],
+) -> Result<String, WorkspacePlanPrepareError> {
+    #[derive(Serialize)]
+    struct Directory<'a> {
+        path: &'a str,
+        identity: &'a WorkspacePlanDirectoryIdentity,
+    }
+    #[derive(Serialize)]
+    #[serde(tag = "kind", rename_all = "snake_case")]
+    enum Effect<'a> {
+        CreateDirectory {
+            path: &'a WorkspaceRelativePath,
+            parent: WorkspacePlanParentAuthority,
+            name: &'a str,
+        },
+        MoveFile {
+            source: &'a WorkspaceRelativePath,
+            source_parent_index: usize,
+            source_name: &'a str,
+            destination: &'a WorkspaceRelativePath,
+            destination_parent: WorkspacePlanParentAuthority,
+            destination_name: &'a str,
+            source_identity: &'a WorkspacePlanFileIdentity,
+        },
+    }
+    #[derive(Serialize)]
+    struct Plan<'a> {
+        schema: u16,
+        workspace_root: &'a str,
+        workspace_identity: &'a WorkspacePlanDirectoryIdentity,
+        origin: WorkspacePlanOrigin,
+        proposal_sha256: &'a str,
+        created_at_ms: u64,
+        expires_at_ms: u64,
+        directories: Vec<Directory<'a>>,
+        effects: Vec<Effect<'a>>,
+    }
+
+    let directories = directories
+        .iter()
+        .map(|directory| Directory {
+            path: &directory.relative_path,
+            identity: &directory.identity,
+        })
+        .collect();
+    let effects = effects
+        .iter()
+        .map(|effect| match effect {
+            PreparedWorkspacePlanEffect::CreateDirectory { path, parent, name } => {
+                Effect::CreateDirectory {
+                    path,
+                    parent: *parent,
+                    name,
+                }
+            }
+            PreparedWorkspacePlanEffect::MoveFile {
+                source,
+                source_parent_index,
+                source_name,
+                destination,
+                destination_parent,
+                destination_name,
+                source_identity,
+            } => Effect::MoveFile {
+                source,
+                source_parent_index: *source_parent_index,
+                source_name,
+                destination,
+                destination_parent: *destination_parent,
+                destination_name,
+                source_identity,
+            },
+        })
+        .collect();
+    let encoded = serde_json::to_vec(&Plan {
+        schema: WORKSPACE_PLAN_SCHEMA_VERSION,
+        workspace_root,
+        workspace_identity,
+        origin,
+        proposal_sha256,
+        created_at_ms,
+        expires_at_ms,
+        directories,
+        effects,
+    })
+    .map_err(|_| WorkspacePlanPrepareError::DigestEncoding)?;
+    let digest = Sha256::digest(
+        [
+            b"blossom-prepared-workspace-plan-v1\0".as_slice(),
+            encoded.as_slice(),
+        ]
+        .concat(),
+    );
+    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+impl WorkspacePlanAuthorityResolver {
+    pub fn prepare(
+        workspace_root: &str,
+        proposal: ValidatedWorkspacePlanProposal,
+        reservation: WorkspacePlanCapacityReservation,
+        created_at_ms: u64,
+        expires_at_ms: u64,
+    ) -> Result<PreparedWorkspacePlan, WorkspacePlanPrepareError> {
+        linux_prepare_plan(
+            workspace_root,
+            proposal,
+            reservation,
+            created_at_ms,
+            expires_at_ms,
+        )
+    }
+}
+
 pub struct WorkspacePlanProposalResolver;
 
 impl WorkspacePlanProposalResolver {
@@ -377,6 +1042,42 @@ fn proposal_digest(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    struct TestWorkspace(std::path::PathBuf);
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    impl TestWorkspace {
+        fn new() -> Self {
+            use std::time::{SystemTime, UNIX_EPOCH};
+
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "blossom-plan-resolver-{}-{nonce}",
+                std::process::id()
+            ));
+            std::fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+
+        fn path(&self) -> &std::path::Path {
+            &self.0
+        }
+
+        fn root(&self) -> &str {
+            self.0.to_str().unwrap()
+        }
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    impl Drop for TestWorkspace {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
 
     fn resolve(
         value: serde_json::Value,
@@ -579,5 +1280,160 @@ mod tests {
         drop(replacement);
         drop(reservations);
         assert_eq!(capacity.in_use(), 0);
+    }
+
+    #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+    #[test]
+    fn unsupported_prepare_releases_its_capacity_reservation() {
+        let capacity = WorkspacePlanCapacity::default();
+        let reservation = capacity.reserve().unwrap();
+        let proposal = resolve(json!({
+            "schema": 1,
+            "effects": [{"kind": "create_directory", "path": "sorted"}]
+        }))
+        .unwrap();
+        assert!(matches!(
+            WorkspacePlanAuthorityResolver::prepare("/tmp/workspace", proposal, reservation, 1, 2,),
+            Err(WorkspacePlanPrepareError::UnsupportedPlatform)
+        ));
+        assert_eq!(capacity.in_use(), 0);
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    #[test]
+    fn prepares_only_folder_authority_and_binds_source_identity() {
+        let workspace = TestWorkspace::new();
+        std::fs::create_dir(workspace.path().join("inbox")).unwrap();
+        std::fs::write(workspace.path().join("inbox/report.txt"), b"evidence").unwrap();
+        let proposal = resolve(json!({
+            "schema": 1,
+            "effects": [
+                {"kind": "create_directory", "path": "sorted"},
+                {"kind": "move_file", "source": "inbox/report.txt", "destination": "sorted/report.txt"}
+            ]
+        }))
+        .unwrap();
+        let capacity = WorkspacePlanCapacity::default();
+        let prepared = WorkspacePlanAuthorityResolver::prepare(
+            workspace.root(),
+            proposal,
+            capacity.reserve().unwrap(),
+            10,
+            20,
+        )
+        .unwrap();
+
+        assert_eq!(prepared.retained_directory_count(), 2);
+        assert_eq!(prepared.plan_sha256().len(), 64);
+        assert_ne!(prepared.plan_sha256(), prepared.proposal_sha256());
+        let PreparedWorkspacePlanEffect::MoveFile {
+            destination_parent,
+            source_identity,
+            ..
+        } = &prepared.effects()[1]
+        else {
+            panic!("expected prepared move");
+        };
+        assert_eq!(source_identity.size(), 8);
+        assert_eq!(source_identity.content_sha256(), digest_bytes(b"evidence"));
+        assert_eq!(
+            *destination_parent,
+            WorkspacePlanParentAuthority::Planned { effect_index: 0 }
+        );
+        assert_eq!(capacity.in_use(), 1);
+        drop(prepared);
+        assert_eq!(capacity.in_use(), 0);
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    #[test]
+    fn rejects_hardlink_overlap_non_regular_sources_and_symlink_traversal() {
+        let workspace = TestWorkspace::new();
+        std::fs::create_dir(workspace.path().join("inbox")).unwrap();
+        std::fs::create_dir(workspace.path().join("out")).unwrap();
+        std::fs::write(workspace.path().join("inbox/a"), b"same inode").unwrap();
+        std::fs::hard_link(
+            workspace.path().join("inbox/a"),
+            workspace.path().join("inbox/b"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink("inbox", workspace.path().join("linked")).unwrap();
+        std::fs::create_dir(workspace.path().join("directory-source")).unwrap();
+
+        let cases = [
+            (
+                json!({"schema": 1, "effects": [
+                    {"kind": "move_file", "source": "inbox/a", "destination": "out/a"},
+                    {"kind": "move_file", "source": "inbox/b", "destination": "out/b"}
+                ]}),
+                WorkspacePlanPrepareError::IdentityOverlap,
+            ),
+            (
+                json!({"schema": 1, "effects": [
+                    {"kind": "move_file", "source": "directory-source", "destination": "out/d"}
+                ]}),
+                WorkspacePlanPrepareError::SourceNotRegularFile,
+            ),
+            (
+                json!({"schema": 1, "effects": [
+                    {"kind": "move_file", "source": "linked/a", "destination": "out/c"}
+                ]}),
+                WorkspacePlanPrepareError::PathResolutionFailed,
+            ),
+        ];
+        for (value, expected) in cases {
+            let capacity = WorkspacePlanCapacity::default();
+            let result = WorkspacePlanAuthorityResolver::prepare(
+                workspace.root(),
+                resolve(value).unwrap(),
+                capacity.reserve().unwrap(),
+                10,
+                20,
+            );
+            assert!(matches!(result, Err(actual) if actual == expected));
+            assert_eq!(capacity.in_use(), 0);
+        }
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    #[test]
+    fn sixty_fifth_directory_authority_is_rejected_with_split_plan_reason() {
+        let workspace = TestWorkspace::new();
+        let mut effects = Vec::new();
+        for index in 0..MAX_WORKSPACE_PLAN_DIRECTORY_AUTHORITIES {
+            let directory = format!("source-{index}");
+            std::fs::create_dir(workspace.path().join(&directory)).unwrap();
+            std::fs::write(workspace.path().join(&directory).join("file"), b"x").unwrap();
+            effects.push(json!({
+                "kind": "move_file",
+                "source": format!("{directory}/file"),
+                "destination": format!("moved-{index}")
+            }));
+        }
+        let capacity = WorkspacePlanCapacity::default();
+        let result = WorkspacePlanAuthorityResolver::prepare(
+            workspace.root(),
+            resolve(json!({"schema": 1, "effects": effects})).unwrap(),
+            capacity.reserve().unwrap(),
+            10,
+            20,
+        );
+        assert!(matches!(
+            result,
+            Err(WorkspacePlanPrepareError::TooManyFoldersSplitPlan)
+        ));
+        assert_eq!(
+            WorkspacePlanPrepareError::TooManyFoldersSplitPlan.user_message(),
+            "plan spans too many folders; split it"
+        );
+        assert_eq!(capacity.in_use(), 0);
+    }
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    fn digest_bytes(bytes: &[u8]) -> String {
+        Sha256::digest(bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
     }
 }
