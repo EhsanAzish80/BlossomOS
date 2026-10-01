@@ -1083,7 +1083,7 @@ mod tests {
             invalid
                 .begin_agent_turn(owner.clone(), INDIRECT_INVALID_PROMPT, 1_000)
                 .expect("invalid proposal fails closed"),
-            ShellServiceOutcome::Denied
+            ShellServiceOutcome::ModelFailed
         );
         crate::project_shell_activity(invalid.audit(), None, crate::MAX_ACTIVITY_BATCH)
             .unwrap_or_else(|error| panic!("{error:?}: {:?}", invalid.audit().records()));

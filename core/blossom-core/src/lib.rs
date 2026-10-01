@@ -45,10 +45,11 @@ pub use battery_summary::{
 };
 pub use command_bar::{
     ApplicationOrigin, BrokerCommandRow, BrokerCommandStore, CREATE_FILE_TEMPLATE,
-    CommandActivation, CommandRoute, CommandRow, CommandStoreError, DesktopEntryError,
-    LocalApplication, MAX_COMMAND_PEERS, MAX_COMMAND_QUERY_BYTES, MAX_COMMAND_RESULTS,
-    MAX_DESKTOP_ENTRIES, MAX_DESKTOP_ENTRY_BYTES, UNSUPPORTED_RESPONSE, WorkspaceFile,
-    activate_command, discover_local_applications, parse_desktop_entry, route_command,
+    CommandActivation, CommandActivationWire, CommandQueryWire, CommandRoute, CommandRow,
+    CommandStoreError, DesktopEntryError, LocalApplication, MAX_COMMAND_PEERS,
+    MAX_COMMAND_QUERY_BYTES, MAX_COMMAND_RESULTS, MAX_DESKTOP_ENTRIES, MAX_DESKTOP_ENTRY_BYTES,
+    UNSUPPORTED_RESPONSE, WorkspaceFile, activate_command, decode_command_activation,
+    decode_command_query, discover_local_applications, parse_desktop_entry, route_command,
     unsupported_command_result,
 };
 pub use context::{

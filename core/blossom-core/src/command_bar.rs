@@ -2,6 +2,7 @@ use crate::{
     DirectWorkspaceCreateParse, ModelWorkspaceCreateProposal, ModelWorkspaceProposalError,
     ShellPeerId, parse_obvious_workspace_create,
 };
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -129,7 +130,7 @@ pub fn discover_local_applications(
                 *origin,
                 locale,
                 current_desktop,
-                |program| executable_exists(program, path),
+                |program| resolve_executable(program, path),
             ) {
                 seen_ids.insert(desktop_id.to_owned());
                 applications.push(application);
@@ -146,7 +147,7 @@ pub fn parse_desktop_entry(
     origin: ApplicationOrigin,
     locale: &str,
     current_desktop: &str,
-    executable_exists: impl Fn(&str) -> bool,
+    resolve_executable: impl Fn(&str) -> Option<String>,
 ) -> Result<LocalApplication, DesktopEntryError> {
     if bytes.is_empty() || bytes.len() as u64 > MAX_DESKTOP_ENTRY_BYTES {
         return Err(DesktopEntryError::InvalidEntry);
@@ -181,7 +182,7 @@ pub fn parse_desktop_entry(
         return Err(DesktopEntryError::ExcludedDesktop);
     }
     if let Some(try_exec) = values.get("TryExec")
-        && (try_exec.is_empty() || !executable_exists(try_exec))
+        && (try_exec.is_empty() || resolve_executable(try_exec).is_none())
     {
         return Err(DesktopEntryError::MissingExecutable);
     }
@@ -191,10 +192,14 @@ pub fn parse_desktop_entry(
         .ok_or(DesktopEntryError::InvalidEntry)?;
     let display_name = localized_name(&values, locale).unwrap_or(plain_name);
     let exec = values.get("Exec").ok_or(DesktopEntryError::InvalidEntry)?;
-    let launch_argv = parse_exec(exec)?;
-    if launch_argv.is_empty() || !executable_exists(&launch_argv[0]) {
+    let mut launch_argv = parse_exec(exec)?;
+    let Some(executable) = launch_argv
+        .first()
+        .and_then(|program| resolve_executable(program))
+    else {
         return Err(DesktopEntryError::MissingExecutable);
-    }
+    };
+    launch_argv[0] = executable;
     let path = entry_path
         .to_str()
         .filter(|value| value.starts_with('/') && value.ends_with(".desktop"))
@@ -294,13 +299,15 @@ fn parse_exec(value: &str) -> Result<Vec<String>, DesktopEntryError> {
     Ok(arguments)
 }
 
-fn executable_exists(program: &str, path: &str) -> bool {
+fn resolve_executable(program: &str, path: &str) -> Option<String> {
     if program.contains('/') {
-        return is_executable_file(Path::new(program));
+        return is_executable_file(Path::new(program)).then(|| program.into());
     }
     path.split(':')
         .filter(|directory| !directory.is_empty())
-        .any(|directory| is_executable_file(&Path::new(directory).join(program)))
+        .map(|directory| Path::new(directory).join(program))
+        .find(|candidate| is_executable_file(candidate))
+        .and_then(|candidate| candidate.to_str().map(str::to_owned))
 }
 
 fn is_executable_file(path: &Path) -> bool {
@@ -504,6 +511,34 @@ impl CommandActivation {
             _ => None,
         }
     }
+
+    pub fn application_entry_path(&self) -> Option<&str> {
+        match self {
+            Self::OpenApplication {
+                desktop_entry_path, ..
+            } => Some(desktop_entry_path),
+            _ => None,
+        }
+    }
+
+    pub fn verified_application_launch<'a>(
+        &'a self,
+        current_entry_bytes: &[u8],
+    ) -> Option<(&'a str, &'a [String])> {
+        match self {
+            Self::OpenApplication {
+                desktop_id,
+                desktop_entry_sha256,
+                launch_argv,
+                ..
+            } if sha256(current_entry_bytes) == *desktop_entry_sha256
+                && !launch_argv.is_empty() =>
+            {
+                Some((desktop_id, launch_argv))
+            }
+            _ => None,
+        }
+    }
 }
 
 fn normalized_match(candidate: &str, normalized_query: &str) -> bool {
@@ -520,12 +555,51 @@ fn sha256(bytes: &[u8]) -> String {
         .collect()
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct BrokerCommandRow {
     pub id: String,
     pub kind: &'static str,
     pub title: String,
     pub detail: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommandQueryWire {
+    pub version: u16,
+    pub query: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommandActivationWire {
+    pub version: u16,
+    pub row_id: String,
+}
+
+pub fn decode_command_query(bytes: &[u8]) -> Result<CommandQueryWire, CommandStoreError> {
+    let request: CommandQueryWire =
+        serde_json::from_slice(bytes).map_err(|_| CommandStoreError::InvalidQuery)?;
+    if request.version != crate::SHELL_PROTOCOL_VERSION
+        || request.query.is_empty()
+        || request.query.len() > MAX_COMMAND_QUERY_BYTES
+        || request.query.contains('\0')
+    {
+        return Err(CommandStoreError::InvalidQuery);
+    }
+    Ok(request)
+}
+
+pub fn decode_command_activation(bytes: &[u8]) -> Result<CommandActivationWire, CommandStoreError> {
+    let request: CommandActivationWire =
+        serde_json::from_slice(bytes).map_err(|_| CommandStoreError::UnknownOrStaleRow)?;
+    if request.version != crate::SHELL_PROTOCOL_VERSION
+        || request.row_id.len() != 32
+        || !request.row_id.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err(CommandStoreError::UnknownOrStaleRow);
+    }
+    Ok(request)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -729,7 +803,9 @@ mod tests {
             ApplicationOrigin::System,
             locale,
             "Blossom",
-            |program| matches!(program, "example" | "/usr/bin/example"),
+            |program| {
+                matches!(program, "example" | "/usr/bin/example").then(|| "/usr/bin/example".into())
+            },
         )
     }
 
@@ -743,7 +819,7 @@ mod tests {
         assert_eq!(application.name, "Ornek");
         assert_eq!(
             application.launch_argv(),
-            ["example", "--open=", "--literal=%"]
+            ["/usr/bin/example", "--open=", "--literal=%"]
         );
         assert_eq!(
             route_command("exa", std::slice::from_ref(&application), &[])
@@ -785,6 +861,42 @@ mod tests {
         ] {
             assert!(parse_entry(entry, "en").is_err(), "{entry}");
         }
+    }
+
+    #[test]
+    fn command_bridge_wire_is_closed_bounded_and_versioned() {
+        let query = decode_command_query(br#"{"version":1,"query":"fire"}"#).unwrap();
+        assert_eq!(query.query, "fire");
+        assert!(decode_command_query(br#"{"version":2,"query":"fire"}"#).is_err());
+        assert!(decode_command_query(br#"{"version":1,"query":"fire","path":"/tmp/x"}"#).is_err());
+        assert!(
+            decode_command_query(
+                format!(
+                    r#"{{"version":1,"query":"{}"}}"#,
+                    "x".repeat(MAX_COMMAND_QUERY_BYTES + 1)
+                )
+                .as_bytes()
+            )
+            .is_err()
+        );
+
+        let activation = decode_command_activation(
+            br#"{"version":1,"row_id":"0123456789abcdef0123456789abcdef"}"#,
+        )
+        .unwrap();
+        assert_eq!(activation.row_id.len(), 32);
+        assert!(
+            decode_command_activation(
+                br#"{"version":1,"row_id":"0123456789abcdef0123456789abcdeg"}"#
+            )
+            .is_err()
+        );
+        assert!(
+            decode_command_activation(
+                br#"{"version":1,"row_id":"0123456789abcdef0123456789abcdef","argv":["evil"]}"#
+            )
+            .is_err()
+        );
     }
 
     #[test]
