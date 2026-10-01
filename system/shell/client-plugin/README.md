@@ -7,6 +7,10 @@ approve-once, deny, pre-start cancellation, bounded activity refresh, and the
 fixed battery and network refreshes. Every D-Bus name, path, interface, method, protocol
 version, activity limit, and request shape is compiled into the plugin.
 
+The command bar receives only bounded display rows and opaque 128-bit row IDs.
+It can query the broker and return one current ID; it never receives application
+commands, desktop-entry paths, workspace authority, or model-generated arguments.
+
 The plugin cannot choose an executable, argument, capability, scope, path,
 plan, provider, privileged operation, or D-Bus destination. It contains no
 process launcher, shell, filesystem API, network API, approval token, policy,

@@ -88,6 +88,8 @@ for value in (
 for config in (live_hyprland, installed_hyprland):
     require("bind = , Print, exec, /usr/local/bin/blossom-screenshot" in config,
             "screenshot binding is missing")
+    require("bind = SUPER, SPACE, global, blossom:command-bar" in config,
+            "global Blossom command-bar binding is missing")
 
 for value in ("set -euo pipefail", "/usr/bin/grim", "/usr/bin/notify-send", "install -d -m 0700"):
     require(value in screenshot, f"bounded screenshot behavior is missing: {value}")

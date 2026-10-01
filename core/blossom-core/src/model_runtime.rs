@@ -225,6 +225,7 @@ pub enum InferenceOutputMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ModelIntentKind {
+    Unsupported,
     SystemOsIdentity,
     SystemUptime,
     SystemMemorySummary,
@@ -237,6 +238,7 @@ pub enum ModelIntentKind {
 impl ModelIntentKind {
     pub fn name(self) -> &'static str {
         match self {
+            Self::Unsupported => "blossom.unsupported",
             Self::SystemOsIdentity => "system.os.identity",
             Self::SystemUptime => "system.uptime",
             Self::SystemMemorySummary => "system.memory.summary",
@@ -249,6 +251,7 @@ impl ModelIntentKind {
 
     fn from_name(value: &str) -> Option<Self> {
         match value {
+            "blossom.unsupported" => Some(Self::Unsupported),
             "system.os.identity" => Some(Self::SystemOsIdentity),
             "system.uptime" => Some(Self::SystemUptime),
             "system.memory.summary" => Some(Self::SystemMemorySummary),
@@ -264,6 +267,9 @@ impl ModelIntentKind {
         ModelIntentDefinition {
             name: self.name(),
             description: match self {
+                Self::Unsupported => {
+                    "Return when none of the eligible effect proposals exactly satisfy the request."
+                }
                 Self::SystemOsIdentity => "Read the operating-system identity.",
                 Self::SystemUptime => "Read the system uptime.",
                 Self::SystemMemorySummary => "Read a bounded memory summary.",
@@ -1072,6 +1078,34 @@ mod tests {
             Ok(NormalizedCompletion::ToolIntents { .. })
         ));
         assert_eq!(capacity.used(), 0);
+    }
+
+    #[test]
+    fn unsupported_is_a_closed_argument_free_result_and_cannot_mix_with_an_effect() {
+        let eligible = TurnIntentCatalogue::from_eligible([
+            ModelIntentKind::Unsupported,
+            ModelIntentKind::FilesWriteCreate,
+        ])
+        .unwrap();
+        let completion = validate_provider_completion(
+            br#"{"kind":"tool_intents","intents":[{"name":"blossom.unsupported","arguments":{}}]}"#,
+            &eligible,
+        )
+        .unwrap();
+        let NormalizedCompletion::ToolIntents { intents } = completion else {
+            panic!("unsupported must remain a closed tool result")
+        };
+        assert_eq!(intents.len(), 1);
+        assert_eq!(intents[0].kind(), ModelIntentKind::Unsupported);
+        assert!(intents[0].workspace_create().is_none());
+
+        assert_eq!(
+            validate_provider_completion(
+                br#"{"kind":"tool_intents","intents":[{"name":"blossom.unsupported","arguments":{"reason":"free text"}}]}"#,
+                &eligible,
+            ),
+            Err(ModelContractError::InvalidIntentArguments)
+        );
     }
 
     #[test]

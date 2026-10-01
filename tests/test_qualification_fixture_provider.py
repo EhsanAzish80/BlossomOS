@@ -35,6 +35,17 @@ def request(prompt: str, *, untrusted_data: str | None = None) -> dict:
                     "parameters": {"additionalProperties": False},
                 }
             }
+            ,
+            {
+                "function": {
+                    "name": "blossom.unsupported",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                }
+            },
         ],
     }
 

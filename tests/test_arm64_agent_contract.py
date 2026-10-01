@@ -170,6 +170,21 @@ class Arm64AgentContractTests(unittest.TestCase):
             declaration = declaration[:declaration.index(";") + 1]
             self.assertNotIn("{", declaration, handler)
         self.assertNotIn("fn start_agent", trait.split(";")[-1])
+        for method in ("QueryCommandBar1", "QueryCommandSuggestions1", "ActivateCommandRow1"):
+            self.assertIn(f'#[zbus(name = "{method}")]', source)
+        self.assertIn("decode_command_query(&input)", source)
+        self.assertIn("decode_command_activation(&input)", source)
+        self.assertIn("verified_application_launch(&current)", source)
+        self.assertIn('"StartTransientUnit"', source)
+        self.assertIn('(\"Type\", Value::new(\"exec\"))', source)
+        self.assertIn('(\"ExitType\", Value::new(\"cgroup\"))', source)
+        self.assertIn(
+            '(\"CollectMode\", Value::new(\"inactive-or-failed\"))', source
+        )
+        self.assertIn('(\"Slice\", Value::new(\"app-graphical.slice\"))', source)
+        self.assertIn('format!("app-blossom-{escaped_id}@{nonce}.service")', source)
+        self.assertNotIn('(\"Restart\",', source)
+        self.assertNotIn("std::process::Command", source)
 
     def test_desktop_accounts_are_deliberately_gateway_eligible(self):
         sysusers = (

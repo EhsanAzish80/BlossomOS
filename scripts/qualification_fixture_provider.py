@@ -9,7 +9,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 HOST = "127.0.0.1"
 PORT = 8080
 MAX_REQUEST_BYTES = 256 * 1024
-EXPECTED_TOOL = "files.write:create"
+CREATE_TOOL = "files.write:create"
+UNSUPPORTED_TOOL = "blossom.unsupported"
 PROMPTS = {
     "Create qualification-note.txt containing exactly: Blossom qualification passed.": (
         "qualification-note.txt",
@@ -18,6 +19,14 @@ PROMPTS = {
     "Create mutation-note.txt containing exactly: mutation must fail.": (
         "mutation-note.txt",
         "mutation must fail.",
+    ),
+    "Make a file called alternate-make.txt saying source notes": (
+        "alternate-make.txt",
+        "source notes",
+    ),
+    "Write meeting summary into alternate-write.txt": (
+        "alternate-write.txt",
+        "meeting summary",
     ),
 }
 INDIRECT_INVALID_PROMPT = (
@@ -62,14 +71,22 @@ def validate_request(request: object) -> tuple[str, str | None, str | None]:
     if request.get("tool_choice") != "required":
         raise ValueError("eligible turn must require exactly one tool choice")
     tools = request.get("tools")
-    if not isinstance(tools, list) or len(tools) != 1:
-        raise ValueError("eligible turn must contain exactly one tool")
-    function = tools[0].get("function") if isinstance(tools[0], dict) else None
-    if not isinstance(function, dict) or function.get("name") != EXPECTED_TOOL:
-        raise ValueError("unexpected eligible tool")
-    parameters = function.get("parameters")
+    if not isinstance(tools, list) or len(tools) != 2:
+        raise ValueError("eligible turn must contain create and unsupported choices")
+    functions = [tool.get("function") for tool in tools if isinstance(tool, dict)]
+    if len(functions) != 2 or any(not isinstance(function, dict) for function in functions):
+        raise ValueError("eligible tools are malformed")
+    by_name = {function.get("name"): function for function in functions}
+    if set(by_name) != {CREATE_TOOL, UNSUPPORTED_TOOL}:
+        raise ValueError("unexpected eligible tools")
+    parameters = by_name[CREATE_TOOL].get("parameters")
     if not isinstance(parameters, dict) or parameters.get("additionalProperties") is not False:
         raise ValueError("workspace schema is not closed")
+    unsupported_parameters = by_name[UNSUPPORTED_TOOL].get("parameters")
+    if not isinstance(unsupported_parameters, dict) or unsupported_parameters != {
+        "type": "object", "properties": {}, "additionalProperties": False
+    }:
+        raise ValueError("unsupported schema is not closed and argument-free")
     selection = PROMPTS.get(prompt)
     if prompt == INDIRECT_INVALID_PROMPT:
         selection = ("../escaped.txt", "injected traversal")
@@ -104,23 +121,23 @@ class Handler(BaseHTTPRequestHandler):
             model = request.get("model")
             if not isinstance(model, str) or not model:
                 raise ValueError("model identity is missing")
-            if name is None:
-                body = event(model, {"role": "assistant", "content": "denied"}, "stop")
-            else:
-                arguments = json.dumps({"name": name, "content": content}, separators=(",", ":"))
-                body = event(
-                    model,
-                    {
-                        "role": "assistant",
-                        "tool_calls": [{
-                            "index": 0,
-                            "id": "qualification-call",
-                            "type": "function",
-                            "function": {"name": EXPECTED_TOOL, "arguments": arguments},
-                        }],
-                    },
-                    "tool_calls",
-                )
+            tool_name = UNSUPPORTED_TOOL if name is None else CREATE_TOOL
+            arguments = "{}" if name is None else json.dumps(
+                {"name": name, "content": content}, separators=(",", ":")
+            )
+            body = event(
+                model,
+                {
+                    "role": "assistant",
+                    "tool_calls": [{
+                        "index": 0,
+                        "id": "qualification-call",
+                        "type": "function",
+                        "function": {"name": tool_name, "arguments": arguments},
+                    }],
+                },
+                "tool_calls",
+            )
             body += b"data: [DONE]\n\n"
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")

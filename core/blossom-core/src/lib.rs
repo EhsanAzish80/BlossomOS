@@ -3,6 +3,7 @@
 pub mod approval;
 pub mod audit;
 pub mod battery_summary;
+pub mod command_bar;
 pub mod context;
 pub mod durable_memory;
 pub mod engine;
@@ -41,6 +42,15 @@ pub use battery_summary::{
     SYSTEM_BUS_ADDRESS as BATTERY_SYSTEM_BUS_ADDRESS, UPOWER_DESTINATION, UPOWER_DEVICE_INTERFACE,
     UPOWER_DISPLAY_DEVICE_PATH, UnavailableBatterySummaryProvider, UpowerBatterySummaryProvider,
     validate_battery_observation,
+};
+pub use command_bar::{
+    ApplicationOrigin, BrokerCommandRow, BrokerCommandStore, CREATE_FILE_TEMPLATE,
+    CommandActivation, CommandActivationWire, CommandQueryWire, CommandRoute, CommandRow,
+    CommandStoreError, DesktopEntryError, LocalApplication, MAX_COMMAND_PEERS,
+    MAX_COMMAND_QUERY_BYTES, MAX_COMMAND_RESULTS, MAX_DESKTOP_ENTRIES, MAX_DESKTOP_ENTRY_BYTES,
+    UNSUPPORTED_RESPONSE, WorkspaceFile, activate_command, decode_command_activation,
+    decode_command_query, discover_local_applications, parse_desktop_entry, route_command,
+    suggest_commands, unsupported_command_result,
 };
 pub use context::{
     BATTERY_MAX_AGE_MS, BATTERY_MIN_POLL_INTERVAL_MS, CONTEXT_PROTOCOL_VERSION, ContextObservation,

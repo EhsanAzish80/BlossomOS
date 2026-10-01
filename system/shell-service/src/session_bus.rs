@@ -1,16 +1,18 @@
 #[cfg(feature = "production-dbus-service")]
 use blossom_core::executor::bubblewrap::BubblewrapExecutor;
 use blossom_core::{
-    AgentTurnError, BatterySummaryProvider, Executor, SHELL_INTERFACE, SHELL_PROTOCOL_VERSION,
-    ShellClientRequest, ShellDiagnosticService, ShellPeerId, decode_shell_agent_turn_request,
-    decode_shell_client_request,
+    AgentTurnError, BatterySummaryProvider, BrokerCommandStore, CommandActivation, Executor,
+    LocalApplication, SHELL_INTERFACE, SHELL_PROTOCOL_VERSION, ShellClientRequest,
+    ShellDiagnosticService, ShellPeerId, WorkspaceFile, decode_command_activation,
+    decode_command_query, decode_shell_agent_turn_request, decode_shell_client_request,
+    route_command, suggest_commands,
 };
 #[cfg(feature = "production-dbus-service")]
 use blossom_core::{
     ConversationMessage, ConversationRole, GatewayProfile, InferenceRequestId,
     NetworkManagerConnectivityProvider, NormalizedCompletion, PRIVATE_GATEWAY_SOCKET_PATH,
     PrivateGatewayClient, PrivateGatewayClientError, TurnIntentCatalogue,
-    UpowerBatterySummaryProvider, production_provider_profile,
+    UpowerBatterySummaryProvider, discover_local_applications, production_provider_profile,
 };
 #[cfg(any(feature = "production-dbus-service", test))]
 use blossom_core::{SHELL_BUS_NAME, SHELL_OBJECT_PATH};
@@ -31,6 +33,13 @@ const DBUS_DESTINATION: &str = "org.freedesktop.DBus";
 const DBUS_PATH: &str = "/org/freedesktop/DBus";
 const DBUS_INTERFACE: &str = "org.freedesktop.DBus";
 const MAX_WIRE_RESULT_BYTES: usize = 32 * 1024;
+
+#[derive(Default)]
+struct CommandBridgeState {
+    store: BrokerCommandStore,
+    applications: Vec<LocalApplication>,
+    workspace_files: Vec<WorkspaceFile>,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HandlerError {
@@ -221,9 +230,104 @@ fn encode(value: &impl serde::Serialize) -> Result<Vec<u8>, HandlerError> {
     Ok(bytes)
 }
 
+fn start_agent_from_command(
+    handler: &Arc<Mutex<Box<dyn ShellRequestHandler>>>,
+    peer: ShellPeerId,
+    prompt: &str,
+) -> zbus::fdo::Result<Vec<u8>> {
+    let input = serde_json::to_vec(&serde_json::json!({
+        "version": SHELL_PROTOCOL_VERSION,
+        "prompt": prompt,
+    }))
+    .map_err(|_| failed())?;
+    handler
+        .lock()
+        .map_err(|_| failed())?
+        .start_agent(peer, &input, now_ms())
+        .map_err(handler_error)
+}
+
+fn verify_absolute_executable(argv: &[String]) -> Result<(), ()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let executable = argv.first().ok_or(())?;
+    if !executable.starts_with('/') || executable.contains('\0') {
+        return Err(());
+    }
+    let metadata = std::fs::metadata(executable).map_err(|_| ())?;
+    if !metadata.is_file() || metadata.permissions().mode() & 0o111 == 0 {
+        return Err(());
+    }
+    Ok(())
+}
+
+fn escaped_application_id(desktop_id: &str) -> Result<String, ()> {
+    let mut escaped = String::new();
+    for byte in desktop_id.bytes().take(128) {
+        if byte.is_ascii_alphanumeric() || byte == b'_' {
+            escaped.push(char::from(byte));
+        } else {
+            escaped.push_str(&format!("\\x{byte:02x}"));
+        }
+    }
+    (!escaped.is_empty()).then_some(escaped).ok_or(())
+}
+
+async fn start_transient_application(
+    connection: &Connection,
+    desktop_id: &str,
+    argv: &[String],
+) -> zbus::fdo::Result<String> {
+    use zbus::zvariant::Value;
+
+    verify_absolute_executable(argv).map_err(|_| denied())?;
+    let mut random = [0u8; 8];
+    getrandom::fill(&mut random).map_err(|_| failed())?;
+    let escaped_id = escaped_application_id(desktop_id).map_err(|_| denied())?;
+    let nonce = random
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let unit = format!("app-blossom-{escaped_id}@{nonce}.service");
+    let executable = argv[0].clone();
+    let exec_start = vec![(executable, argv.to_vec(), false)];
+    let properties = vec![
+        (
+            "Description",
+            Value::new(format!("Blossom application {desktop_id}")),
+        ),
+        ("Type", Value::new("exec")),
+        ("ExitType", Value::new("cgroup")),
+        ("CollectMode", Value::new("inactive-or-failed")),
+        ("Slice", Value::new("app-graphical.slice")),
+        ("ExecStart", Value::new(exec_start)),
+    ];
+    let auxiliary: Vec<(&str, Vec<(&str, Value<'_>)>)> = Vec::new();
+    let manager: Proxy<'_> = ProxyBuilder::new(connection)
+        .destination("org.freedesktop.systemd1")
+        .and_then(|builder| builder.path("/org/freedesktop/systemd1"))
+        .and_then(|builder| builder.interface("org.freedesktop.systemd1.Manager"))
+        .map_err(|_| failed())?
+        .cache_properties(CacheProperties::No)
+        .build()
+        .await
+        .map_err(|_| failed())?;
+    let job: Option<zbus::zvariant::OwnedObjectPath> = manager
+        .call_with_flags(
+            "StartTransientUnit",
+            MethodFlags::NoAutoStart.into(),
+            &(unit.clone(), "fail", properties, auxiliary),
+        )
+        .await
+        .map_err(|_| failed())?;
+    job.ok_or_else(failed)?;
+    Ok(unit)
+}
+
 pub struct ShellBusService {
     handler: Arc<Mutex<Box<dyn ShellRequestHandler>>>,
     authorizer: Arc<Mutex<Box<dyn TrustedApprovalAuthorizer>>>,
+    commands: Arc<Mutex<CommandBridgeState>>,
 }
 
 impl ShellBusService {
@@ -238,17 +342,123 @@ impl ShellBusService {
         Self {
             handler: Arc::new(Mutex::new(Box::new(handler))),
             authorizer: Arc::new(Mutex::new(Box::new(authorizer))),
+            commands: Arc::new(Mutex::new(CommandBridgeState::default())),
         }
+    }
+
+    pub fn with_command_sources(
+        self,
+        applications: Vec<LocalApplication>,
+        workspace_files: Vec<WorkspaceFile>,
+    ) -> Self {
+        if let Ok(mut commands) = self.commands.lock() {
+            commands.applications = applications;
+            commands.workspace_files = workspace_files;
+        }
+        self
     }
 
     #[cfg(any(feature = "production-dbus-service", test))]
     fn shared_handler(&self) -> Arc<Mutex<Box<dyn ShellRequestHandler>>> {
         Arc::clone(&self.handler)
     }
+
+    #[cfg(any(feature = "production-dbus-service", test))]
+    fn shared_commands(&self) -> Arc<Mutex<CommandBridgeState>> {
+        Arc::clone(&self.commands)
+    }
 }
 
 #[zbus::interface(name = "org.blossomos.Shell1")]
 impl ShellBusService {
+    #[zbus(name = "QueryCommandBar1")]
+    async fn query_command_bar1(
+        &self,
+        input: Vec<u8>,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> zbus::fdo::Result<Vec<u8>> {
+        if input.len() > blossom_core::MAX_SHELL_MESSAGE_BYTES {
+            return Err(denied());
+        }
+        let peer = authenticated_peer(&header, connection).await?;
+        let request = decode_command_query(&input).map_err(|_| denied())?;
+        let mut commands = self.commands.lock().map_err(|_| failed())?;
+        let route = route_command(
+            &request.query,
+            &commands.applications,
+            &commands.workspace_files,
+        );
+        let rows = commands
+            .store
+            .replace(peer, &request.query, route)
+            .map_err(|_| denied())?;
+        encode(&rows).map_err(handler_error)
+    }
+
+    #[zbus(name = "QueryCommandSuggestions1")]
+    async fn query_command_suggestions1(
+        &self,
+        version: u16,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> zbus::fdo::Result<Vec<u8>> {
+        check_version(version)?;
+        let peer = authenticated_peer(&header, connection).await?;
+        let mut commands = self.commands.lock().map_err(|_| failed())?;
+        let route = suggest_commands(&commands.applications);
+        let rows = commands
+            .store
+            .replace(peer, "<trusted-suggestions>", route)
+            .map_err(|_| denied())?;
+        encode(&rows).map_err(handler_error)
+    }
+
+    #[zbus(name = "ActivateCommandRow1")]
+    async fn activate_command_row1(
+        &self,
+        input: Vec<u8>,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] connection: &Connection,
+    ) -> zbus::fdo::Result<Vec<u8>> {
+        if input.len() > blossom_core::MAX_SHELL_MESSAGE_BYTES {
+            return Err(denied());
+        }
+        let peer = authenticated_peer(&header, connection).await?;
+        let request = decode_command_activation(&input).map_err(|_| denied())?;
+        let action = self
+            .commands
+            .lock()
+            .map_err(|_| failed())?
+            .store
+            .activate(&peer, &request.row_id)
+            .map_err(|_| denied())?;
+        match action {
+            action @ CommandActivation::OpenApplication { .. } => {
+                let path = action.application_entry_path().ok_or_else(denied)?;
+                let current = std::fs::read(path).map_err(|_| denied())?;
+                let (desktop_id, argv) = action
+                    .verified_application_launch(&current)
+                    .ok_or_else(denied)?;
+                verify_absolute_executable(argv).map_err(|_| denied())?;
+                start_transient_application(connection, desktop_id, argv).await?;
+                Ok(br#"{"status":"launched"}"#.to_vec())
+            }
+            CommandActivation::BeginWorkspaceCreate(proposal) => {
+                let prompt = format!("create {} containing {}", proposal.name, proposal.content);
+                start_agent_from_command(&self.handler, peer, &prompt)
+            }
+            CommandActivation::BeginAgentTurn { prompt } => {
+                start_agent_from_command(&self.handler, peer, &prompt)
+            }
+            CommandActivation::ShowInvalidCreate(_) => Err(zbus::fdo::Error::InvalidArgs(
+                "direct create request has an invalid name or content".into(),
+            )),
+            CommandActivation::OpenWorkspaceFile { .. }
+            | CommandActivation::ShowUnsupported { .. } => Err(denied()),
+        }
+    }
+
     #[zbus(name = "StartAgentTurn1")]
     async fn start_agent_turn1(
         &self,
@@ -518,6 +728,7 @@ fn disconnect_match_rule() -> Result<zbus::MatchRule<'static>, ShellProcessError
 fn monitor_disconnects(
     mut messages: zbus::blocking::MessageIterator,
     handler: Arc<Mutex<Box<dyn ShellRequestHandler>>>,
+    commands: Arc<Mutex<CommandBridgeState>>,
 ) -> Result<(), ShellProcessError> {
     for message in &mut messages {
         let message = message.map_err(|_| ShellProcessError::SessionBusUnavailable)?;
@@ -529,6 +740,11 @@ fn monitor_disconnects(
         let old_owner = args.old_owner().as_ref().map(|owner| owner.as_str());
         let new_owner = args.new_owner().as_ref().map(|owner| owner.as_str());
         if let Some(peer) = lost_unique_owner(args.name().as_str(), old_owner, new_owner) {
+            commands
+                .lock()
+                .map_err(|_| ShellProcessError::SessionBusUnavailable)?
+                .store
+                .disconnect(&peer);
             handler
                 .lock()
                 .map_err(|_| ShellProcessError::SessionBusUnavailable)?
@@ -537,6 +753,60 @@ fn monitor_disconnects(
         }
     }
     Err(ShellProcessError::SessionBusUnavailable)
+}
+
+#[cfg(feature = "production-dbus-service")]
+fn monitor_application_directories(
+    commands: Arc<Mutex<CommandBridgeState>>,
+    directories: Vec<(std::path::PathBuf, blossom_core::ApplicationOrigin)>,
+    locale: String,
+) {
+    use nix::errno::Errno;
+    use nix::sys::inotify::{AddWatchFlags, InitFlags, Inotify};
+    use std::time::{Duration, Instant};
+
+    let inotify = Inotify::init(InitFlags::IN_CLOEXEC | InitFlags::IN_NONBLOCK).ok();
+    if let Some(inotify) = inotify.as_ref() {
+        let flags = AddWatchFlags::IN_CLOSE_WRITE
+            | AddWatchFlags::IN_CREATE
+            | AddWatchFlags::IN_DELETE
+            | AddWatchFlags::IN_MOVE
+            | AddWatchFlags::IN_ATTRIB
+            | AddWatchFlags::IN_DELETE_SELF
+            | AddWatchFlags::IN_MOVE_SELF
+            | AddWatchFlags::IN_ONLYDIR
+            | AddWatchFlags::IN_DONT_FOLLOW;
+        for (directory, _) in &directories {
+            if directory.is_dir() {
+                let _ = inotify.add_watch(directory.as_path(), flags);
+            }
+        }
+    }
+
+    let mut last_rescan = Instant::now();
+    loop {
+        let changed = match inotify.as_ref().map(Inotify::read_events) {
+            Some(Ok(events)) => !events.is_empty(),
+            Some(Err(Errno::EAGAIN)) | None => false,
+            Some(Err(_)) => true,
+        };
+        if changed || last_rescan.elapsed() >= Duration::from_secs(60) {
+            if changed {
+                std::thread::sleep(Duration::from_millis(250));
+            }
+            let applications = discover_local_applications(
+                &directories,
+                &locale,
+                "Blossom",
+                "/usr/local/bin:/usr/bin",
+            );
+            if let Ok(mut state) = commands.lock() {
+                state.applications = applications;
+            }
+            last_rescan = Instant::now();
+        }
+        std::thread::sleep(Duration::from_secs(1));
+    }
 }
 
 #[cfg(feature = "production-dbus-service")]
@@ -642,6 +912,27 @@ pub fn run_production() -> Result<(), ShellProcessError> {
     )
     .with_agent_turn_provider(InstalledGatewayAgentProvider)
     .with_agent_workspace(workspace);
+    let application_directories = vec![
+        (
+            std::path::PathBuf::from("/usr/local/share/applications"),
+            blossom_core::ApplicationOrigin::System,
+        ),
+        (
+            std::path::PathBuf::from("/usr/share/applications"),
+            blossom_core::ApplicationOrigin::System,
+        ),
+        (
+            account.dir.join(".local/share/applications"),
+            blossom_core::ApplicationOrigin::UserInstalled,
+        ),
+    ];
+    let locale = std::env::var("LANG").unwrap_or_else(|_| "C".into());
+    let applications = discover_local_applications(
+        &application_directories,
+        &locale,
+        "Blossom",
+        "/usr/local/bin:/usr/bin",
+    );
     let connection = zbus::blocking::connection::Builder::session()
         .map_err(|_| ShellProcessError::SessionBusUnavailable)?
         .build()
@@ -652,8 +943,17 @@ pub fn run_production() -> Result<(), ShellProcessError> {
         Some(64),
     )
     .map_err(|_| ShellProcessError::SessionBusUnavailable)?;
-    let interface = ShellBusService::with_authorizer(service, PolkitTrustedApproval::default());
+    let interface = ShellBusService::with_authorizer(service, PolkitTrustedApproval::default())
+        .with_command_sources(applications, Vec::new());
     let handler = interface.shared_handler();
+    let commands = interface.shared_commands();
+    let watcher_commands = Arc::clone(&commands);
+    std::thread::Builder::new()
+        .name("blossom-application-watcher".into())
+        .spawn(move || {
+            monitor_application_directories(watcher_commands, application_directories, locale);
+        })
+        .map_err(|_| ShellProcessError::SessionBusUnavailable)?;
     connection
         .object_server()
         .at(SHELL_OBJECT_PATH, interface)
@@ -665,7 +965,7 @@ pub fn run_production() -> Result<(), ShellProcessError> {
     std::thread::Builder::new()
         .name("blossom-shell-owner-monitor".into())
         .spawn(move || {
-            let _ = fatal_sender.send(monitor_disconnects(messages, handler));
+            let _ = fatal_sender.send(monitor_disconnects(messages, handler, commands));
         })
         .map_err(|_| ShellProcessError::SessionBusUnavailable)?;
     fatal_receiver
@@ -891,6 +1191,61 @@ mod tests {
         assert!(lost_unique_owner(":malformed", Some(":malformed"), None).is_none());
     }
 
+    #[cfg(target_os = "linux")]
+    #[test]
+    #[ignore = "requires a running graphical user systemd manager"]
+    fn transient_service_keeps_a_child_alive_after_its_parent_exits() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let nonce = now_ms();
+        let directory = std::env::temp_dir().join(format!(
+            "blossom-transient-service-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&directory).expect("test directory");
+        let pid_path = directory.join("child.pid");
+        let launcher = directory.join("parent-exits");
+        std::fs::write(
+            &launcher,
+            format!(
+                "#!/bin/sh\n/bin/sleep 30 &\nprintf '%s\\n' \"$!\" > {}\nexit 0\n",
+                pid_path.display()
+            ),
+        )
+        .expect("launcher");
+        let mut permissions = std::fs::metadata(&launcher)
+            .expect("launcher metadata")
+            .permissions();
+        permissions.set_mode(0o700);
+        std::fs::set_permissions(&launcher, permissions).expect("launcher mode");
+
+        let connection = async_io::block_on(Connection::session()).expect("session bus");
+        let argv = vec![launcher.to_string_lossy().into_owned()];
+        let unit = async_io::block_on(start_transient_application(
+            &connection,
+            "blossom-exit-type-test.desktop",
+            &argv,
+        ))
+        .expect("transient service starts");
+        assert!(unit.starts_with("app-blossom-"));
+        assert!(unit.ends_with(".service"));
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !pid_path.exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let child_pid: i32 = std::fs::read_to_string(&pid_path)
+            .expect("child pid")
+            .trim()
+            .parse()
+            .expect("numeric child pid");
+        std::thread::sleep(Duration::from_millis(500));
+        let child_pid = nix::unistd::Pid::from_raw(child_pid);
+        assert!(nix::sys::signal::kill(child_pid, None).is_ok());
+        let _ = nix::sys::signal::kill(child_pid, Some(nix::sys::signal::Signal::SIGTERM));
+        let _ = std::fs::remove_dir_all(directory);
+    }
+
     #[test]
     fn dropping_client_notifies_the_shared_handler() {
         let (_bus, address) = test_bus();
@@ -921,7 +1276,8 @@ mod tests {
             expected_peer: sender,
         });
         let handler = interface.shared_handler();
-        let monitor = std::thread::spawn(move || monitor_disconnects(messages, handler));
+        let commands = interface.shared_commands();
+        let monitor = std::thread::spawn(move || monitor_disconnects(messages, handler, commands));
 
         drop(client);
         let deadline = Instant::now() + Duration::from_secs(2);

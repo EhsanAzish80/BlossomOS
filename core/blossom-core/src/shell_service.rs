@@ -170,9 +170,11 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
         let request_id = self.next_request_id()?;
         let inference_id = InferenceRequestId::parse(request_id.as_str().into())
             .map_err(|_| ShellServiceError::Agent(AgentTurnError::Protocol))?;
-        let catalogue =
-            TurnIntentCatalogue::from_code_owned_eligible([ModelIntentKind::FilesWriteCreate])
-                .map_err(|_| ShellServiceError::Agent(AgentTurnError::Protocol))?;
+        let catalogue = TurnIntentCatalogue::from_code_owned_eligible([
+            ModelIntentKind::Unsupported,
+            ModelIntentKind::FilesWriteCreate,
+        ])
+        .map_err(|_| ShellServiceError::Agent(AgentTurnError::Protocol))?;
         let deterministic = if untrusted_data.is_none() {
             crate::parse_obvious_workspace_create(prompt)
         } else {
@@ -200,14 +202,19 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
                 };
                 let completion = match completion {
                     Ok(completion) => completion,
-                    Err(AgentTurnError::Protocol) => return Ok(ShellServiceOutcome::Denied),
+                    Err(AgentTurnError::Protocol) => return Ok(ShellServiceOutcome::ModelFailed),
                     Err(error) => return Err(ShellServiceError::Agent(error)),
                 };
                 let NormalizedCompletion::ToolIntents { intents } = completion else {
-                    return Ok(ShellServiceOutcome::Denied);
+                    return Ok(ShellServiceOutcome::ModelFailed);
                 };
                 if intents.len() != 1 {
-                    return Ok(ShellServiceOutcome::Denied);
+                    return Ok(ShellServiceOutcome::ModelFailed);
+                }
+                if intents[0].kind() == ModelIntentKind::Unsupported
+                    && intents[0].workspace_create().is_none()
+                {
+                    return Ok(ShellServiceOutcome::Unsupported);
                 }
                 let proposal = intents[0]
                     .workspace_create()
@@ -686,6 +693,8 @@ pub enum ShellServiceOutcome {
     Expired,
     Verified,
     VerificationFailed,
+    Unsupported,
+    ModelFailed,
 }
 
 #[derive(Debug)]
@@ -976,6 +985,68 @@ mod tests {
         }
     }
 
+    struct UnsupportedAgentProvider;
+
+    impl AgentTurnProvider for UnsupportedAgentProvider {
+        fn complete(
+            &mut self,
+            _: &InferenceRequestId,
+            _: &str,
+            catalogue: &TurnIntentCatalogue,
+        ) -> Result<NormalizedCompletion, AgentTurnError> {
+            crate::validate_provider_completion(
+                br#"{"kind":"tool_intents","intents":[{"name":"blossom.unsupported","arguments":{}}]}"#,
+                catalogue,
+            )
+            .map_err(|_| AgentTurnError::Protocol)
+        }
+    }
+
+    struct FailedAgentProvider;
+
+    impl AgentTurnProvider for FailedAgentProvider {
+        fn complete(
+            &mut self,
+            _: &InferenceRequestId,
+            _: &str,
+            _: &TurnIntentCatalogue,
+        ) -> Result<NormalizedCompletion, AgentTurnError> {
+            Err(AgentTurnError::Protocol)
+        }
+    }
+
+    #[test]
+    fn model_failure_is_not_reported_as_an_unsupported_capability() {
+        let calls = Rc::new(Cell::new(0));
+        let owner = peer(":1.88");
+        let mut service = service(calls.clone()).with_agent_turn_provider(FailedAgentProvider);
+
+        assert_eq!(
+            service
+                .begin_agent_turn(owner.clone(), "Please make sense of this", 1_000)
+                .unwrap(),
+            ShellServiceOutcome::ModelFailed
+        );
+        assert_eq!(calls.get(), 0);
+        assert!(!service.sessions.has_pending(&owner));
+    }
+
+    #[test]
+    fn closed_unsupported_agent_result_has_no_proposal_or_pending_approval() {
+        let calls = Rc::new(Cell::new(0));
+        let owner = peer(":1.89");
+        let mut service = service(calls.clone()).with_agent_turn_provider(UnsupportedAgentProvider);
+
+        assert_eq!(
+            service
+                .begin_agent_turn(owner.clone(), "Organize my downloads", 1_000)
+                .unwrap(),
+            ShellServiceOutcome::Unsupported
+        );
+        assert_eq!(calls.get(), 0);
+        assert!(!service.sessions.has_pending(&owner));
+    }
+
     #[cfg(target_os = "linux")]
     fn indirect_workspace(contents: &str) -> (std::path::PathBuf, String) {
         use std::time::{SystemTime, UNIX_EPOCH};
@@ -1012,7 +1083,7 @@ mod tests {
             invalid
                 .begin_agent_turn(owner.clone(), INDIRECT_INVALID_PROMPT, 1_000)
                 .expect("invalid proposal fails closed"),
-            ShellServiceOutcome::Denied
+            ShellServiceOutcome::ModelFailed
         );
         crate::project_shell_activity(invalid.audit(), None, crate::MAX_ACTIVITY_BATCH)
             .unwrap_or_else(|error| panic!("{error:?}: {:?}", invalid.audit().records()));

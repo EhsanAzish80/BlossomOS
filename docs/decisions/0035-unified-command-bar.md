@@ -20,9 +20,14 @@ execution.
 
 ### Surface and focus
 
-The dock contains one command-bar button. `Super+Space` opens the same centered
-overlay and places keyboard focus in its input. `Escape` closes it without
-submitting or preserving the text.
+The Blossom flower is the first dock item and opens the command bar. The same
+flower at the left edge of the top bar is a second visible entry point.
+`Super+Space` opens the same centered overlay and places keyboard focus in its
+input. `Escape` closes it without submitting or preserving the text.
+
+Every dock icon has an accessible name and a visible hover label. The first
+version includes no decorative trash affordance; a trash item may appear only
+if the file manager exposes a real trash location and behavior.
 
 The bar yields focus when the separate broker-owned approval or PolicyKit
 authentication window appears. It must not reclaim focus until those surfaces
@@ -33,8 +38,9 @@ request.
 
 Trusted local routing evaluates input in this order:
 
-1. exact application matches derived from installed `.desktop` files;
-2. exact file matches within the configured workspace;
+1. normalized local application matches derived from installed `.desktop`
+   files;
+2. normalized file matches within the configured workspace;
 3. the existing deterministic `create NAME containing CONTENT` parser; and
 4. one explicit `Ask Blossom: ...` choice for all other non-empty input.
 
@@ -58,11 +64,21 @@ selected when a local result exists. For example, `fire` selects Firefox first
 and shows `Ask Blossom: fire` beneath it. The model does not run unless the user
 explicitly selects and activates that final row.
 
-The current agent can propose only one create-only workspace file. When a
-request cannot be satisfied by that admitted capability, trusted orchestration
-returns the fixed plain response `Blossom can't do this yet`. It produces no
-proposal, no approval window and no effect. The model may not reinterpret an
-unsupported request as an unrelated file creation.
+Prefix input such as `fire` may produce multiple normalized local matches. The
+bar lists them in stable order instead of guessing; an exact result remains a
+single local row.
+
+The router does not infer model capability from words in the query. Any
+non-empty input which is neither a local result nor a deterministic-create
+result receives the explicit `Ask Blossom: ...` row. Only after the user
+activates that row may the agent return one of two closed results: a validated
+`files.write:create` proposal, or `unsupported`.
+
+`unsupported` is part of the fixed provider output constraint, not free text.
+Trusted orchestration maps it to the fixed plain response `Blossom can't do
+this yet. Today it can create one file in your workspace.` It produces no
+proposal, no approval window and no effect. Malformed, mixed or unknown model
+output fails closed and may not be reinterpreted as a proposal.
 
 ### Ambiguity and truthful suggestions
 
@@ -80,12 +96,57 @@ Choosing `Create a file` fills the input with `create  containing ` and places
 the cursor between `create ` and ` containing ` so the completed request follows
 the deterministic parser.
 
+The terminal unsupported state does not show `Enter to run`, because it has no
+action.
+
+### Broker-owned routing and activation
+
+Routing and result discovery run in the broker. The shell sends bounded raw
+query text and receives display-only rows carrying opaque row identifiers. It
+never receives an executable, application path or filesystem authority.
+Activating a row sends only its opaque identifier.
+
+The broker keeps rows only for the latest query from that peer. A new query
+invalidates every earlier identifier; stale, unknown and cross-peer identifiers
+are rejected. Query bytes, query rate, result count and discovery work are
+bounded. The shell debounces keystrokes, but broker-side admission does not rely
+on that client behavior.
+
+Application results come from parsed `.desktop` entries. System entries sort
+before user-installed entries, and the latter are visibly labelled because
+`~/.local/share/applications` is writable by same-user processes. The broker
+parses the selected entry's `Exec` value, removes desktop field codes according
+to the desktop-entry contract, never invokes a shell, and launches the retained
+selection in its own systemd user scope.
+
+The first version deliberately supports only regular application entries. It
+skips `Hidden` and `NoDisplay` entries, desktop-environment exclusions and a
+missing `TryExec`; it refuses terminal and D-Bus-activated launch modes. It uses
+the current localized name for display while retaining the plain name for
+matching. File size, total entries scanned and returned results are bounded.
+The broker caches this snapshot and watches the application directories for a
+change instead of rescanning on each keystroke. At activation it rereads the
+selected entry and compares its digest with the retained row before launching;
+any substitution fails closed.
+
+File discovery is restricted to the configured workspace. Rows display the
+workspace-relative path. Activation uses only the retained broker-side
+selection; the shell cannot substitute a path.
+
+Deterministic create activation reuses the existing resolver, prepared request,
+policy and exact-effect approval path. The command bar adds no constructor or
+execution route.
+
 ### Privacy
 
 The first version stores no prompt or query history. Closing the overlay clears
 its input and results. Audit records retain only the data already required by
 the selected action's existing contract; the command bar adds no new prompt
 retention.
+
+The usable desktop contains no persistent promotional slogan or duplicate
+bottom-corner product label. Those elements may appear in presentation mockups,
+but not in the everyday shell.
 
 ### Approval separation
 

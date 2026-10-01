@@ -24,6 +24,24 @@ constexpr qulonglong MaxApprovalDelayMs = 60 * 1000;
 constexpr qulonglong MaxBatteryLifetimeMs = 5 * 1000;
 constexpr qulonglong MaxNetworkLifetimeMs = 5 * 1000;
 constexpr qsizetype MaxFailureReasonCharacters = 240;
+constexpr qsizetype MaxCommandRows = 12;
+
+bool safeDisplayText(const QString &text, qsizetype limit) {
+    if (text.size() > limit) return false;
+    for (const auto character : text) {
+        if (!character.isPrint() && character != QLatin1Char('\n')) return false;
+    }
+    return true;
+}
+
+bool validRowId(const QString &id) {
+    if (id.size() != 32) return false;
+    for (const auto character : id) {
+        if (!character.isDigit() && !(character >= QLatin1Char('a') && character <= QLatin1Char('f')))
+            return false;
+    }
+    return true;
+}
 
 QDBusInterface fixedInterface() {
     return QDBusInterface(QString::fromLatin1(BusName), QString::fromLatin1(ObjectPath),
@@ -80,6 +98,10 @@ BlossomBroker::BlossomBroker(QObject *parent) : QObject(parent) {
     connect(&m_serviceWatcher, &QDBusServiceWatcher::serviceUnregistered,
             this, [this](const QString &) {
                 ++m_serviceGeneration;
+                ++m_commandGeneration;
+                m_commandRows.clear();
+                emit commandRowsChanged();
+                setCommandState(QStringLiteral("error"), QStringLiteral("The Blossom service became unavailable."));
                 failClosed();
             });
     m_expiryTimer.setSingleShot(true);
@@ -106,6 +128,156 @@ bool BlossomBroker::liveEnvironment() const {
 QString BlossomBroker::desktopMessage() const { return m_desktopMessage; }
 QString BlossomBroker::failureReason() const { return m_failureReason; }
 bool BlossomBroker::onboardingRequired() const { return m_onboardingRequired; }
+QVariantList BlossomBroker::commandRows() const { return m_commandRows; }
+QString BlossomBroker::commandState() const { return m_commandState; }
+QString BlossomBroker::commandMessage() const { return m_commandMessage; }
+
+void BlossomBroker::setCommandState(const QString &state, const QString &message) {
+    if (m_commandState != state) {
+        m_commandState = state;
+        emit commandStateChanged();
+    }
+    if (m_commandMessage != message) {
+        m_commandMessage = message;
+        emit commandMessageChanged();
+    }
+}
+
+void BlossomBroker::queryCommandBar(const QString &query) {
+    const QByteArray queryBytes = query.toUtf8();
+    const quint64 commandGeneration = ++m_commandGeneration;
+    if (queryBytes.isEmpty()) {
+        if (!m_commandRows.isEmpty()) {
+            m_commandRows.clear();
+            emit commandRowsChanged();
+        }
+        setCommandState(QStringLiteral("idle"));
+        return;
+    }
+    if (queryBytes.size() > MaxAgentPromptBytes || query.contains(QChar::Null)) {
+        setCommandState(QStringLiteral("error"), QStringLiteral("That request is too long."));
+        return;
+    }
+    const QJsonObject request{{QStringLiteral("version"), ProtocolVersion},
+                              {QStringLiteral("query"), query}};
+    if (!m_commandRows.isEmpty()) {
+        m_commandRows.clear();
+        emit commandRowsChanged();
+    }
+    const auto call = fixedInterface().asyncCall(QStringLiteral("QueryCommandBar1"),
+        QJsonDocument(request).toJson(QJsonDocument::Compact));
+    setCommandState(QStringLiteral("querying"));
+    watchCommandRows(call, commandGeneration);
+}
+
+void BlossomBroker::queryCommandSuggestions() {
+    const quint64 commandGeneration = ++m_commandGeneration;
+    if (!m_commandRows.isEmpty()) {
+        m_commandRows.clear();
+        emit commandRowsChanged();
+    }
+    const auto call = fixedInterface().asyncCall(QStringLiteral("QueryCommandSuggestions1"),
+        QVariant::fromValue(ProtocolVersion));
+    setCommandState(QStringLiteral("querying"));
+    watchCommandRows(call, commandGeneration);
+}
+
+void BlossomBroker::watchCommandRows(
+    const QDBusPendingCall &call,
+    quint64 commandGeneration
+) {
+    auto *watcher = new QDBusPendingCallWatcher(call, this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this, watcher, commandGeneration] {
+        const QDBusPendingReply<QByteArray> reply = *watcher;
+        watcher->deleteLater();
+        if (commandGeneration != m_commandGeneration) return;
+        if (reply.isError() || reply.value().size() > MaxReplyBytes) {
+            setCommandState(QStringLiteral("error"), QStringLiteral("Blossom could not search right now."));
+            return;
+        }
+        QJsonParseError error;
+        const auto document = QJsonDocument::fromJson(reply.value(), &error);
+        if (error.error != QJsonParseError::NoError || !document.isArray() ||
+            document.array().size() > MaxCommandRows) {
+            setCommandState(QStringLiteral("error"), QStringLiteral("Blossom returned an invalid result."));
+            return;
+        }
+        QVariantList rows;
+        const QStringList kinds{QStringLiteral("application"), QStringLiteral("workspace_file"),
+            QStringLiteral("workspace_create"), QStringLiteral("ask_blossom"),
+            QStringLiteral("invalid_create"), QStringLiteral("unsupported")};
+        for (const auto value : document.array()) {
+            if (!value.isObject()) { rows.clear(); break; }
+            const auto row = value.toObject();
+            const QString id = row.value(QStringLiteral("id")).toString();
+            const QString kind = row.value(QStringLiteral("kind")).toString();
+            const QString title = row.value(QStringLiteral("title")).toString();
+            const QString detail = row.value(QStringLiteral("detail")).toString();
+            const auto badges = row.value(QStringLiteral("badges")).toArray();
+            bool validBadges = badges.size() <= 3;
+            const QStringList tones{QStringLiteral("local"), QStringLiteral("approval"),
+                QStringLiteral("model"), QStringLiteral("neutral")};
+            for (const auto badgeValue : badges) {
+                if (!badgeValue.isObject()) { validBadges = false; break; }
+                const auto badge = badgeValue.toObject();
+                if (badge.size() != 2 || !safeDisplayText(badge.value(QStringLiteral("text")).toString(), 128) ||
+                    !tones.contains(badge.value(QStringLiteral("tone")).toString())) {
+                    validBadges = false; break;
+                }
+            }
+            if (row.size() != 5 || !validRowId(id) || !kinds.contains(kind) || !validBadges ||
+                !safeDisplayText(title, 512) || !safeDisplayText(detail, 4096)) {
+                rows.clear(); break;
+            }
+            rows.append(row.toVariantMap());
+        }
+        if (rows.size() != document.array().size()) {
+            setCommandState(QStringLiteral("error"), QStringLiteral("Blossom returned an invalid result."));
+            return;
+        }
+        m_commandRows = rows;
+        emit commandRowsChanged();
+        setCommandState(QStringLiteral("ready"));
+    });
+}
+
+void BlossomBroker::activateCommandRow(const QString &rowId) {
+    if (!validRowId(rowId) || m_commandState != QStringLiteral("ready")) return;
+    const QJsonObject request{{QStringLiteral("version"), ProtocolVersion},
+                              {QStringLiteral("row_id"), rowId}};
+    const quint64 commandGeneration = ++m_commandGeneration;
+    auto *watcher = new QDBusPendingCallWatcher(
+        fixedInterface().asyncCall(QStringLiteral("ActivateCommandRow1"),
+            QJsonDocument(request).toJson(QJsonDocument::Compact)), this);
+    setCommandState(QStringLiteral("activating"));
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this, watcher, commandGeneration] {
+        const QDBusPendingReply<QByteArray> reply = *watcher;
+        watcher->deleteLater();
+        if (commandGeneration != m_commandGeneration) return;
+        if (reply.isError()) {
+            setCommandState(QStringLiteral("error"), QStringLiteral("That result expired or could not be opened."));
+            return;
+        }
+        bool parsed = false;
+        const auto object = boundedObject(reply.value(), &parsed);
+        if (parsed && object.size() == 1 && object.value(QStringLiteral("status")) == QStringLiteral("launched")) {
+            setCommandState(QStringLiteral("completed"), QStringLiteral("Opened."));
+            return;
+        }
+        handleOutcome(reply.value());
+        if (m_state == QStringLiteral("unsupported")) {
+            setCommandState(QStringLiteral("result"),
+                QStringLiteral("Blossom can't do this yet. Today it can create one file in your workspace."));
+        } else if (m_state == QStringLiteral("model_failed")) {
+            setCommandState(QStringLiteral("result"),
+                QStringLiteral("Blossom couldn't work out that request. Nothing was done."));
+        } else {
+            setCommandState(QStringLiteral("completed"));
+        }
+    });
+}
 
 void BlossomBroker::openTerminal() {
     launchDesktop(QStringLiteral("terminal"));
@@ -510,7 +682,8 @@ void BlossomBroker::handleOutcome(const QByteArray &bytes) {
     }
     if (status == QStringLiteral("denied") || status == QStringLiteral("cancelled") ||
         status == QStringLiteral("expired") ||
-        status == QStringLiteral("verified") || status == QStringLiteral("verification_failed")) {
+        status == QStringLiteral("verified") || status == QStringLiteral("verification_failed") ||
+        status == QStringLiteral("unsupported") || status == QStringLiteral("model_failed")) {
         m_preview.clear();
         emit previewChanged();
         clearFailureReason();
