@@ -119,17 +119,20 @@ pub fn route_command(
         DirectWorkspaceCreateParse::NoMatch => {}
     }
 
-    if admitted_agent_create_request(query) {
-        rows.push(CommandRow::AskBlossom {
-            prompt: query.into(),
-        });
-    } else {
-        rows.push(CommandRow::Unsupported {
-            message: UNSUPPORTED_RESPONSE,
-        });
-    }
+    rows.push(CommandRow::AskBlossom {
+        prompt: query.into(),
+    });
 
     CommandRoute::from_rows(rows)
+}
+
+/// Produces the terminal display state only after trusted orchestration has
+/// accepted the model's closed `unsupported` result. Routing never guesses
+/// support from words in the user's query.
+pub fn unsupported_command_result() -> CommandRoute {
+    CommandRoute::from_rows(vec![CommandRow::Unsupported {
+        message: UNSUPPORTED_RESPONSE,
+    }])
 }
 
 pub fn activate_command(row: &CommandRow) -> CommandActivation {
@@ -153,18 +156,6 @@ pub fn activate_command(row: &CommandRow) -> CommandActivation {
 
 fn normalized_match(candidate: &str, normalized_query: &str) -> bool {
     candidate.to_ascii_lowercase().starts_with(normalized_query)
-}
-
-fn admitted_agent_create_request(query: &str) -> bool {
-    let query = query.to_ascii_lowercase();
-    [
-        "make a file ",
-        "make a text file ",
-        "create a file ",
-        "create a text file ",
-    ]
-    .iter()
-    .any(|prefix| query.starts_with(prefix))
 }
 
 #[cfg(test)]
@@ -319,8 +310,19 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_request_has_no_agent_or_effect_row() {
+    fn unresolved_input_is_offered_to_the_agent_without_keyword_guessing() {
         let route = route_command("Organize my downloads", &applications(), &files());
+        assert_eq!(
+            route.rows,
+            vec![CommandRow::AskBlossom {
+                prompt: "Organize my downloads".into()
+            }]
+        );
+    }
+
+    #[test]
+    fn closed_agent_unsupported_result_has_no_action() {
+        let route = unsupported_command_result();
         assert_eq!(
             route.rows,
             vec![CommandRow::Unsupported {

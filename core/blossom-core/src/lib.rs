@@ -46,6 +46,7 @@ pub use battery_summary::{
 pub use command_bar::{
     CREATE_FILE_TEMPLATE, CommandActivation, CommandRoute, CommandRow, LocalApplication,
     UNSUPPORTED_RESPONSE, WorkspaceFile, activate_command, route_command,
+    unsupported_command_result,
 };
 pub use context::{
     BATTERY_MAX_AGE_MS, BATTERY_MIN_POLL_INTERVAL_MS, CONTEXT_PROTOCOL_VERSION, ContextObservation,

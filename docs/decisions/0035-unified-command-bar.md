@@ -68,12 +68,17 @@ Prefix input such as `fire` may produce multiple normalized local matches. The
 bar lists them in stable order instead of guessing; an exact result remains a
 single local row.
 
-The current agent can propose only one create-only workspace file. When a
-request cannot be satisfied by that admitted capability, trusted orchestration
-returns the fixed plain response `Blossom can't do this yet. Today it can create
-one file in your workspace.` It produces no proposal, no approval window and no
-effect. The model may not reinterpret an unsupported request as an unrelated
-file creation.
+The router does not infer model capability from words in the query. Any
+non-empty input which is neither a local result nor a deterministic-create
+result receives the explicit `Ask Blossom: ...` row. Only after the user
+activates that row may the agent return one of two closed results: a validated
+`files.write:create` proposal, or `unsupported`.
+
+`unsupported` is part of the fixed provider output constraint, not free text.
+Trusted orchestration maps it to the fixed plain response `Blossom can't do
+this yet. Today it can create one file in your workspace.` It produces no
+proposal, no approval window and no effect. Malformed, mixed or unknown model
+output fails closed and may not be reinterpreted as a proposal.
 
 ### Ambiguity and truthful suggestions
 
@@ -90,6 +95,37 @@ The empty state shows `Super+Space to open · Enter to run · Esc to close`.
 Choosing `Create a file` fills the input with `create  containing ` and places
 the cursor between `create ` and ` containing ` so the completed request follows
 the deterministic parser.
+
+The terminal unsupported state does not show `Enter to run`, because it has no
+action.
+
+### Broker-owned routing and activation
+
+Routing and result discovery run in the broker. The shell sends bounded raw
+query text and receives display-only rows carrying opaque row identifiers. It
+never receives an executable, application path or filesystem authority.
+Activating a row sends only its opaque identifier.
+
+The broker keeps rows only for the latest query from that peer. A new query
+invalidates every earlier identifier; stale, unknown and cross-peer identifiers
+are rejected. Query bytes, query rate, result count and discovery work are
+bounded. The shell debounces keystrokes, but broker-side admission does not rely
+on that client behavior.
+
+Application results come from parsed `.desktop` entries. System entries sort
+before user-installed entries, and the latter are visibly labelled because
+`~/.local/share/applications` is writable by same-user processes. The broker
+parses the selected entry's `Exec` value, removes desktop field codes according
+to the desktop-entry contract, never invokes a shell, and launches the retained
+selection in its own systemd user scope.
+
+File discovery is restricted to the configured workspace. Rows display the
+workspace-relative path. Activation uses only the retained broker-side
+selection; the shell cannot substitute a path.
+
+Deterministic create activation reuses the existing resolver, prepared request,
+policy and exact-effect approval path. The command bar adds no constructor or
+execution route.
 
 ### Privacy
 
