@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import Blossom.Shell
 import "Petal"
@@ -35,7 +36,14 @@ ShellRoot {
             root.quickVisible = false
             root.powerVisible = false
             root.powerAction = ""
+            commandBar.hide()
         }
+    }
+    GlobalShortcut {
+        appid: "blossom"
+        name: "command-bar"
+        description: "Open the Blossom command bar"
+        onPressed: commandBar.toggle()
     }
     Component.onCompleted: {
         BlossomBroker.refreshActivity()
@@ -47,7 +55,7 @@ ShellRoot {
         target: BlossomBroker
         function onStateChanged() {
             const busy = ["waiting", "submitting", "cancelling"].includes(BlossomBroker.state)
-            const finished = ["unavailable", "verified", "verification_failed", "cancelled", "expired"]
+            const finished = ["unavailable", "unsupported", "model_failed", "verified", "verification_failed", "cancelled", "expired"]
                 .includes(BlossomBroker.state)
             if (busy) {
                 if (root.activityVisible)
@@ -76,6 +84,7 @@ ShellRoot {
     // request.  The separate accessibility host has its own D-Bus peer and
     // therefore cannot adopt or decide this pending request.
     ApprovalPanel {}
+    CommandBar { id: commandBar }
 
     Variants {
         model: root.desktopScreens
@@ -110,7 +119,7 @@ ShellRoot {
             RowLayout {
                 anchors { fill: parent; leftMargin: 14; rightMargin: 14 }
                 spacing: 12
-                BlossomButton { text: "Blossom OS"; onClicked: root.launcherVisible = !root.launcherVisible; Accessible.description: "Open the Blossom OS application launcher." }
+                BlossomButton { text: "✦  Blossom OS"; onClicked: commandBar.show(); Accessible.description: "Open the Blossom command bar." }
                 Label { text: BlossomBroker.liveEnvironment ? "Live session" : "Workspace"; color: Theme.textSecondary; font.family: Theme.sans }
                 Item { Layout.fillWidth: true }
                 BlossomIconButton { symbol: BlossomBroker.quickStatus.network === "ethernet" ? "↔" : "≋"; description: BlossomBroker.quickStatus.network === "wifi" ? "Wi-Fi connected" : BlossomBroker.quickStatus.network === "ethernet" ? "Ethernet connected" : "Network " + BlossomBroker.network.connectivity; selected: root.quickVisible; onClicked: { root.quickVisible = !root.quickVisible; root.powerVisible = false } }
@@ -266,12 +275,13 @@ ShellRoot {
                 RowLayout {
                     anchors { fill: parent; margins: 10 } spacing: 8
                     Item { Layout.fillWidth: true }
+                    BlossomDockItem { iconSource: "icon-agent.svg"; text: "Blossom"; description: "Blossom command bar"; selected: commandBar.open; accent: true; onClicked: commandBar.show() }
                     BlossomDockItem { iconSource: "icon-apps.svg"; text: "Applications"; description: "Applications"; selected: root.launcherVisible; onClicked: root.launcherVisible = !root.launcherVisible }
                     BlossomDockItem { iconSource: "icon-files.svg"; text: "Files"; description: "Files"; onClicked: BlossomBroker.openFiles() }
                     BlossomDockItem { iconSource: "icon-browser.svg"; text: "Browser"; description: "Web Browser"; onClicked: BlossomBroker.openBrowser() }
                     BlossomDockItem { iconSource: "icon-terminal.svg"; text: "Terminal"; description: "Terminal"; onClicked: BlossomBroker.openTerminal() }
                     Rectangle { width: 1; height: 34; color: Theme.lineStrong }
-                    BlossomDockItem { iconSource: "icon-agent.svg"; text: "Agent"; description: "Blossom Agent"; selected: root.activityVisible; onClicked: root.activityVisible = !root.activityVisible }
+                    BlossomDockItem { symbol: "≡"; text: "Activity"; description: "Blossom Agent activity"; selected: root.activityVisible; onClicked: root.activityVisible = !root.activityVisible }
                     Item { Layout.fillWidth: true }
                 }
             }
@@ -295,6 +305,8 @@ ShellRoot {
                                 : BlossomBroker.state === "waiting" ? "Review the exact proposed effect in the approval window."
                                 : BlossomBroker.state === "submitting" ? "Authenticating and applying the approved effect…"
                                 : BlossomBroker.state === "unavailable" ? BlossomBroker.failureReason + " Nothing was applied."
+                                : BlossomBroker.state === "unsupported" ? "Blossom can't do this yet. Today it can create one file in your workspace."
+                                : BlossomBroker.state === "model_failed" ? "Blossom couldn't work out that request. Nothing was done."
                                 : "Ask the local agent for one bounded action. Proposed effects never run without exact approval."
                             color: BlossomBroker.state === "unavailable" ? Theme.danger : Theme.textSecondary
                             font.family: Theme.sans
@@ -356,6 +368,8 @@ ShellRoot {
                                     : BlossomBroker.state === "cancelled" ? "Cancelled · nothing was applied."
                                     : BlossomBroker.state === "expired" ? "Expired · nothing was applied."
                                     : BlossomBroker.state === "verification_failed" ? "Verification failed · review the activity below."
+                                    : BlossomBroker.state === "unsupported" ? "Blossom can't do this yet. Today it can create one file in your workspace."
+                                    : BlossomBroker.state === "model_failed" ? "Blossom couldn't work out that request. Nothing was done."
                                     : BlossomBroker.state === "unavailable" ? "Request failed closed · " + BlossomBroker.failureReason
                                     : "Ready"
                                 color: BlossomBroker.state === "waiting" || BlossomBroker.state === "verified"

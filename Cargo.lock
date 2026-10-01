@@ -214,6 +214,7 @@ dependencies = [
  "getrandom 0.3.4",
  "libc",
  "nix",
+ "rustix",
  "serde",
  "serde_json",
  "sha2",

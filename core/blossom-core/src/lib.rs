@@ -3,6 +3,7 @@
 pub mod approval;
 pub mod audit;
 pub mod battery_summary;
+pub mod command_bar;
 pub mod context;
 pub mod durable_memory;
 pub mod engine;
@@ -30,6 +31,7 @@ pub mod storage_summary;
 pub mod uptime;
 pub mod verification;
 pub mod workspace_create;
+pub mod workspace_plan;
 
 pub use approval::{ApprovalError, ApprovalToken};
 pub use audit::{
@@ -41,6 +43,15 @@ pub use battery_summary::{
     SYSTEM_BUS_ADDRESS as BATTERY_SYSTEM_BUS_ADDRESS, UPOWER_DESTINATION, UPOWER_DEVICE_INTERFACE,
     UPOWER_DISPLAY_DEVICE_PATH, UnavailableBatterySummaryProvider, UpowerBatterySummaryProvider,
     validate_battery_observation,
+};
+pub use command_bar::{
+    ApplicationOrigin, BrokerCommandRow, BrokerCommandStore, CREATE_FILE_TEMPLATE,
+    CommandActivation, CommandActivationWire, CommandQueryWire, CommandRoute, CommandRow,
+    CommandStoreError, DesktopEntryError, LocalApplication, MAX_COMMAND_PEERS,
+    MAX_COMMAND_QUERY_BYTES, MAX_COMMAND_RESULTS, MAX_DESKTOP_ENTRIES, MAX_DESKTOP_ENTRY_BYTES,
+    UNSUPPORTED_RESPONSE, WorkspaceFile, activate_command, decode_command_activation,
+    decode_command_query, discover_local_applications, parse_desktop_entry, route_command,
+    suggest_commands, unsupported_command_result,
 };
 pub use context::{
     BATTERY_MAX_AGE_MS, BATTERY_MIN_POLL_INTERVAL_MS, CONTEXT_PROTOCOL_VERSION, ContextObservation,
@@ -193,4 +204,15 @@ pub use workspace_create::{
     model_workspace_proposal_schema, model_workspace_proposal_schema_bytes,
     parse_obvious_workspace_create, resolve_model_workspace_proposal,
     validate_model_workspace_proposal, validate_relative_destination, validate_workspace_selection,
+};
+pub use workspace_plan::{
+    MAX_PENDING_WORKSPACE_PLANS, MAX_WORKSPACE_PATH_COMPONENT_BYTES, MAX_WORKSPACE_PATH_DEPTH,
+    MAX_WORKSPACE_PLAN_DIRECTORY_AUTHORITIES, MAX_WORKSPACE_PLAN_EFFECTS,
+    MAX_WORKSPACE_PLAN_MESSAGE_BYTES, MAX_WORKSPACE_RELATIVE_PATH_BYTES, PreparedWorkspacePlan,
+    PreparedWorkspacePlanEffect, ValidatedWorkspacePlanEffect, ValidatedWorkspacePlanProposal,
+    WORKSPACE_PLAN_SCHEMA_VERSION, WorkspacePlanAuthorityResolver, WorkspacePlanCapacity,
+    WorkspacePlanCapacityError, WorkspacePlanCapacityReservation, WorkspacePlanDirectoryIdentity,
+    WorkspacePlanError, WorkspacePlanFileIdentity, WorkspacePlanOrigin,
+    WorkspacePlanParentAuthority, WorkspacePlanPrepareError, WorkspacePlanProposalResolver,
+    WorkspaceRelativePath,
 };

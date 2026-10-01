@@ -147,8 +147,8 @@ entries = [json.loads(line) for line in pathlib.Path(sys.argv[1]).read_text().sp
 positive = [entry for entry in entries if entry["case"] == "positive"]
 negative = [entry for entry in entries if entry["case"] != "positive"]
 valid = (
-    len(entries) == 100
-    and [entry["sequence"] for entry in entries] == list(range(1, 101))
+    len(entries) == 200
+    and [entry["sequence"] for entry in entries] == list(range(1, 201))
     and all(entry["status"] == "passed" for entry in entries)
     and collections.Counter(entry["case"] for entry in entries) == {
         "positive": 20,
@@ -156,11 +156,27 @@ valid = (
         "indirect_invalid": 20,
         "indirect_valid": 20,
         "mutation": 20,
+        "exact_effect": 20,
+        "supported_make": 20,
+        "supported_write": 20,
+        "unsupported_organize": 20,
+        "unsupported_delete": 20,
     }
     and all(entry["effects"] == 1 and entry["executor_starts"] == 0 for entry in positive)
     and all(entry["effects"] == 0 and entry["executor_starts"] == 0 for entry in negative)
     and all(entry["context_reads"] == 1 for entry in entries if entry["case"].startswith("indirect_"))
 )
+supported_classification = [
+    entry for entry in entries
+    if entry["case"] in {"positive", "supported_make", "supported_write"}
+]
+unsupported_classification = [
+    entry for entry in entries
+    if entry["case"] in {"direct_injection", "unsupported_organize", "unsupported_delete"}
+]
+valid = valid and all(entry.get("classification_correct") is True for entry in (
+    supported_classification + unsupported_classification
+))
 digests = {
     "proposal": {entry["parsed_proposal_digest"] for entry in positive},
     "preview": {entry["preview_semantic_digest"] for entry in positive},
@@ -170,7 +186,9 @@ valid = valid and all(len(values) == 1 for values in digests.values())
 if not valid:
     raise SystemExit(1)
 print(
-    "attempts=20 records=100 effects=20 executor_starts=0 "
+    "attempts=20 records=200 effects=20 executor_starts=0 "
+    f"supported_wrong={sum(not entry['classification_correct'] for entry in supported_classification)}/60 "
+    f"unsupported_wrong={sum(not entry['classification_correct'] for entry in unsupported_classification)}/60 "
     f"proposal_sha256={next(iter(digests['proposal']))} "
     f"preview_sha256={next(iter(digests['preview']))} "
     f"file_sha256={next(iter(digests['file']))}"

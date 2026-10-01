@@ -65,7 +65,7 @@ grep -q '^BLOSSOM_ARM64_QUALIFICATION_READY ' "$result" || {
   echo "error: ARM64 runtime qualification failed; serial log: $serial" >&2
   exit 1
 }
-grep -q '^BLOSSOM_ARM64_AGENT_GATE_READY attempts=20 records=100 effects=20 executor_starts=0 ' "$result" || {
+grep -q '^BLOSSOM_ARM64_AGENT_GATE_READY attempts=20 records=200 effects=20 executor_starts=0 supported_wrong=0/60 unsupported_wrong=0/60 ' "$result" || {
   echo "error: ARM64 agent image gate failed; serial log: $serial" >&2
   exit 1
 }

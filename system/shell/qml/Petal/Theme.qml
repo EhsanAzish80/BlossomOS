@@ -27,16 +27,16 @@ QtObject {
     readonly property color blossom: "#f3a6bc"      // agent, primary action, focus, selection
     readonly property color blossomHover: "#f7c1d1"
     readonly property color blossomPressed: "#e08ba3"
-    readonly property color onBlossom: "#2a1520"
+    readonly property color blossomForeground: "#2a1520"
     readonly property color blossomTint: "#3a2530"
     readonly property color decision: "#f2c265"     // only: a decision is waiting for you
-    readonly property color onDecision: "#2a1e08"
+    readonly property color decisionForeground: "#2a1e08"
     readonly property color decisionTint: "#3a3020"
     readonly property color verified: "#9bd3a6"     // outcome confirmed by verification
     readonly property color verifiedTint: "#1e2e22"
     readonly property color danger: "#f28b82"       // denied, failed, destructive
     readonly property color dangerPressed: "#e0746b"
-    readonly property color onDanger: "#2b0f0d"
+    readonly property color dangerForeground: "#2b0f0d"
     readonly property color dangerTint: "#3a1e1e"
     readonly property color dangerLine: "#5a2a28"
     readonly property color info: "#9ec1f2"         // neutral system facts

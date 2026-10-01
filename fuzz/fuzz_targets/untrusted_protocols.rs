@@ -4,12 +4,17 @@ use blossom_core::{
     ApprovalCapacity, GatewayFrameDecoder, GatewayProfile, ModelProfile, ModelProviderKind,
     RequestOrigin, RequestResolver, SessionContext, ToolRequestWire, decode_gateway_cancel,
     decode_gateway_event, decode_gateway_hello, decode_gateway_private_request,
-    decode_gateway_synthetic_request, decode_shell_client_request,
+    decode_gateway_synthetic_request, decode_shell_client_request, WorkspacePlanOrigin,
+    WorkspacePlanProposalResolver,
 };
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
     let _ = decode_shell_client_request(data);
+    let _ = WorkspacePlanProposalResolver::resolve(
+        data,
+        WorkspacePlanOrigin::ModelProposedScheme,
+    );
     let mut decoder = GatewayFrameDecoder::default();
     if let Ok(frames) = decoder.push(data) {
         for frame in frames {
