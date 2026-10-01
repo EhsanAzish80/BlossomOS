@@ -25,6 +25,24 @@ bool observe(BlossomBroker &broker, Start start, Check check) {
     return check();
 }
 
+template <typename Start, typename Check>
+bool observeCommand(BlossomBroker &broker, Start start, Check check) {
+    QEventLoop loop;
+    QTimer timeout;
+    timeout.setSingleShot(true);
+    QObject::connect(&timeout, &QTimer::timeout, &loop, &QEventLoop::quit);
+    QObject::connect(&broker, &BlossomBroker::commandRowsChanged, &loop, [&] {
+        if (check()) loop.quit();
+    });
+    QObject::connect(&broker, &BlossomBroker::commandStateChanged, &loop, [&] {
+        if (check()) loop.quit();
+    });
+    start();
+    timeout.start(5000);
+    loop.exec();
+    return check();
+}
+
 int main(int argc, char **argv) {
     QCoreApplication app(argc, argv);
     const auto exact = QVariant::fromValue(quint16(1));
@@ -33,6 +51,12 @@ int main(int argc, char **argv) {
     std::printf("Qt implicit signature: %s; explicit signature: q\n",
                 QDBusMetaType::typeToSignature(promoted.metaType()));
     BlossomBroker broker;
+    if (!observeCommand(broker, [&] { broker.queryCommandBar(QStringLiteral("fixture")); }, [&] {
+            return broker.commandState() == "ready" && broker.commandRows().size() == 1;
+        })) return 12;
+    const auto commandRow = broker.commandRows().first().toMap();
+    if (commandRow.value(QStringLiteral("kind")) != QStringLiteral("ask_blossom") ||
+        commandRow.value(QStringLiteral("id")).toString().size() != 32) return 13;
     bool activityReceived = false;
     QObject::connect(&broker, &BlossomBroker::activityChanged, &app, [&] { activityReceived = true; });
     if (!observe(broker, [&] { broker.refreshActivity(); }, [&] { return activityReceived; })) return 2;
@@ -48,6 +72,6 @@ int main(int argc, char **argv) {
     const auto cancelledActivityCount = broker.activity().size();
     if (!observe(broker, [] {}, [&] { return broker.activity().size() > cancelledActivityCount; })) return 9;
     if (broker.state() != "cancelled") return 10;
-    std::puts("Real Qt/Rust bus: bounded agent request, fail-closed unavailable model, activity, preview, denial, cancellation and post-decision refresh passed; no approval sent.");
+    std::puts("Real Qt/Rust bus: opaque command rows, bounded agent request, fail-closed unavailable model, activity, preview, denial, cancellation and post-decision refresh passed; no approval sent.");
     return 0;
 }

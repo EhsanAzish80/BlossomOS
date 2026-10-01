@@ -19,6 +19,9 @@ class BlossomBroker final : public QObject {
     Q_PROPERTY(QVariantMap quickStatus READ quickStatus NOTIFY quickStatusChanged FINAL)
     Q_PROPERTY(QString desktopMessage READ desktopMessage NOTIFY desktopMessageChanged FINAL)
     Q_PROPERTY(QString failureReason READ failureReason NOTIFY failureReasonChanged FINAL)
+    Q_PROPERTY(QVariantList commandRows READ commandRows NOTIFY commandRowsChanged FINAL)
+    Q_PROPERTY(QString commandState READ commandState NOTIFY commandStateChanged FINAL)
+    Q_PROPERTY(QString commandMessage READ commandMessage NOTIFY commandMessageChanged FINAL)
     Q_PROPERTY(bool onboardingRequired READ onboardingRequired NOTIFY onboardingRequiredChanged FINAL)
     Q_PROPERTY(bool liveEnvironment READ liveEnvironment CONSTANT FINAL)
 
@@ -35,9 +38,14 @@ public:
     [[nodiscard]] QString desktopMessage() const;
     [[nodiscard]] QString failureReason() const;
     [[nodiscard]] bool onboardingRequired() const;
+    [[nodiscard]] QVariantList commandRows() const;
+    [[nodiscard]] QString commandState() const;
+    [[nodiscard]] QString commandMessage() const;
 
     Q_INVOKABLE void requestSystemUname();
     Q_INVOKABLE void requestAgentTurn(const QString &prompt);
+    Q_INVOKABLE void queryCommandBar(const QString &query);
+    Q_INVOKABLE void activateCommandRow(const QString &rowId);
     Q_INVOKABLE void approveOnce();
     Q_INVOKABLE void deny();
     Q_INVOKABLE void cancelPending();
@@ -73,6 +81,9 @@ signals:
     void desktopMessageChanged();
     void failureReasonChanged();
     void onboardingRequiredChanged();
+    void commandRowsChanged();
+    void commandStateChanged();
+    void commandMessageChanged();
 
 private:
     void launchDesktop(const QString &action);
@@ -85,6 +96,7 @@ private:
     void clearNetwork();
     void clearQuickStatus();
     void setState(const QString &value);
+    void setCommandState(const QString &state, const QString &message = QString());
 
     QString m_state = QStringLiteral("idle");
     QVariantMap m_preview;
@@ -97,6 +109,9 @@ private:
                               {QStringLiteral("bluetooth"), QStringLiteral("unavailable")}};
     QString m_desktopMessage;
     QString m_failureReason;
+    QVariantList m_commandRows;
+    QString m_commandState = QStringLiteral("idle");
+    QString m_commandMessage;
     bool m_onboardingRequired = true;
     QDBusServiceWatcher m_serviceWatcher;
     QTimer m_expiryTimer;
@@ -108,4 +123,5 @@ private:
     quint64 m_batteryGeneration = 0;
     quint64 m_networkGeneration = 0;
     quint64 m_quickStatusGeneration = 0;
+    quint64 m_commandGeneration = 0;
 };

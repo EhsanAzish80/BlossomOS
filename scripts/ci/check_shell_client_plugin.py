@@ -22,6 +22,8 @@ def main() -> None:
         '"/org/blossomos/Shell1"',
         '"StartSystemUname1"',
         '"StartAgentTurn1"',
+        '"QueryCommandBar1"',
+        '"ActivateCommandRow1"',
         '"SubmitDecision1"',
         '"CancelPending1"',
         '"ReadActivity1"',
@@ -50,7 +52,7 @@ def main() -> None:
     ]:
         require(forbidden not in text, f"forbidden client authority: {forbidden}")
     header = (PLUGIN / "blossombroker.h").read_text()
-    require(header.count("Q_INVOKABLE") == 26, "client invokable surface drift")
+    require(header.count("Q_INVOKABLE") == 28, "client invokable surface drift")
     require("onboardingRequired" in header and "dismissOnboarding" in header,
             "fixed onboarding surface is missing")
     client = (PLUGIN / "blossombroker.cpp").read_text()
@@ -86,6 +88,9 @@ def main() -> None:
     require("MaxAgentPromptBytes" in client and "prompt.toUtf8()" in client and
             "prompt.contains(QChar::Null)" in client,
             "agent prompt must be UTF-8 bounded before crossing D-Bus")
+    require("MaxCommandRows" in client and "validRowId" in client and
+            "safeDisplayText" in client and "m_commandGeneration" in client,
+            "command rows must be bounded, opaque, and stale-reply safe")
     require('setState(QStringLiteral("requesting"))' in client,
             "request start must close the rapid-click race")
     require("MaxFailureReasonCharacters" in client and "boundedFailureReason" in client,
@@ -123,6 +128,9 @@ def main() -> None:
     require('requestAgentTurn(QStringLiteral("fixture qualification"))' in bus_test and
             'broker.state() == "unavailable"' in bus_test,
             "real client bus test must exercise the agent method and fail closed without a model")
+    require('queryCommandBar(QStringLiteral("fixture"))' in bus_test and
+            'QStringLiteral("ask_blossom")' in bus_test,
+            "real client bus test must validate broker-authored opaque command rows")
 
 
 if __name__ == "__main__":

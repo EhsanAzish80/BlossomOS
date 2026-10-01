@@ -173,7 +173,8 @@ def main() -> None:
         'Accessible.description: "Approve only this exact request for one execution."',
         'Accessible.description: "Request the fixed kernel identity diagnostic."',
         'Accessible.description: "Send this request to the local model through the Blossom gateway."',
-        'Accessible.description: "Open the Blossom OS application launcher."',
+        'Accessible.description: "Open the Blossom command bar."',
+        'Accessible.name: "Blossom command"',
     ]:
         require(snippet in qml, f"missing accessibility contract: {snippet}")
     for target in ["approveButton", "denyButton"]:
