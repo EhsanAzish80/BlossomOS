@@ -181,6 +181,12 @@ def check_polkit_helper_preset() -> None:
             "blossom-shell must depend on the reviewed graphical PolicyKit agent")
     require("hyprpolkitagent" not in shell_package,
             "the crashing Hyprtoolkit PolicyKit agent must not return")
+    require("'ttf-ibm-plex'" in shell_package,
+            "blossom-shell must depend on IBM Plex")
+    require("IBM-Plex-OFL.txt" in shell_package,
+            "blossom-shell must ship the IBM Plex OFL licence")
+    require("license=('Apache-2.0' 'OFL-1.1')" in shell_package,
+            "blossom-shell package metadata must declare the IBM Plex OFL")
 
 
 def check_real_pam_qualification() -> None:

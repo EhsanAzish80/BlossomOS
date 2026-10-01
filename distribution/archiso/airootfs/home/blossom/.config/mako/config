@@ -1,16 +1,20 @@
 anchor=top-right
-background-color=#171d27f2
-border-color=#506987ff
-border-radius=12
-border-size=2
+background-color=#1a171df5
+border-color=#463f4cff
+border-radius=14
+border-size=1
 default-timeout=7000
-font=Noto Sans 11
+font=IBM Plex Sans 11
 icons=1
 layer=overlay
 margin=14
 padding=14
-text-color=#f4f7fbff
+text-color=#f3eef2ff
 width=380
+progress-color=over #f3a6bcff
+
+[urgency=critical]
+border-color=#f28b82ff
 
 [mode=do-not-disturb]
 invisible=1

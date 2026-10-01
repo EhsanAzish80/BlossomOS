@@ -24,6 +24,19 @@ The Agent panel accepts one bounded prompt and sends it through the fixed shell
 D-Bus method. Model proposals still resolve, enter policy, and require the
 separate exact-preview approval ceremony before any effect.
 
+Ordinary shell presentation uses the local `Petal` QML singleton for color,
+type, spacing, radius, motion, and focus tokens. Petal contains presentation
+data only and cannot import the broker plugin or define executable behavior.
+IBM Plex is supplied by the packaged `ttf-ibm-plex` dependency, with its OFL
+licence installed alongside the shell package.
+
+The approval window deliberately does not import Petal. It retains a fixed
+security palette and the header `Blossom approval · drawn by the system broker`
+so ordinary theme changes cannot silently make authorization look like another
+command-bar result. This is a recognizable cue, not protection against a
+same-user process drawing a lookalike window; ADR-0034 records that remaining
+overlay-phishing risk.
+
 The approval overlay focuses denial as its safe default, cycles Tab and Backtab
 only between the two decision controls, maps assistive press actions to the same
 fixed broker calls, and maps the standard Qt window closing signal to pending

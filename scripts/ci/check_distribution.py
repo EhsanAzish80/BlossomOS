@@ -49,12 +49,16 @@ for required in ("iso_name=\"blossom-os\"", "arch=\"x86_64\"", "uefi-x64.systemd
         fail(f"missing fixed image property: {required}")
 if "$(" in profile or "`" in profile:
     fail("image identity contains dynamic shell evaluation")
-for package in ("blossom-core", "blossom-shell"):
+package_licenses = {
+    "blossom-core": "license=('Apache-2.0')",
+    "blossom-shell": "license=('Apache-2.0' 'OFL-1.1')",
+}
+for package, expected_license in package_licenses.items():
     pkgbuild = DIST / "packages" / package / "PKGBUILD"
     text = pkgbuild.read_text(encoding="utf-8")
     if (f"pkgname={package}" not in text or
             "arch=('x86_64' 'aarch64')" not in text or
-            "license=('Apache-2.0')" not in text):
+            expected_license not in text):
         fail(f"invalid package identity: {package}")
     if re.search(r"\b(curl|wget|git clone|sudo|systemctl enable)\b", text):
         fail(f"forbidden package side effect: {package}")
