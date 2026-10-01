@@ -93,3 +93,13 @@ The follow-up fix must expose the complete original request, destination,
 content, and byte length without elision, and must prove the literal create
 request maps to the requested name and content before this finding can be
 closed.
+
+## 2026-10-01 closure
+
+The follow-up installed-package gate closed this finding. The literal request
+above used the deterministic parser, the live approval window exposed the exact
+request, destination, content, byte length, and proposal source through AT-SPI,
+one real PAM challenge authorized the effect, and the verified on-disk file
+matched the requested 35 bytes. See
+`EXACT_EFFECT_INSTALLED_PACKAGE_EVIDENCE.md` for the environment, digests,
+automated checks, and limitations.

@@ -14,6 +14,7 @@ RestartSec=2
 RuntimeDirectory=quickshell
 RuntimeDirectoryMode=0700
 Environment=QML2_IMPORT_PATH=/usr/lib/qt6/qml
+Environment=QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict

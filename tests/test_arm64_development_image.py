@@ -120,6 +120,8 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "xres=$xres,yres=$yres",
             "edid=on",
             "zoom-to-fit=off",
+            "virtio-serial-pci",
+            "org.qemu.guest_agent.0",
         ):
             self.assertIn(required, text)
         self.assertNotIn("qemu-system-x86_64", text)

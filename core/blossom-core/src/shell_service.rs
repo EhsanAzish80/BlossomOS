@@ -1090,10 +1090,13 @@ mod tests {
     #[test]
     fn matched_invalid_direct_create_is_rejected_without_model_repair() {
         let (workspace, workspace_text) = indirect_workspace("fixture");
+        let initial_entries = std::fs::read_dir(&workspace)
+            .expect("workspace readable before request")
+            .count();
         let mut service = production_like_service(Rc::new(Cell::new(0)))
             .with_agent_workspace(workspace_text)
             .with_agent_turn_provider(ModelMustNotRun);
-        assert_eq!(
+        assert!(matches!(
             service.begin_agent_turn(
                 peer(":1.92"),
                 "create Bad Name.txt containing do not repair this",
@@ -1102,12 +1105,12 @@ mod tests {
             Err(ShellServiceError::Agent(
                 AgentTurnError::InvalidDirectRequest
             ))
-        );
+        ));
         assert_eq!(
             std::fs::read_dir(&workspace)
                 .expect("workspace readable")
                 .count(),
-            0
+            initial_entries
         );
         std::fs::remove_dir_all(workspace).expect("remove invalid direct workspace");
     }

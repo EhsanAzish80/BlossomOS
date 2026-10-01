@@ -51,6 +51,9 @@ exec qemu-system-aarch64 \
   -device virtio-net-pci,netdev=net0 \
   -netdev user,id=net0 \
   -device virtio-rng-pci \
+  -device virtio-serial-pci \
+  -chardev null,id=qga \
+  -device virtserialport,chardev=qga,name=org.qemu.guest_agent.0 \
   -audiodev coreaudio,id=audio0 \
   -device virtio-sound-pci,audiodev=audio0 \
   -display cocoa,gl=off,zoom-to-fit=off \
