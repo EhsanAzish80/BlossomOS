@@ -31,6 +31,7 @@ pub mod storage_summary;
 pub mod uptime;
 pub mod verification;
 pub mod workspace_create;
+pub mod workspace_plan;
 
 pub use approval::{ApprovalError, ApprovalToken};
 pub use audit::{
@@ -203,4 +204,15 @@ pub use workspace_create::{
     model_workspace_proposal_schema, model_workspace_proposal_schema_bytes,
     parse_obvious_workspace_create, resolve_model_workspace_proposal,
     validate_model_workspace_proposal, validate_relative_destination, validate_workspace_selection,
+};
+pub use workspace_plan::{
+    MAX_PENDING_WORKSPACE_PLANS, MAX_WORKSPACE_PATH_COMPONENT_BYTES, MAX_WORKSPACE_PATH_DEPTH,
+    MAX_WORKSPACE_PLAN_DIRECTORY_AUTHORITIES, MAX_WORKSPACE_PLAN_EFFECTS,
+    MAX_WORKSPACE_PLAN_MESSAGE_BYTES, MAX_WORKSPACE_RELATIVE_PATH_BYTES, PreparedWorkspacePlan,
+    PreparedWorkspacePlanEffect, ValidatedWorkspacePlanEffect, ValidatedWorkspacePlanProposal,
+    WORKSPACE_PLAN_SCHEMA_VERSION, WorkspacePlanAuthorityResolver, WorkspacePlanCapacity,
+    WorkspacePlanCapacityError, WorkspacePlanCapacityReservation, WorkspacePlanDirectoryIdentity,
+    WorkspacePlanError, WorkspacePlanFileIdentity, WorkspacePlanOrigin,
+    WorkspacePlanParentAuthority, WorkspacePlanPrepareError, WorkspacePlanProposalResolver,
+    WorkspaceRelativePath,
 };

@@ -74,9 +74,13 @@ compatibility, packaging, or contributor obligations.
 - Trusted approval authentication: ADR-0034 requires password-backed polkit
   authentication for model-proposed effects, removes raw input-device access
   from the desktop user, and records overlay phishing as a remaining risk.
-- Unified local command bar: ADR-0035 proposes deterministic local routing
+- Unified local command bar: ADR-0035 accepts deterministic local routing
   before an explicit agent handoff, a centered dock/keyboard surface, no prompt
   history, and unchanged separate exact-effect approval.
+- Bounded workspace plan approval: ADR-0036 accepts one password-backed
+  decision over an exact retained plan of no-replace directory creation and
+  same-filesystem file moves, with verification, encrypted recovery journaling
+  and freshly approved undo. Learned labels and embeddings remain deferred.
 - Sandbox and resource-control stack.
 - Audit storage, integrity, redaction, and retention.
 - Quickshell/Hyprland support and compatibility policy: initial boundary and

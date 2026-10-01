@@ -64,6 +64,7 @@ class Arm64AgentContractTests(unittest.TestCase):
             ROOT / "core/blossom-core/src/approval.rs",
             ROOT / "core/blossom-core/src/request.rs",
             ROOT / "core/blossom-core/src/workspace_create.rs",
+            ROOT / "core/blossom-core/src/workspace_plan.rs",
             ROOT / "core/blossom-core/src/shell_service.rs",
         )
         for path in authority_modules:
@@ -81,6 +82,30 @@ class Arm64AgentContractTests(unittest.TestCase):
             (ROOT / "core/blossom-core/src/service_status.rs", "ServiceSelection"),
             (ROOT / "core/blossom-core/src/request.rs", "ToolRequest"),
             (ROOT / "core/blossom-core/src/prepared_request.rs", "PreparedToolRequest"),
+            (
+                ROOT / "core/blossom-core/src/workspace_plan.rs",
+                "ValidatedWorkspacePlanEffect",
+            ),
+            (
+                ROOT / "core/blossom-core/src/workspace_plan.rs",
+                "ValidatedWorkspacePlanProposal",
+            ),
+            (
+                ROOT / "core/blossom-core/src/workspace_plan.rs",
+                "WorkspacePlanDirectoryIdentity",
+            ),
+            (
+                ROOT / "core/blossom-core/src/workspace_plan.rs",
+                "WorkspacePlanFileIdentity",
+            ),
+            (
+                ROOT / "core/blossom-core/src/workspace_plan.rs",
+                "PreparedWorkspacePlanEffect",
+            ),
+            (
+                ROOT / "core/blossom-core/src/workspace_plan.rs",
+                "PreparedWorkspacePlan",
+            ),
         )
         for path, type_name in declarations:
             source = path.read_text()
@@ -89,6 +114,30 @@ class Arm64AgentContractTests(unittest.TestCase):
             derive_end = source.index(")]", derive_start)
             derive = source[derive_start:derive_end]
             self.assertNotIn("Deserialize", derive, f"{path}:{type_name}")
+
+    def test_prepared_workspace_plan_cannot_be_cloned_or_serialized(self):
+        source = (ROOT / "core/blossom-core/src/workspace_plan.rs").read_text()
+        declaration = source.index("PreparedWorkspacePlan {")
+        derive_start = source.rfind("#[derive(", 0, declaration)
+        derive_end = source.index(")]", derive_start)
+        derive = source[derive_start:derive_end]
+        self.assertNotIn("Clone", derive)
+        self.assertNotIn("Serialize", derive)
+        self.assertNotIn("Deserialize", derive)
+
+    def test_workspace_plan_authority_is_kernel_contained_and_mount_bound(self):
+        source = (ROOT / "core/blossom-core/src/workspace_plan.rs").read_text()
+        for required in (
+            "ResolveFlag::RESOLVE_BENEATH",
+            "ResolveFlag::RESOLVE_NO_SYMLINKS",
+            "ResolveFlag::RESOLVE_NO_MAGICLINKS",
+            "StatxFlags::MNT_ID",
+            "SourceNotRegularFile",
+            "IdentityOverlap",
+            "MAX_WORKSPACE_PLAN_DIRECTORY_AUTHORITIES",
+            '"plan spans too many folders; split it"',
+        ):
+            self.assertIn(required, source)
 
     def test_legacy_domain_parser_and_approval_store_are_gone(self):
         request = (ROOT / "core/blossom-core/src/request.rs").read_text()
@@ -104,6 +153,7 @@ class Arm64AgentContractTests(unittest.TestCase):
         self.assertIn("ToolRequestWire::parse_json", fuzz)
         self.assertIn("RequestResolver::resolve", fuzz)
         self.assertIn("capacity.reserve()", fuzz)
+        self.assertIn("WorkspacePlanProposalResolver::resolve", fuzz)
 
     def test_qualification_driver_uses_one_public_shell_path(self):
         driver = (ROOT / "scripts/qualify_agent_pipeline.py").read_text()
