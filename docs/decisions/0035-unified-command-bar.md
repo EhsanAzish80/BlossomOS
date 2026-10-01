@@ -20,9 +20,14 @@ execution.
 
 ### Surface and focus
 
-The dock contains one command-bar button. `Super+Space` opens the same centered
-overlay and places keyboard focus in its input. `Escape` closes it without
-submitting or preserving the text.
+The Blossom flower is the first dock item and opens the command bar. The same
+flower at the left edge of the top bar is a second visible entry point.
+`Super+Space` opens the same centered overlay and places keyboard focus in its
+input. `Escape` closes it without submitting or preserving the text.
+
+Every dock icon has an accessible name and a visible hover label. The first
+version includes no decorative trash affordance; a trash item may appear only
+if the file manager exposes a real trash location and behavior.
 
 The bar yields focus when the separate broker-owned approval or PolicyKit
 authentication window appears. It must not reclaim focus until those surfaces
@@ -33,8 +38,9 @@ request.
 
 Trusted local routing evaluates input in this order:
 
-1. exact application matches derived from installed `.desktop` files;
-2. exact file matches within the configured workspace;
+1. normalized local application matches derived from installed `.desktop`
+   files;
+2. normalized file matches within the configured workspace;
 3. the existing deterministic `create NAME containing CONTENT` parser; and
 4. one explicit `Ask Blossom: ...` choice for all other non-empty input.
 
@@ -58,11 +64,16 @@ selected when a local result exists. For example, `fire` selects Firefox first
 and shows `Ask Blossom: fire` beneath it. The model does not run unless the user
 explicitly selects and activates that final row.
 
+Prefix input such as `fire` may produce multiple normalized local matches. The
+bar lists them in stable order instead of guessing; an exact result remains a
+single local row.
+
 The current agent can propose only one create-only workspace file. When a
 request cannot be satisfied by that admitted capability, trusted orchestration
-returns the fixed plain response `Blossom can't do this yet`. It produces no
-proposal, no approval window and no effect. The model may not reinterpret an
-unsupported request as an unrelated file creation.
+returns the fixed plain response `Blossom can't do this yet. Today it can create
+one file in your workspace.` It produces no proposal, no approval window and no
+effect. The model may not reinterpret an unsupported request as an unrelated
+file creation.
 
 ### Ambiguity and truthful suggestions
 
@@ -86,6 +97,10 @@ The first version stores no prompt or query history. Closing the overlay clears
 its input and results. Audit records retain only the data already required by
 the selected action's existing contract; the command bar adds no new prompt
 retention.
+
+The usable desktop contains no persistent promotional slogan or duplicate
+bottom-corner product label. Those elements may appear in presentation mockups,
+but not in the everyday shell.
 
 ### Approval separation
 
