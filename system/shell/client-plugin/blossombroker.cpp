@@ -510,7 +510,8 @@ void BlossomBroker::handleOutcome(const QByteArray &bytes) {
     }
     if (status == QStringLiteral("denied") || status == QStringLiteral("cancelled") ||
         status == QStringLiteral("expired") ||
-        status == QStringLiteral("verified") || status == QStringLiteral("verification_failed")) {
+        status == QStringLiteral("verified") || status == QStringLiteral("verification_failed") ||
+        status == QStringLiteral("unsupported")) {
         m_preview.clear();
         emit previewChanged();
         clearFailureReason();
