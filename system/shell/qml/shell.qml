@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Wayland
 import Blossom.Shell
 import "Petal"
@@ -39,10 +40,11 @@ ShellRoot {
             root.commandBarVisible = false
         }
     }
-    Shortcut {
-        sequence: "Meta+Space"
-        context: Qt.ApplicationShortcut
-        onActivated: root.commandBarVisible = true
+    GlobalShortcut {
+        appid: "blossom"
+        name: "command-bar"
+        description: "Open the Blossom command bar"
+        onPressed: root.commandBarVisible = true
     }
     Component.onCompleted: {
         BlossomBroker.refreshActivity()

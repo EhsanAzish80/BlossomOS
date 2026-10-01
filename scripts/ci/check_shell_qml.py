@@ -133,6 +133,9 @@ def main() -> None:
     require('import "Petal"' not in approval_qml and "Theme." not in approval_qml,
             "approval presentation must remain independent from the Petal theme")
     shell = (QML / "shell.qml").read_text()
+    theme = (QML / "Petal" / "Theme.qml").read_text()
+    require("property color on" not in theme,
+            "Petal token names must not be parsed as QML signal handlers")
     require(re.search(
         r'if\s*\(root\.activityVisible\)\s*root\.agentHiddenForApproval\s*=\s*true',
         shell,
@@ -148,6 +151,9 @@ def main() -> None:
     ) is not None, "approval must dismiss shell popups before presenting its standard Qt window")
     require("BlossomBroker.failureReason" in shell,
             "agent failure surface must report the bounded broker reason")
+    require('appid: "blossom"' in shell and 'name: "command-bar"' in shell and
+            "GlobalShortcut" in shell,
+            "command bar must register its Hyprland global shortcut")
     require("};" not in shell,
             "shell QML must not terminate grouped properties, child objects, or handlers with semicolons")
     for required in (

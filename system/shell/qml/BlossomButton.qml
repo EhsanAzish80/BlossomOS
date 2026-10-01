@@ -21,8 +21,8 @@ Button {
         text: control.text
         font: control.font
         color: !control.enabled ? Theme.textDisabled
-             : control.primary ? Theme.onBlossom
-             : control.destructive ? ((control.hovered || control.down) ? Theme.onDanger : Theme.danger)
+             : control.primary ? Theme.blossomForeground
+             : control.destructive ? ((control.hovered || control.down) ? Theme.dangerForeground : Theme.danger)
              : control.ghost && !control.hovered ? Theme.textSecondary
              : Theme.text
         horizontalAlignment: Text.AlignHCenter
