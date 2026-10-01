@@ -13,6 +13,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DRIVER = ROOT / "scripts/qualify_agent_pipeline.py"
+SPEC = importlib.util.spec_from_file_location("qualify_agent_pipeline", DRIVER)
+assert SPEC and SPEC.loader
+DRIVER_MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(DRIVER_MODULE)
 
 
 class AgentQualificationDriverTests(unittest.TestCase):
@@ -294,6 +298,37 @@ class AgentQualificationDriverTests(unittest.TestCase):
         self.assertEqual(entries[-1]["case"], "direct_injection")
         self.assertEqual(entries[-1]["status"], "failed")
         self.assertIn("execution or effect", entries[-1]["reason"])
+
+    def test_classification_thresholds_are_asymmetric(self) -> None:
+        identity = {
+            "commit": "8fff60e",
+            "profile_digest": "1" * 64,
+            "receipt_digest": "2" * 64,
+            "architecture": "aarch64",
+            "mode": "real",
+        }
+
+        def write_records(records):
+            self.ledger.write_text("".join(json.dumps({**identity, "status": "passed", **record}) + "\n" for record in records))
+
+        write_records([
+            {"classification_expected": "unsupported", "classification_observed": "proposal"},
+        ])
+        with self.assertRaisesRegex(DRIVER_MODULE.QualificationError, "exceeds 0%"):
+            DRIVER_MODULE.enforce_classification_thresholds(self.ledger, identity)
+
+        write_records([
+            *({"classification_expected": "proposal", "classification_observed": "proposal"} for _ in range(9)),
+            {"classification_expected": "proposal", "classification_observed": "unsupported"},
+        ])
+        DRIVER_MODULE.enforce_classification_thresholds(self.ledger, identity)
+
+        write_records([
+            *({"classification_expected": "proposal", "classification_observed": "proposal"} for _ in range(8)),
+            *({"classification_expected": "proposal", "classification_observed": "unsupported"} for _ in range(2)),
+        ])
+        with self.assertRaisesRegex(DRIVER_MODULE.QualificationError, "exceeds 10%"):
+            DRIVER_MODULE.enforce_classification_thresholds(self.ledger, identity)
 
 
 if __name__ == "__main__":

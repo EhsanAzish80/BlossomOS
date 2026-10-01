@@ -3,7 +3,8 @@ use crate::{
     ShellPeerId, parse_obvious_workspace_create,
 };
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
 pub const CREATE_FILE_TEMPLATE: &str = "create  containing ";
 pub const UNSUPPORTED_RESPONSE: &str =
@@ -11,6 +12,8 @@ pub const UNSUPPORTED_RESPONSE: &str =
 pub const MAX_COMMAND_QUERY_BYTES: usize = 4096;
 pub const MAX_COMMAND_RESULTS: usize = 12;
 pub const MAX_COMMAND_PEERS: usize = 32;
+pub const MAX_DESKTOP_ENTRIES: usize = 512;
+pub const MAX_DESKTOP_ENTRY_BYTES: u64 = 64 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ApplicationOrigin {
@@ -22,8 +25,10 @@ pub enum ApplicationOrigin {
 pub struct LocalApplication {
     pub desktop_id: String,
     pub name: String,
+    match_names: Vec<String>,
     desktop_entry_path: String,
     desktop_entry_sha256: String,
+    launch_argv: Vec<String>,
     origin: ApplicationOrigin,
 }
 
@@ -48,15 +53,271 @@ impl LocalApplication {
         }
         Some(Self {
             desktop_id,
+            match_names: vec![name.clone()],
             name,
             desktop_entry_path,
             desktop_entry_sha256: sha256(desktop_entry_bytes),
+            launch_argv: Vec::new(),
             origin,
         })
     }
 
     pub fn origin(&self) -> ApplicationOrigin {
         self.origin
+    }
+
+    pub fn launch_argv(&self) -> &[String] {
+        &self.launch_argv
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DesktopEntryError {
+    InvalidEncoding,
+    InvalidEntry,
+    Hidden,
+    ExcludedDesktop,
+    UnsupportedLaunchMode,
+    MissingExecutable,
+}
+
+/// Reads a bounded snapshot of application entries. Callers retain the result
+/// and rescan only when their directory watcher reports a change.
+pub fn discover_local_applications(
+    directories: &[(PathBuf, ApplicationOrigin)],
+    locale: &str,
+    current_desktop: &str,
+    path: &str,
+) -> Vec<LocalApplication> {
+    let mut applications = Vec::new();
+    let mut scanned = 0usize;
+    let mut seen_ids = HashSet::new();
+    for (directory, origin) in directories {
+        let Ok(entries) = std::fs::read_dir(directory) else {
+            continue;
+        };
+        let mut entries = entries.flatten().collect::<Vec<_>>();
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            if scanned >= MAX_DESKTOP_ENTRIES {
+                return applications;
+            }
+            scanned += 1;
+            let file_name = entry.file_name();
+            let Some(desktop_id) = file_name.to_str() else {
+                continue;
+            };
+            if !desktop_id.ends_with(".desktop") {
+                continue;
+            }
+            if seen_ids.contains(desktop_id) {
+                continue;
+            }
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+            if !metadata.is_file() || metadata.len() > MAX_DESKTOP_ENTRY_BYTES {
+                continue;
+            }
+            let Ok(bytes) = std::fs::read(entry.path()) else {
+                continue;
+            };
+            if let Ok(application) = parse_desktop_entry(
+                desktop_id,
+                &entry.path(),
+                &bytes,
+                *origin,
+                locale,
+                current_desktop,
+                |program| executable_exists(program, path),
+            ) {
+                seen_ids.insert(desktop_id.to_owned());
+                applications.push(application);
+            }
+        }
+    }
+    applications
+}
+
+pub fn parse_desktop_entry(
+    desktop_id: &str,
+    entry_path: &Path,
+    bytes: &[u8],
+    origin: ApplicationOrigin,
+    locale: &str,
+    current_desktop: &str,
+    executable_exists: impl Fn(&str) -> bool,
+) -> Result<LocalApplication, DesktopEntryError> {
+    if bytes.is_empty() || bytes.len() as u64 > MAX_DESKTOP_ENTRY_BYTES {
+        return Err(DesktopEntryError::InvalidEntry);
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| DesktopEntryError::InvalidEncoding)?;
+    let mut values = HashMap::<String, String>::new();
+    let mut in_desktop_entry = false;
+    for raw_line in text.lines() {
+        let line = raw_line.trim();
+        if line.starts_with('[') && line.ends_with(']') {
+            in_desktop_entry = line == "[Desktop Entry]";
+            continue;
+        }
+        if !in_desktop_entry || line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            return Err(DesktopEntryError::InvalidEntry);
+        };
+        values.entry(key.into()).or_insert_with(|| value.into());
+    }
+    if values.get("Type").map(String::as_str) != Some("Application")
+        || truthy(values.get("Hidden"))
+        || truthy(values.get("NoDisplay"))
+    {
+        return Err(DesktopEntryError::Hidden);
+    }
+    if truthy(values.get("Terminal")) || truthy(values.get("DBusActivatable")) {
+        return Err(DesktopEntryError::UnsupportedLaunchMode);
+    }
+    if !desktop_allowed(&values, current_desktop) {
+        return Err(DesktopEntryError::ExcludedDesktop);
+    }
+    if let Some(try_exec) = values.get("TryExec")
+        && (try_exec.is_empty() || !executable_exists(try_exec))
+    {
+        return Err(DesktopEntryError::MissingExecutable);
+    }
+    let plain_name = values
+        .get("Name")
+        .filter(|value| valid_display_name(value))
+        .ok_or(DesktopEntryError::InvalidEntry)?;
+    let display_name = localized_name(&values, locale).unwrap_or(plain_name);
+    let exec = values.get("Exec").ok_or(DesktopEntryError::InvalidEntry)?;
+    let launch_argv = parse_exec(exec)?;
+    if launch_argv.is_empty() || !executable_exists(&launch_argv[0]) {
+        return Err(DesktopEntryError::MissingExecutable);
+    }
+    let path = entry_path
+        .to_str()
+        .filter(|value| value.starts_with('/') && value.ends_with(".desktop"))
+        .ok_or(DesktopEntryError::InvalidEntry)?;
+    let mut match_names = vec![plain_name.clone()];
+    if display_name != plain_name {
+        match_names.push(display_name.clone());
+    }
+    Ok(LocalApplication {
+        desktop_id: desktop_id.into(),
+        name: display_name.clone(),
+        match_names,
+        desktop_entry_path: path.into(),
+        desktop_entry_sha256: sha256(bytes),
+        launch_argv,
+        origin,
+    })
+}
+
+fn truthy(value: Option<&String>) -> bool {
+    value.is_some_and(|value| value.eq_ignore_ascii_case("true"))
+}
+
+fn desktop_allowed(values: &HashMap<String, String>, current_desktop: &str) -> bool {
+    let current = current_desktop
+        .split(':')
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    let list = |key: &str| {
+        values
+            .get(key)
+            .map(|value| {
+                value
+                    .split(';')
+                    .filter(|item| !item.is_empty())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default()
+    };
+    let only = list("OnlyShowIn");
+    let excluded = list("NotShowIn");
+    (only.is_empty() || only.iter().any(|item| current.contains(item)))
+        && !excluded.iter().any(|item| current.contains(item))
+}
+
+fn localized_name<'a>(values: &'a HashMap<String, String>, locale: &str) -> Option<&'a String> {
+    let normalized = locale.split('.').next().unwrap_or(locale);
+    let language = normalized.split('_').next().unwrap_or(normalized);
+    [format!("Name[{normalized}]"), format!("Name[{language}]")]
+        .into_iter()
+        .find_map(|key| values.get(&key).filter(|value| valid_display_name(value)))
+}
+
+fn valid_display_name(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 255 && !value.chars().any(char::is_control)
+}
+
+fn parse_exec(value: &str) -> Result<Vec<String>, DesktopEntryError> {
+    let mut arguments = Vec::new();
+    let mut current = String::new();
+    let mut quoted = false;
+    let mut escaped = false;
+    let mut chars = value.chars().peekable();
+    while let Some(character) = chars.next() {
+        if escaped {
+            current.push(character);
+            escaped = false;
+        } else if character == '\\' {
+            escaped = true;
+        } else if character == '"' {
+            quoted = !quoted;
+        } else if character == '%' {
+            let Some(code) = chars.next() else {
+                return Err(DesktopEntryError::InvalidEntry);
+            };
+            if code == '%' {
+                current.push('%');
+            } else if !code.is_ascii_alphabetic() {
+                return Err(DesktopEntryError::InvalidEntry);
+            }
+        } else if character.is_whitespace() && !quoted {
+            if !current.is_empty() {
+                arguments.push(std::mem::take(&mut current));
+            }
+        } else if character.is_control() {
+            return Err(DesktopEntryError::InvalidEntry);
+        } else {
+            current.push(character);
+        }
+    }
+    if quoted || escaped {
+        return Err(DesktopEntryError::InvalidEntry);
+    }
+    if !current.is_empty() {
+        arguments.push(current);
+    }
+    Ok(arguments)
+}
+
+fn executable_exists(program: &str, path: &str) -> bool {
+    if program.contains('/') {
+        return is_executable_file(Path::new(program));
+    }
+    path.split(':')
+        .filter(|directory| !directory.is_empty())
+        .any(|directory| is_executable_file(&Path::new(directory).join(program)))
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = path.metadata() else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
     }
 }
 
@@ -98,6 +359,7 @@ pub enum CommandActivation {
         desktop_entry_path: String,
         desktop_entry_sha256: String,
         origin: ApplicationOrigin,
+        launch_argv: Vec<String>,
     },
     OpenWorkspaceFile {
         relative_path: String,
@@ -127,13 +389,22 @@ pub fn route_command(
     let normalized_query = query.to_ascii_lowercase();
     let mut applications = applications
         .iter()
-        .filter(|application| normalized_match(&application.name, &normalized_query))
+        .filter(|application| {
+            application
+                .match_names
+                .iter()
+                .any(|name| normalized_match(name, &normalized_query))
+        })
         .cloned()
         .collect::<Vec<_>>();
     applications.sort_by(|left, right| {
-        left.name
-            .to_ascii_lowercase()
-            .cmp(&right.name.to_ascii_lowercase())
+        (left.origin != ApplicationOrigin::System)
+            .cmp(&(right.origin != ApplicationOrigin::System))
+            .then_with(|| {
+                left.name
+                    .to_ascii_lowercase()
+                    .cmp(&right.name.to_ascii_lowercase())
+            })
             .then_with(|| left.desktop_id.cmp(&right.desktop_id))
     });
 
@@ -200,6 +471,7 @@ pub fn activate_command(row: &CommandRow) -> CommandActivation {
             desktop_entry_path: application.desktop_entry_path.clone(),
             desktop_entry_sha256: application.desktop_entry_sha256.clone(),
             origin: application.origin,
+            launch_argv: application.launch_argv.clone(),
         },
         CommandRow::OpenWorkspaceFile(file) => CommandActivation::OpenWorkspaceFile {
             relative_path: file.relative_path.clone(),
@@ -223,6 +495,13 @@ impl CommandActivation {
                 ..
             } => sha256(bytes) == *desktop_entry_sha256,
             _ => false,
+        }
+    }
+
+    pub fn application_launch_argv(&self) -> Option<&[String]> {
+        match self {
+            Self::OpenApplication { launch_argv, .. } => Some(launch_argv),
+            _ => None,
         }
     }
 }
@@ -442,6 +721,72 @@ mod tests {
         ]
     }
 
+    fn parse_entry(text: &str, locale: &str) -> Result<LocalApplication, DesktopEntryError> {
+        parse_desktop_entry(
+            "example.desktop",
+            Path::new("/usr/share/applications/example.desktop"),
+            text.as_bytes(),
+            ApplicationOrigin::System,
+            locale,
+            "Blossom",
+            |program| matches!(program, "example" | "/usr/bin/example"),
+        )
+    }
+
+    #[test]
+    fn desktop_entry_uses_localized_and_plain_names_and_strips_all_field_codes() {
+        let application = parse_entry(
+            "[Desktop Entry]\nType=Application\nName=Example\nName[tr]=Ornek\nExec=example --open=%f %U --literal=%%\nOnlyShowIn=Blossom;GNOME;\n",
+            "tr_TR.UTF-8",
+        )
+        .unwrap();
+        assert_eq!(application.name, "Ornek");
+        assert_eq!(
+            application.launch_argv(),
+            ["example", "--open=", "--literal=%"]
+        );
+        assert_eq!(
+            route_command("exa", std::slice::from_ref(&application), &[])
+                .rows
+                .len(),
+            2
+        );
+        assert_eq!(route_command("orn", &[application], &[]).rows.len(), 2);
+    }
+
+    #[test]
+    fn desktop_entry_exclusions_fail_closed() {
+        let cases = [
+            ("Hidden=true", DesktopEntryError::Hidden),
+            ("NoDisplay=true", DesktopEntryError::Hidden),
+            ("Terminal=true", DesktopEntryError::UnsupportedLaunchMode),
+            (
+                "DBusActivatable=true",
+                DesktopEntryError::UnsupportedLaunchMode,
+            ),
+            ("OnlyShowIn=GNOME;", DesktopEntryError::ExcludedDesktop),
+            ("NotShowIn=Blossom;", DesktopEntryError::ExcludedDesktop),
+            ("TryExec=missing", DesktopEntryError::MissingExecutable),
+        ];
+        for (extra, expected) in cases {
+            let entry =
+                format!("[Desktop Entry]\nType=Application\nName=Example\nExec=example\n{extra}\n");
+            assert_eq!(parse_entry(&entry, "en"), Err(expected), "{extra}");
+        }
+    }
+
+    #[test]
+    fn desktop_entry_rejects_unsupported_shapes_and_missing_exec() {
+        for entry in [
+            "[Desktop Entry]\nType=Link\nName=Example\nExec=example\n",
+            "[Desktop Entry]\nType=Application\nName=Example\n",
+            "[Desktop Entry]\nType=Application\nName=Example\nExec=missing\n",
+            "[Desktop Entry]\nType=Application\nName=Example\nExec=\"example\n",
+        ] {
+            assert!(parse_entry(entry, "en").is_err(), "{entry}");
+        }
+    }
+
     #[test]
     fn routing_table_is_ordered_and_local_rows_never_activate_the_model() {
         struct Case<'a> {
@@ -461,6 +806,7 @@ mod tests {
                         .into(),
                     desktop_entry_sha256: sha256(b"[Desktop Entry]\nExec=firefox %u\n"),
                     origin: ApplicationOrigin::System,
+                    launch_argv: Vec::new(),
                 },
                 ask_last: true,
             },
@@ -473,6 +819,7 @@ mod tests {
                         .into(),
                     desktop_entry_sha256: sha256(b"[Desktop Entry]\nExec=firefox %u\n"),
                     origin: ApplicationOrigin::System,
+                    launch_argv: Vec::new(),
                 },
                 ask_last: true,
             },

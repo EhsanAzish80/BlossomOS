@@ -45,9 +45,11 @@ pub use battery_summary::{
 };
 pub use command_bar::{
     ApplicationOrigin, BrokerCommandRow, BrokerCommandStore, CREATE_FILE_TEMPLATE,
-    CommandActivation, CommandRoute, CommandRow, CommandStoreError, LocalApplication,
-    MAX_COMMAND_PEERS, MAX_COMMAND_QUERY_BYTES, MAX_COMMAND_RESULTS, UNSUPPORTED_RESPONSE,
-    WorkspaceFile, activate_command, route_command, unsupported_command_result,
+    CommandActivation, CommandRoute, CommandRow, CommandStoreError, DesktopEntryError,
+    LocalApplication, MAX_COMMAND_PEERS, MAX_COMMAND_QUERY_BYTES, MAX_COMMAND_RESULTS,
+    MAX_DESKTOP_ENTRIES, MAX_DESKTOP_ENTRY_BYTES, UNSUPPORTED_RESPONSE, WorkspaceFile,
+    activate_command, discover_local_applications, parse_desktop_entry, route_command,
+    unsupported_command_result,
 };
 pub use context::{
     BATTERY_MAX_AGE_MS, BATTERY_MIN_POLL_INTERVAL_MS, CONTEXT_PROTOCOL_VERSION, ContextObservation,

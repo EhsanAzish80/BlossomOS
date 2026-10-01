@@ -119,6 +119,16 @@ parses the selected entry's `Exec` value, removes desktop field codes according
 to the desktop-entry contract, never invokes a shell, and launches the retained
 selection in its own systemd user scope.
 
+The first version deliberately supports only regular application entries. It
+skips `Hidden` and `NoDisplay` entries, desktop-environment exclusions and a
+missing `TryExec`; it refuses terminal and D-Bus-activated launch modes. It uses
+the current localized name for display while retaining the plain name for
+matching. File size, total entries scanned and returned results are bounded.
+The broker caches this snapshot and watches the application directories for a
+change instead of rescanning on each keystroke. At activation it rereads the
+selected entry and compares its digest with the retained row before launching;
+any substitution fails closed.
+
 File discovery is restricted to the configured workspace. Rows display the
 workspace-relative path. Activation uses only the retained broker-side
 selection; the shell cannot substitute a path.
