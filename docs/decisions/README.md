@@ -77,7 +77,7 @@ compatibility, packaging, or contributor obligations.
 - Unified local command bar: ADR-0035 accepts deterministic local routing
   before an explicit agent handoff, a centered dock/keyboard surface, no prompt
   history, and unchanged separate exact-effect approval.
-- Bounded workspace plan approval: ADR-0036 proposes one password-backed
+- Bounded workspace plan approval: ADR-0036 accepts one password-backed
   decision over an exact retained plan of no-replace directory creation and
   same-filesystem file moves, with verification, encrypted recovery journaling
   and freshly approved undo. Learned labels and embeddings remain deferred.

@@ -1,6 +1,9 @@
 # ADR-0036: Bounded workspace plan approval
 
-Status: Proposed
+- Status: Accepted
+- Date: 2026-10-01
+- Accepted: 2026-10-01 as the prerequisite for deterministic workspace organization
+- Owners: Project maintainers
 
 ## Context
 
