@@ -159,7 +159,7 @@ class Arm64DevelopmentImageTests(unittest.TestCase):
             "qualify-agent-pipeline",
             "--qualification-provider /run/blossom-no-fixture-receipt.json",
             "for attempt in {1..20}",
-            'len(entries) == 100',
+            'len(entries) == 200',
         ):
             self.assertIn(required, probe)
         self.assertIn(
