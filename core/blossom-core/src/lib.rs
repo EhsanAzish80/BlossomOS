@@ -206,8 +206,10 @@ pub use workspace_create::{
     validate_model_workspace_proposal, validate_relative_destination, validate_workspace_selection,
 };
 pub use workspace_plan::{
-    MAX_WORKSPACE_PATH_COMPONENT_BYTES, MAX_WORKSPACE_PATH_DEPTH, MAX_WORKSPACE_PLAN_EFFECTS,
+    MAX_PENDING_WORKSPACE_PLANS, MAX_WORKSPACE_PATH_COMPONENT_BYTES, MAX_WORKSPACE_PATH_DEPTH,
+    MAX_WORKSPACE_PLAN_DIRECTORY_AUTHORITIES, MAX_WORKSPACE_PLAN_EFFECTS,
     MAX_WORKSPACE_PLAN_MESSAGE_BYTES, MAX_WORKSPACE_RELATIVE_PATH_BYTES,
     ValidatedWorkspacePlanEffect, ValidatedWorkspacePlanProposal, WORKSPACE_PLAN_SCHEMA_VERSION,
+    WorkspacePlanCapacity, WorkspacePlanCapacityError, WorkspacePlanCapacityReservation,
     WorkspacePlanError, WorkspacePlanOrigin, WorkspacePlanProposalResolver, WorkspaceRelativePath,
 };

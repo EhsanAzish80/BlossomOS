@@ -8,6 +8,10 @@
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
 pub const WORKSPACE_PLAN_SCHEMA_VERSION: u16 = 1;
 pub const MAX_WORKSPACE_PLAN_EFFECTS: usize = 128;
@@ -15,6 +19,64 @@ pub const MAX_WORKSPACE_PLAN_MESSAGE_BYTES: usize = 64 * 1024;
 pub const MAX_WORKSPACE_RELATIVE_PATH_BYTES: usize = 1024;
 pub const MAX_WORKSPACE_PATH_COMPONENT_BYTES: usize = 255;
 pub const MAX_WORKSPACE_PATH_DEPTH: usize = 16;
+pub const MAX_WORKSPACE_PLAN_DIRECTORY_AUTHORITIES: usize = 64;
+pub const MAX_PENDING_WORKSPACE_PLANS: usize = 4;
+
+#[derive(Clone, Debug)]
+pub struct WorkspacePlanCapacity {
+    inner: Arc<WorkspacePlanCapacityInner>,
+}
+
+#[derive(Debug)]
+struct WorkspacePlanCapacityInner {
+    in_use: AtomicUsize,
+}
+
+#[derive(Debug)]
+pub struct WorkspacePlanCapacityReservation {
+    inner: Arc<WorkspacePlanCapacityInner>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WorkspacePlanCapacityError {
+    Exhausted,
+}
+
+impl Default for WorkspacePlanCapacity {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(WorkspacePlanCapacityInner {
+                in_use: AtomicUsize::new(0),
+            }),
+        }
+    }
+}
+
+impl WorkspacePlanCapacity {
+    /// Admission must happen before plan resolution opens filesystem authority.
+    pub fn reserve(&self) -> Result<WorkspacePlanCapacityReservation, WorkspacePlanCapacityError> {
+        self.inner
+            .in_use
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |current| {
+                (current < MAX_PENDING_WORKSPACE_PLANS).then_some(current + 1)
+            })
+            .map_err(|_| WorkspacePlanCapacityError::Exhausted)?;
+        Ok(WorkspacePlanCapacityReservation {
+            inner: Arc::clone(&self.inner),
+        })
+    }
+
+    pub fn in_use(&self) -> usize {
+        self.inner.in_use.load(Ordering::Acquire)
+    }
+}
+
+impl Drop for WorkspacePlanCapacityReservation {
+    fn drop(&mut self) {
+        let previous = self.inner.in_use.fetch_sub(1, Ordering::AcqRel);
+        debug_assert!(previous > 0, "workspace plan capacity underflow");
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -496,5 +558,26 @@ mod tests {
             ]})),
             Err(WorkspacePlanError::MissingEarlierDirectoryDependency)
         );
+    }
+
+    #[test]
+    fn fifth_plan_is_rejected_and_drop_returns_capacity() {
+        let capacity = WorkspacePlanCapacity::default();
+        let mut reservations = Vec::new();
+        for expected in 1..=MAX_PENDING_WORKSPACE_PLANS {
+            reservations.push(capacity.reserve().unwrap());
+            assert_eq!(capacity.in_use(), expected);
+        }
+        assert!(matches!(
+            capacity.reserve(),
+            Err(WorkspacePlanCapacityError::Exhausted)
+        ));
+        reservations.pop();
+        assert_eq!(capacity.in_use(), MAX_PENDING_WORKSPACE_PLANS - 1);
+        let replacement = capacity.reserve().unwrap();
+        assert_eq!(capacity.in_use(), MAX_PENDING_WORKSPACE_PLANS);
+        drop(replacement);
+        drop(reservations);
+        assert_eq!(capacity.in_use(), 0);
     }
 }
