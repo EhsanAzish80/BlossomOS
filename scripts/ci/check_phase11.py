@@ -399,7 +399,7 @@ if "start graphical-session.target" in session_command:
     fail("desktop session attempts to manually start a protected systemd special target")
 for required in (
     "XCURSOR_THEME,Adwaita",
-    "background_color = rgb(0b111b)",
+    "background_color = rgb(121015)",
     "/usr/local/bin/blossom-start-session",
 ):
     if required not in live_hyprland:

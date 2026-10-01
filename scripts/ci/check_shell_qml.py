@@ -13,10 +13,45 @@ def require(condition: bool, message: str) -> None:
         raise SystemExit(message)
 
 
+def relative_luminance(hex_color: str) -> float:
+    channels = [int(hex_color[index:index + 2], 16) / 255 for index in (1, 3, 5)]
+    linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+              for value in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def contrast_ratio(first: str, second: str) -> float:
+    high, low = sorted((relative_luminance(first), relative_luminance(second)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
 def main() -> None:
-    expected = {"shell.qml", "quickshell.qml", "SecurityHost.qml", "wallpaper.svg", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "BlossomButton.qml", "BlossomIconButton.qml", "BlossomDockItem.qml", "icon-apps.svg", "icon-files.svg", "icon-browser.svg", "icon-terminal.svg", "icon-agent.svg", "README.md"}
+    expected = {"shell.qml", "quickshell.qml", "SecurityHost.qml", "wallpaper.svg", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "BlossomButton.qml", "BlossomIconButton.qml", "BlossomDockItem.qml", "icon-apps.svg", "icon-files.svg", "icon-browser.svg", "icon-terminal.svg", "icon-agent.svg", "README.md", "Petal"}
     require({path.name for path in QML.iterdir()} == expected, "unexpected QML surface")
     qml = "\n".join((QML / name).read_text() for name in expected if name.endswith(".qml"))
+    petal = QML / "Petal"
+    petal_files = {str(path.relative_to(petal)) for path in petal.rglob("*") if path.is_file()}
+    require({"qmldir", "Theme.qml"} <= petal_files, "Petal design tokens are missing")
+    require(all(name in {"qmldir", "Theme.qml"} or
+                (name.startswith("icons/") and name.endswith(".svg"))
+                for name in petal_files), "unexpected Petal design-token surface")
+    theme = (petal / "Theme.qml").read_text()
+    require("pragma Singleton" in theme and "import Blossom.Shell" not in theme and
+            "function " not in theme, "Petal must stay presentation-only tokens")
+    qml += "\n" + theme
+    colors = dict(re.findall(r"readonly property color (\w+): \"(#[0-9a-fA-F]{6})\"", theme))
+    for foreground, background in (
+        ("text", "base"),
+        ("textSecondary", "base"),
+        ("text", "surface"),
+        ("textSecondary", "surface"),
+        ("text", "raised"),
+        ("textSecondary", "raised"),
+    ):
+        require(contrast_ratio(colors[foreground], colors[background]) >= 4.5,
+                f"Petal contrast below 4.5:1: {foreground} on {background}")
+    require("placeholderTextColor: Theme.textSecondary" in qml,
+            "command input placeholder must use a contrast-qualified token")
     for field in [
         "Operation",
         "Purpose",
@@ -92,6 +127,11 @@ def main() -> None:
                 f"exact-effect approval disclosure missing: {required}")
     require("PanelWindow" not in security_qml,
             "security controls must not use the inaccessible proxy-window hierarchy")
+    approval_qml = (QML / "ApprovalPanel.qml").read_text()
+    require('text: "🔒  Blossom approval · drawn by the system broker"' in approval_qml,
+            "approval must identify the fixed system-broker surface")
+    require('import "Petal"' not in approval_qml and "Theme." not in approval_qml,
+            "approval presentation must remain independent from the Petal theme")
     shell = (QML / "shell.qml").read_text()
     require(re.search(
         r'if\s*\(root\.activityVisible\)\s*root\.agentHiddenForApproval\s*=\s*true',

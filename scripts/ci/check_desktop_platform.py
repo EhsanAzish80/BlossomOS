@@ -44,6 +44,7 @@ required_packages = {
     "pipewire-pulse",
     "qt6-wayland",
     "slurp",
+    "ttf-ibm-plex",
     "xdg-desktop-portal",
     "xdg-desktop-portal-gtk",
     "xdg-desktop-portal-hyprland",
@@ -58,6 +59,14 @@ for name in required_packages - {"blueman", "bluez", "bluez-utils", "networkmana
                                  "pipewire", "pipewire-alsa", "pipewire-pulse",
                                  "slurp", "wireplumber", "xorg-xwayland"}:
     require(name in package, f"Blossom shell package omits runtime dependency: {name}")
+require("IBM-Plex-OFL.txt" in package,
+        "blossom-shell must ship the IBM Plex OFL licence")
+require("50-blossom-fonts.conf" in package,
+        "blossom-shell must ship and enable its fontconfig preference")
+plex_license = read("system/shell/fonts/IBM-Plex-OFL.txt")
+require("SIL OPEN FONT LICENSE Version 1.1" in plex_license and
+        'Reserved Font Name "Plex"' in plex_license,
+        "IBM Plex OFL licence text is incomplete")
 
 for config in (live_portals, installed_portals):
     require("default=hyprland;gtk" in config, "portal backend order is not explicit")

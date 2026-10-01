@@ -1,11 +1,11 @@
 pkgname=blossom-shell
 pkgver=0.9.0
-pkgrel=2
+pkgrel=3
 pkgdesc='Blossom OS narrow desktop shell surface'
 arch=('x86_64' 'aarch64')
-license=('Apache-2.0')
+license=('Apache-2.0' 'OFL-1.1')
 depends=('blossom-core' 'grim' 'hyprland' 'lxqt-policykit' 'libnotify' 'mako'
-         'quickshell' 'qt6-base' 'qt6-declarative' 'qt6-wayland'
+         'quickshell' 'qt6-base' 'qt6-declarative' 'qt6-wayland' 'ttf-ibm-plex'
          'xdg-desktop-portal' 'xdg-desktop-portal-gtk'
          'xdg-desktop-portal-hyprland')
 makedepends=('cmake' 'ninja')
@@ -63,6 +63,13 @@ package() {
     "$pkgdir/usr/local/bin/blossom-start-session"
   install -Dm0755 "$repo_root/system/shell/runtime/blossom-screenshot" \
     "$pkgdir/usr/local/bin/blossom-screenshot"
+  install -Dm0644 "$repo_root/system/shell/fonts/50-blossom-fonts.conf" \
+    "$pkgdir/usr/share/fontconfig/conf.avail/50-blossom-fonts.conf"
+  install -d "$pkgdir/etc/fonts/conf.d"
+  ln -s ../../../usr/share/fontconfig/conf.avail/50-blossom-fonts.conf \
+    "$pkgdir/etc/fonts/conf.d/50-blossom-fonts.conf"
+  install -Dm0644 "$repo_root/system/shell/fonts/IBM-Plex-OFL.txt" \
+    "$pkgdir/usr/share/licenses/blossom-shell/IBM-Plex-OFL.txt"
   find "$pkgdir/usr/share/blossom-os/shell" -type f -exec chmod 0644 {} +
   find "$pkgdir/usr/share/blossom-os/installer" -type f -exec chmod 0644 {} +
 }

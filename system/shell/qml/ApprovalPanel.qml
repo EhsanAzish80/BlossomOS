@@ -78,6 +78,20 @@ Window {
 
                 Label {
                     Layout.fillWidth: true
+                    text: "🔒  Blossom approval · drawn by the system broker"
+                    textFormat: Text.PlainText
+                    color: "#dbe5f5"
+                    font.pixelSize: 14
+                    font.bold: true
+                    wrapMode: Text.WrapAnywhere
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: "System broker approval surface"
+                    Accessible.description: text
+                    Accessible.ignored: false
+                }
+
+                Label {
+                    Layout.fillWidth: true
                     color: "#f4f7fb"
                     font.pixelSize: 24
                     font.bold: true

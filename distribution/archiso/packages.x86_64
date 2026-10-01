@@ -26,6 +26,7 @@ qt6-declarative
 qt6-wayland
 noto-fonts
 noto-fonts-emoji
+ttf-ibm-plex
 mousepad
 networkmanager
 wpa_supplicant

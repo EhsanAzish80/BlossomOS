@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import "Petal"
 
 Button {
     id: control
@@ -8,6 +9,7 @@ Button {
     property string description: text
     property bool running: false
     property bool selected: false
+    property bool accent: false
 
     implicitWidth: 52
     implicitHeight: 52
@@ -32,23 +34,23 @@ Button {
             fillMode: Image.PreserveAspectFit
             visible: control.iconSource.toString().length > 0
         }
-        Text { anchors.centerIn: parent; text: control.symbol; color: "#f4f7fb"; font.pixelSize: 24; font.weight: Font.DemiBold; visible: control.iconSource.toString().length === 0 }
+        Text { anchors.centerIn: parent; text: control.symbol; color: Theme.text; font.family: Theme.sans; font.pixelSize: 22; font.weight: Font.Medium; visible: control.iconSource.toString().length === 0 }
         Rectangle {
             visible: control.running || control.selected
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
-            width: control.selected ? 18 : 6
-            height: 3
+            width: control.selected ? 16 : 4
+            height: 4
             radius: 2
-            color: "#79d4c5"
+            color: control.selected || control.accent ? Theme.blossom : Theme.textSecondary
         }
     }
 
     background: Rectangle {
-        radius: 14
-        color: control.down ? "#3a4a61" : control.hovered || control.selected ? "#2a384b" : "transparent"
-        border.color: control.activeFocus ? "#8dd7c7" : "transparent"
-        border.width: control.activeFocus ? 2 : 0
-        Behavior on color { ColorAnimation { duration: 90 } }
+        radius: Theme.radiusTile
+        color: control.down ? Theme.pressed : control.accent || control.selected ? Theme.blossomTint : control.hovered ? Theme.hover : "transparent"
+        border.color: Theme.blossom
+        border.width: control.activeFocus ? Theme.focusRing : 0
+        Behavior on color { ColorAnimation { duration: Theme.stateMs } }
     }
 }
