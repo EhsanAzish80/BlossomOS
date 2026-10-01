@@ -402,8 +402,10 @@ mod tests {
         let preview = ShellApprovalPreview::workspace_create(
             &id,
             1_100,
+            "create note.txt containing bounded content",
             "/home/blossom/Workspace/note.txt".into(),
             "bounded content",
+            crate::RequestOrigin::ModelProposed,
         );
         sessions
             .register_model_effect(owner.clone(), id.clone(), 1_100, preview.clone(), 73_u64)

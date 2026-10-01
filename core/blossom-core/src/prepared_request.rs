@@ -21,6 +21,7 @@ const MAX_TOOL_NAME_BYTES: usize = 64;
 #[serde(rename_all = "snake_case")]
 pub enum RequestOrigin {
     UserCli,
+    UserPromptResolved,
     ModelProposed,
     InternalFixed,
 }

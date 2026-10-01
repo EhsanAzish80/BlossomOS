@@ -21,6 +21,13 @@ pub enum ModelWorkspaceProposalError {
     ResolutionFailed,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DirectWorkspaceCreateParse {
+    NoMatch,
+    Invalid(ModelWorkspaceProposalError),
+    Valid(ModelWorkspaceCreateProposal),
+}
+
 fn safe_model_name(name: &str) -> bool {
     let bytes = name.as_bytes();
     (1..=64).contains(&bytes.len())
@@ -57,6 +64,51 @@ pub fn validate_model_workspace_proposal(
         return Err(ModelWorkspaceProposalError::InvalidContent);
     }
     Ok(())
+}
+
+/// Resolves the deliberately narrow, common create-file command without model
+/// inference. Everything returned here still passes through the normal trusted
+/// resolver, policy, approval, execution, and verification path.
+pub fn parse_obvious_workspace_create(prompt: &str) -> DirectWorkspaceCreateParse {
+    let prompt = prompt.trim_start();
+    // Keep this v1 recognizer deliberately exact. Prompts outside this literal
+    // command form continue through the measured model qualification path.
+    let Some(body) = prompt.strip_prefix("create ") else {
+        return DirectWorkspaceCreateParse::NoMatch;
+    };
+    let separator = " containing ";
+    let Some(separator_index) = body.find(separator) else {
+        return DirectWorkspaceCreateParse::NoMatch;
+    };
+    let original_body = &prompt["create ".len()..];
+    let mut name = original_body[..separator_index].trim();
+    let content = original_body[separator_index + separator.len()..].trim();
+
+    for prefix in [
+        "a text file called ",
+        "a text file named ",
+        "a file called ",
+        "a file named ",
+        "a file ",
+        "file ",
+    ] {
+        if name.to_ascii_lowercase().starts_with(prefix) {
+            name = name[prefix.len()..].trim();
+            break;
+        }
+    }
+    name = name.trim_matches('`');
+    if content.is_empty() {
+        return DirectWorkspaceCreateParse::Invalid(ModelWorkspaceProposalError::InvalidContent);
+    }
+    let proposal = ModelWorkspaceCreateProposal {
+        name: name.into(),
+        content: content.into(),
+    };
+    match validate_model_workspace_proposal(&proposal) {
+        Ok(()) => DirectWorkspaceCreateParse::Valid(proposal),
+        Err(error) => DirectWorkspaceCreateParse::Invalid(error),
+    }
 }
 
 pub fn model_workspace_proposal_schema() -> serde_json::Value {
@@ -531,6 +583,61 @@ pub fn digest(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn obvious_create_request_is_resolved_without_swapping_name_and_content() {
+        assert_eq!(
+            parse_obvious_workspace_create(
+                "create manual-proof.txt containing clean image password approval works"
+            ),
+            DirectWorkspaceCreateParse::Valid(ModelWorkspaceCreateProposal {
+                name: "manual-proof.txt".into(),
+                content: "clean image password approval works".into(),
+            })
+        );
+        assert_eq!(
+            parse_obvious_workspace_create("create a text file called note.txt containing hello"),
+            DirectWorkspaceCreateParse::Valid(ModelWorkspaceCreateProposal {
+                name: "note.txt".into(),
+                content: "hello".into(),
+            })
+        );
+        assert_eq!(
+            parse_obvious_workspace_create(
+                "create note.txt containing this content contains containing twice"
+            ),
+            DirectWorkspaceCreateParse::Valid(ModelWorkspaceCreateProposal {
+                name: "note.txt".into(),
+                content: "this content contains containing twice".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn obvious_create_request_falls_back_when_not_exactly_safe() {
+        for prompt in [
+            "summarize this document",
+            "Create qualification-note.txt containing exactly: Blossom qualification passed.",
+            "create note.txt",
+        ] {
+            assert_eq!(
+                parse_obvious_workspace_create(prompt),
+                DirectWorkspaceCreateParse::NoMatch
+            );
+        }
+        assert_eq!(
+            parse_obvious_workspace_create("create ../escape containing no"),
+            DirectWorkspaceCreateParse::Invalid(ModelWorkspaceProposalError::InvalidName)
+        );
+        assert_eq!(
+            parse_obvious_workspace_create("create Bad Name.txt containing no"),
+            DirectWorkspaceCreateParse::Invalid(ModelWorkspaceProposalError::InvalidName)
+        );
+        assert_eq!(
+            parse_obvious_workspace_create("create note.txt containing "),
+            DirectWorkspaceCreateParse::Invalid(ModelWorkspaceProposalError::InvalidContent)
+        );
+    }
 
     #[test]
     fn validates_exact_relative_destinations_and_bound_selection() {

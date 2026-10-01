@@ -12,6 +12,7 @@ ExecStart=/usr/lib/blossom-os/blossom-shell-ui
 Restart=on-failure
 RestartSec=2
 Environment=QT_QPA_PLATFORM=wayland
+Environment=QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1
 Environment=QML2_IMPORT_PATH=/usr/lib/qt6/qml
 NoNewPrivileges=yes
 PrivateTmp=yes

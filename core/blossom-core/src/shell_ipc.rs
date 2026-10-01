@@ -307,9 +307,15 @@ pub struct ShellApprovalPreview {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub destination: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub user_request: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub content_sha256: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content_bytes: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proposal_source: Option<&'static str>,
 }
 
 impl ShellApprovalPreview {
@@ -331,8 +337,11 @@ impl ShellApprovalPreview {
             expires_at_ms,
             preview_sha256: String::new(),
             destination: None,
+            user_request: None,
+            content: None,
             content_sha256: None,
             content_bytes: None,
+            proposal_source: None,
         };
         preview.preview_sha256 = preview.compute_digest();
         preview
@@ -341,9 +350,16 @@ impl ShellApprovalPreview {
     pub fn workspace_create(
         request_id: &RequestId,
         expires_at_ms: u64,
+        user_request: &str,
         destination: String,
         content: &str,
+        origin: crate::RequestOrigin,
     ) -> Self {
+        let proposal_source = match origin {
+            crate::RequestOrigin::UserPromptResolved => "parsed_directly",
+            crate::RequestOrigin::ModelProposed => "model_proposed",
+            _ => "trusted_internal",
+        };
         let mut preview = Self {
             version: SHELL_PROTOCOL_VERSION,
             request_id: request_id.as_str().into(),
@@ -361,8 +377,11 @@ impl ShellApprovalPreview {
             expires_at_ms,
             preview_sha256: String::new(),
             destination: Some(destination),
+            user_request: Some(user_request.into()),
+            content: Some(content.into()),
             content_sha256: Some(crate::audit::digest_bytes(content.as_bytes())),
             content_bytes: Some(content.len()),
+            proposal_source: Some(proposal_source),
         };
         preview.preview_sha256 = preview.compute_digest();
         preview
@@ -390,6 +409,8 @@ impl ShellApprovalPreview {
             self.approval.into(),
             self.expires_at_ms.to_string(),
             self.destination.clone().unwrap_or_default(),
+            self.user_request.clone().unwrap_or_default(),
+            self.content.clone().unwrap_or_default(),
             self.content_sha256.clone().unwrap_or_default(),
             self.content_bytes
                 .map(|value| value.to_string())
@@ -636,6 +657,36 @@ mod tests {
 
         let mut mutated = preview.clone();
         mutated.expires_at_ms += 1;
+        assert!(!mutated.verify_digest());
+    }
+
+    #[test]
+    fn workspace_preview_serializes_complete_maximum_name_request_and_content() {
+        let request_id = RequestId::parse("req-exact-effect".into()).expect("request id");
+        let name = format!("{}.txt", "n".repeat(60));
+        assert_eq!(name.len(), 64);
+        let content = "x".repeat(crate::MAX_MODEL_WORKSPACE_CONTENT_BYTES);
+        let user_request = format!("create {name} containing {content}");
+        let destination = format!("/home/blossom/Workspace/{name}");
+        let preview = ShellApprovalPreview::workspace_create(
+            &request_id,
+            31_000,
+            &user_request,
+            destination.clone(),
+            &content,
+            crate::RequestOrigin::ModelProposed,
+        );
+        assert_eq!(preview.user_request.as_deref(), Some(user_request.as_str()));
+        assert_eq!(preview.destination.as_deref(), Some(destination.as_str()));
+        assert_eq!(preview.content.as_deref(), Some(content.as_str()));
+        assert_eq!(preview.content_bytes, Some(content.len()));
+        assert!(preview.verify_digest());
+        let encoded = serde_json::to_string(&preview).expect("preview serializes");
+        assert!(encoded.contains(&name));
+        assert!(encoded.contains(&content));
+
+        let mut mutated = preview;
+        mutated.content = Some(format!("{}y", "x".repeat(content.len() - 1)));
         assert!(!mutated.verify_digest());
     }
 

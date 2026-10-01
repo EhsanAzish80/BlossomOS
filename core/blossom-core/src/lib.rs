@@ -185,12 +185,12 @@ pub use verification::{
     verify_workspace_file_created,
 };
 pub use workspace_create::{
-    AtomicWorkspaceFileCreator, DirectoryIdentity, MAX_MODEL_WORKSPACE_CONTENT_BYTES,
-    MODEL_WORKSPACE_NAME_PATTERN, ModelWorkspaceCreateProposal, ModelWorkspaceProposalError,
-    UnavailableWorkspaceCreateProvider, WORKSPACE_FILE_MODE, WorkspaceCreateError,
-    WorkspaceCreateProvider, WorkspaceCreateSelection, WorkspaceCreateState, WorkspaceFileCreated,
-    model_workspace_constraint_digests, model_workspace_proposal_grammar,
+    AtomicWorkspaceFileCreator, DirectWorkspaceCreateParse, DirectoryIdentity,
+    MAX_MODEL_WORKSPACE_CONTENT_BYTES, MODEL_WORKSPACE_NAME_PATTERN, ModelWorkspaceCreateProposal,
+    ModelWorkspaceProposalError, UnavailableWorkspaceCreateProvider, WORKSPACE_FILE_MODE,
+    WorkspaceCreateError, WorkspaceCreateProvider, WorkspaceCreateSelection, WorkspaceCreateState,
+    WorkspaceFileCreated, model_workspace_constraint_digests, model_workspace_proposal_grammar,
     model_workspace_proposal_schema, model_workspace_proposal_schema_bytes,
-    resolve_model_workspace_proposal, validate_model_workspace_proposal,
-    validate_relative_destination, validate_workspace_selection,
+    parse_obvious_workspace_create, resolve_model_workspace_proposal,
+    validate_model_workspace_proposal, validate_relative_destination, validate_workspace_selection,
 };

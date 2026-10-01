@@ -35,6 +35,7 @@ const MAX_WIRE_RESULT_BYTES: usize = 32 * 1024;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HandlerError {
     Rejected,
+    InvalidDirectRequest,
     GatewayUnavailable,
     UnexpectedGatewayIdentity,
 }
@@ -47,6 +48,9 @@ impl From<blossom_core::ShellServiceError> for HandlerError {
             }
             blossom_core::ShellServiceError::Agent(AgentTurnError::UnexpectedGatewayIdentity) => {
                 Self::UnexpectedGatewayIdentity
+            }
+            blossom_core::ShellServiceError::Agent(AgentTurnError::InvalidDirectRequest) => {
+                Self::InvalidDirectRequest
             }
             _ => Self::Rejected,
         }
@@ -472,6 +476,9 @@ fn denied() -> zbus::fdo::Error {
 fn handler_error(error: HandlerError) -> zbus::fdo::Error {
     match error {
         HandlerError::Rejected => denied(),
+        HandlerError::InvalidDirectRequest => zbus::fdo::Error::InvalidArgs(
+            "direct create request has an invalid name or content".into(),
+        ),
         HandlerError::GatewayUnavailable => {
             zbus::fdo::Error::Failed("model gateway is unavailable".into())
         }

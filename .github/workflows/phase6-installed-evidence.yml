@@ -290,6 +290,16 @@ jobs:
               hypr_socket=$(hyprctl instances -j | python3 -c \
                 "import json,os,sys; print(next(item[\"wl_socket\"] for item in json.load(sys.stdin) if item[\"instance\"] == os.environ[\"HYPRLAND_INSTANCE_SIGNATURE\"]))")
               test -S "$XDG_RUNTIME_DIR/$hypr_socket"
+              WAYLAND_DISPLAY="$hypr_socket" \
+                QML_IMPORT_PATH=/usr/lib/qt6/qml \
+                QT_LINUX_ACCESSIBILITY_ALWAYS_ON=1 \
+                "$qml_runner" system/shell/tests/exact_effect_accessibility.qml \
+                >"$XDG_RUNTIME_DIR/exact-effect-accessibility.log" 2>&1 &
+              exact_effect_pid=$!
+              python3 system/shell/tests/check_exact_effect_accessibility.py
+              kill "$exact_effect_pid"
+              wait "$exact_effect_pid" 2>/dev/null || true
+              exact_effect_pid=""
               restart_shell_ui() {
                 pkill -u "$(id -u)" -f \
                   "^/usr/lib/blossom-os/blossom-shell-ui$" 2>/dev/null || true

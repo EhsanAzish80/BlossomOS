@@ -37,9 +37,9 @@ def main() -> None:
     for action in [
         "BlossomBroker.requestSystemUname()",
         "BlossomBroker.requestAgentTurn(agentPrompt.text)",
-        "BlossomBroker.approveOnce()",
-        "BlossomBroker.deny()",
-        "BlossomBroker.cancelPending()",
+        "broker.approveOnce()",
+        "broker.deny()",
+        "broker.cancelPending()",
         "BlossomBroker.refreshActivity()",
         "BlossomBroker.openFiles()",
         "BlossomBroker.openBrowser()",
@@ -74,6 +74,22 @@ def main() -> None:
     require("onClosing:" in qml,
             "standard Qt window close must cancel pending approval")
     security_qml = "\n".join((QML / name).read_text() for name in ("SecurityHost.qml", "ApprovalPanel.qml", "SecurityField.qml"))
+    require("elide:" not in security_qml,
+            "approval preview security fields must never elide exact values")
+    for required in [
+        'Accessible.name: "Original request"',
+        'Accessible.name: "Full destination"',
+        'Accessible.name: "Destination folder"',
+        'Accessible.name: "Content byte length"',
+        'Accessible.name: "Complete proposed content"',
+        'Accessible.name: "Proposal source"',
+        "Text.WrapAnywhere",
+        "TextEdit.WrapAnywhere",
+        "broker.preview.user_request",
+        "broker.preview.content",
+    ]:
+        require(required in security_qml,
+                f"exact-effect approval disclosure missing: {required}")
     require("PanelWindow" not in security_qml,
             "security controls must not use the inaccessible proxy-window hierarchy")
     shell = (QML / "shell.qml").read_text()
