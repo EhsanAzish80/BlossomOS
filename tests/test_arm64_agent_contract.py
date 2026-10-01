@@ -64,6 +64,7 @@ class Arm64AgentContractTests(unittest.TestCase):
             ROOT / "core/blossom-core/src/approval.rs",
             ROOT / "core/blossom-core/src/request.rs",
             ROOT / "core/blossom-core/src/workspace_create.rs",
+            ROOT / "core/blossom-core/src/workspace_plan.rs",
             ROOT / "core/blossom-core/src/shell_service.rs",
         )
         for path in authority_modules:
@@ -81,6 +82,14 @@ class Arm64AgentContractTests(unittest.TestCase):
             (ROOT / "core/blossom-core/src/service_status.rs", "ServiceSelection"),
             (ROOT / "core/blossom-core/src/request.rs", "ToolRequest"),
             (ROOT / "core/blossom-core/src/prepared_request.rs", "PreparedToolRequest"),
+            (
+                ROOT / "core/blossom-core/src/workspace_plan.rs",
+                "ValidatedWorkspacePlanEffect",
+            ),
+            (
+                ROOT / "core/blossom-core/src/workspace_plan.rs",
+                "ValidatedWorkspacePlanProposal",
+            ),
         )
         for path, type_name in declarations:
             source = path.read_text()
@@ -104,6 +113,7 @@ class Arm64AgentContractTests(unittest.TestCase):
         self.assertIn("ToolRequestWire::parse_json", fuzz)
         self.assertIn("RequestResolver::resolve", fuzz)
         self.assertIn("capacity.reserve()", fuzz)
+        self.assertIn("WorkspacePlanProposalResolver::resolve", fuzz)
 
     def test_qualification_driver_uses_one_public_shell_path(self):
         driver = (ROOT / "scripts/qualify_agent_pipeline.py").read_text()
