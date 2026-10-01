@@ -202,14 +202,14 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
                 };
                 let completion = match completion {
                     Ok(completion) => completion,
-                    Err(AgentTurnError::Protocol) => return Ok(ShellServiceOutcome::Denied),
+                    Err(AgentTurnError::Protocol) => return Ok(ShellServiceOutcome::ModelFailed),
                     Err(error) => return Err(ShellServiceError::Agent(error)),
                 };
                 let NormalizedCompletion::ToolIntents { intents } = completion else {
-                    return Ok(ShellServiceOutcome::Denied);
+                    return Ok(ShellServiceOutcome::ModelFailed);
                 };
                 if intents.len() != 1 {
-                    return Ok(ShellServiceOutcome::Denied);
+                    return Ok(ShellServiceOutcome::ModelFailed);
                 }
                 if intents[0].kind() == ModelIntentKind::Unsupported
                     && intents[0].workspace_create().is_none()
@@ -694,6 +694,7 @@ pub enum ShellServiceOutcome {
     Verified,
     VerificationFailed,
     Unsupported,
+    ModelFailed,
 }
 
 #[derive(Debug)]
@@ -999,6 +1000,35 @@ mod tests {
             )
             .map_err(|_| AgentTurnError::Protocol)
         }
+    }
+
+    struct FailedAgentProvider;
+
+    impl AgentTurnProvider for FailedAgentProvider {
+        fn complete(
+            &mut self,
+            _: &InferenceRequestId,
+            _: &str,
+            _: &TurnIntentCatalogue,
+        ) -> Result<NormalizedCompletion, AgentTurnError> {
+            Err(AgentTurnError::Protocol)
+        }
+    }
+
+    #[test]
+    fn model_failure_is_not_reported_as_an_unsupported_capability() {
+        let calls = Rc::new(Cell::new(0));
+        let owner = peer(":1.88");
+        let mut service = service(calls.clone()).with_agent_turn_provider(FailedAgentProvider);
+
+        assert_eq!(
+            service
+                .begin_agent_turn(owner.clone(), "Please make sense of this", 1_000)
+                .unwrap(),
+            ShellServiceOutcome::ModelFailed
+        );
+        assert_eq!(calls.get(), 0);
+        assert!(!service.sessions.has_pending(&owner));
     }
 
     #[test]

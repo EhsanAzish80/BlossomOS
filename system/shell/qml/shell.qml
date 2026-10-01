@@ -47,7 +47,7 @@ ShellRoot {
         target: BlossomBroker
         function onStateChanged() {
             const busy = ["waiting", "submitting", "cancelling"].includes(BlossomBroker.state)
-            const finished = ["unavailable", "unsupported", "verified", "verification_failed", "cancelled", "expired"]
+            const finished = ["unavailable", "unsupported", "model_failed", "verified", "verification_failed", "cancelled", "expired"]
                 .includes(BlossomBroker.state)
             if (busy) {
                 if (root.activityVisible)
@@ -296,6 +296,7 @@ ShellRoot {
                                 : BlossomBroker.state === "submitting" ? "Authenticating and applying the approved effect…"
                                 : BlossomBroker.state === "unavailable" ? BlossomBroker.failureReason + " Nothing was applied."
                                 : BlossomBroker.state === "unsupported" ? "Blossom can't do this yet. Today it can create one file in your workspace."
+                                : BlossomBroker.state === "model_failed" ? "Blossom couldn't work out that request. Nothing was done."
                                 : "Ask the local agent for one bounded action. Proposed effects never run without exact approval."
                             color: BlossomBroker.state === "unavailable" ? Theme.danger : Theme.textSecondary
                             font.family: Theme.sans
@@ -358,6 +359,7 @@ ShellRoot {
                                     : BlossomBroker.state === "expired" ? "Expired · nothing was applied."
                                     : BlossomBroker.state === "verification_failed" ? "Verification failed · review the activity below."
                                     : BlossomBroker.state === "unsupported" ? "Blossom can't do this yet. Today it can create one file in your workspace."
+                                    : BlossomBroker.state === "model_failed" ? "Blossom couldn't work out that request. Nothing was done."
                                     : BlossomBroker.state === "unavailable" ? "Request failed closed · " + BlossomBroker.failureReason
                                     : "Ready"
                                 color: BlossomBroker.state === "waiting" || BlossomBroker.state === "verified"

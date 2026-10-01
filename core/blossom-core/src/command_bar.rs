@@ -1,16 +1,63 @@
 use crate::{
     DirectWorkspaceCreateParse, ModelWorkspaceCreateProposal, ModelWorkspaceProposalError,
-    parse_obvious_workspace_create,
+    ShellPeerId, parse_obvious_workspace_create,
 };
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
 pub const CREATE_FILE_TEMPLATE: &str = "create  containing ";
 pub const UNSUPPORTED_RESPONSE: &str =
     "Blossom can't do this yet. Today it can create one file in your workspace.";
+pub const MAX_COMMAND_QUERY_BYTES: usize = 4096;
+pub const MAX_COMMAND_RESULTS: usize = 12;
+pub const MAX_COMMAND_PEERS: usize = 32;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApplicationOrigin {
+    System,
+    UserInstalled,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalApplication {
     pub desktop_id: String,
     pub name: String,
+    desktop_entry_path: String,
+    desktop_entry_sha256: String,
+    origin: ApplicationOrigin,
+}
+
+impl LocalApplication {
+    pub fn new(
+        desktop_id: String,
+        name: String,
+        desktop_entry_path: String,
+        desktop_entry_bytes: &[u8],
+        origin: ApplicationOrigin,
+    ) -> Option<Self> {
+        if desktop_id.is_empty()
+            || name.is_empty()
+            || desktop_id.len() > 255
+            || name.len() > 255
+            || !desktop_entry_path.starts_with('/')
+            || !desktop_entry_path.ends_with(".desktop")
+            || desktop_entry_path.contains('\0')
+            || desktop_entry_bytes.is_empty()
+        {
+            return None;
+        }
+        Some(Self {
+            desktop_id,
+            name,
+            desktop_entry_path,
+            desktop_entry_sha256: sha256(desktop_entry_bytes),
+            origin,
+        })
+    }
+
+    pub fn origin(&self) -> ApplicationOrigin {
+        self.origin
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,12 +93,23 @@ impl CommandRoute {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CommandActivation {
-    OpenApplication { desktop_id: String },
-    OpenWorkspaceFile { relative_path: String },
+    OpenApplication {
+        desktop_id: String,
+        desktop_entry_path: String,
+        desktop_entry_sha256: String,
+        origin: ApplicationOrigin,
+    },
+    OpenWorkspaceFile {
+        relative_path: String,
+    },
     BeginWorkspaceCreate(ModelWorkspaceCreateProposal),
-    BeginAgentTurn { prompt: String },
+    BeginAgentTurn {
+        prompt: String,
+    },
     ShowInvalidCreate(ModelWorkspaceProposalError),
-    ShowUnsupported { message: &'static str },
+    ShowUnsupported {
+        message: &'static str,
+    },
 }
 
 /// Produces display rows only. Model invocation is deliberately absent from
@@ -139,6 +197,9 @@ pub fn activate_command(row: &CommandRow) -> CommandActivation {
     match row {
         CommandRow::OpenApplication(application) => CommandActivation::OpenApplication {
             desktop_id: application.desktop_id.clone(),
+            desktop_entry_path: application.desktop_entry_path.clone(),
+            desktop_entry_sha256: application.desktop_entry_sha256.clone(),
+            origin: application.origin,
         },
         CommandRow::OpenWorkspaceFile(file) => CommandActivation::OpenWorkspaceFile {
             relative_path: file.relative_path.clone(),
@@ -154,8 +215,193 @@ pub fn activate_command(row: &CommandRow) -> CommandActivation {
     }
 }
 
+impl CommandActivation {
+    pub fn application_entry_matches(&self, bytes: &[u8]) -> bool {
+        match self {
+            Self::OpenApplication {
+                desktop_entry_sha256,
+                ..
+            } => sha256(bytes) == *desktop_entry_sha256,
+            _ => false,
+        }
+    }
+}
+
 fn normalized_match(candidate: &str, normalized_query: &str) -> bool {
     candidate.to_ascii_lowercase().starts_with(normalized_query)
+}
+
+fn sha256(bytes: &[u8]) -> String {
+    let mut digest = Sha256::new();
+    digest.update(bytes);
+    digest
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BrokerCommandRow {
+    pub id: String,
+    pub kind: &'static str,
+    pub title: String,
+    pub detail: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CommandStoreError {
+    InvalidQuery,
+    TooManyPeers,
+    RandomnessUnavailable,
+    UnknownOrStaleRow,
+}
+
+struct LiveCommandRows {
+    generation: u64,
+    actions: HashMap<String, CommandActivation>,
+}
+
+/// Holds only the latest result set for each authenticated peer. Activating any
+/// row consumes that peer's complete set, making every sibling ID stale.
+#[derive(Default)]
+pub struct BrokerCommandStore {
+    peers: HashMap<ShellPeerId, LiveCommandRows>,
+    generations: HashMap<ShellPeerId, u64>,
+}
+
+impl BrokerCommandStore {
+    pub fn replace(
+        &mut self,
+        peer: ShellPeerId,
+        query: &str,
+        route: CommandRoute,
+    ) -> Result<Vec<BrokerCommandRow>, CommandStoreError> {
+        if query.is_empty() || query.len() > MAX_COMMAND_QUERY_BYTES || query.contains('\0') {
+            return Err(CommandStoreError::InvalidQuery);
+        }
+        if !self.peers.contains_key(&peer) && self.peers.len() >= MAX_COMMAND_PEERS {
+            return Err(CommandStoreError::TooManyPeers);
+        }
+        let generation = self
+            .generations
+            .get(&peer)
+            .copied()
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or(CommandStoreError::InvalidQuery)?;
+        self.generations.insert(peer.clone(), generation);
+
+        let mut actions = HashMap::new();
+        let mut projection = Vec::new();
+        for (index, row) in route.rows.into_iter().take(MAX_COMMAND_RESULTS).enumerate() {
+            let id = random_row_id(&peer, generation, index)?;
+            let (kind, title, detail) = row_projection(&row);
+            actions.insert(id.clone(), activate_command(&row));
+            projection.push(BrokerCommandRow {
+                id,
+                kind,
+                title,
+                detail,
+            });
+        }
+        self.peers.insert(
+            peer,
+            LiveCommandRows {
+                generation,
+                actions,
+            },
+        );
+        Ok(projection)
+    }
+
+    pub fn activate(
+        &mut self,
+        peer: &ShellPeerId,
+        id: &str,
+    ) -> Result<CommandActivation, CommandStoreError> {
+        let live = self
+            .peers
+            .get(peer)
+            .ok_or(CommandStoreError::UnknownOrStaleRow)?;
+        if live.generation != self.generations.get(peer).copied().unwrap_or_default() {
+            return Err(CommandStoreError::UnknownOrStaleRow);
+        }
+        let action = live
+            .actions
+            .get(id)
+            .cloned()
+            .ok_or(CommandStoreError::UnknownOrStaleRow)?;
+        self.peers.remove(peer);
+        Ok(action)
+    }
+
+    pub fn disconnect(&mut self, peer: &ShellPeerId) {
+        self.peers.remove(peer);
+        self.generations.remove(peer);
+    }
+
+    pub fn live_peer_count(&self) -> usize {
+        self.peers.len()
+    }
+}
+
+fn random_row_id(
+    peer: &ShellPeerId,
+    generation: u64,
+    index: usize,
+) -> Result<String, CommandStoreError> {
+    let mut random = [0u8; 16];
+    getrandom::fill(&mut random).map_err(|_| CommandStoreError::RandomnessUnavailable)?;
+    let mut digest = Sha256::new();
+    digest.update(b"blossom-command-row-v1\0");
+    digest.update(peer.as_str().as_bytes());
+    digest.update(generation.to_le_bytes());
+    digest.update(index.to_le_bytes());
+    digest.update(random);
+    let digest = digest.finalize();
+    Ok(digest[..16]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect())
+}
+
+fn row_projection(row: &CommandRow) -> (&'static str, String, String) {
+    match row {
+        CommandRow::OpenApplication(application) => (
+            "application",
+            application.name.clone(),
+            match application.origin {
+                ApplicationOrigin::System => "System application · no model".into(),
+                ApplicationOrigin::UserInstalled => "User-installed application · no model".into(),
+            },
+        ),
+        CommandRow::OpenWorkspaceFile(file) => (
+            "workspace_file",
+            file.display_name.clone(),
+            file.relative_path.clone(),
+        ),
+        CommandRow::CreateWorkspaceFile(proposal) => (
+            "workspace_create",
+            format!("Create {}", proposal.name),
+            "Parsed directly · approval required".into(),
+        ),
+        CommandRow::AskBlossom { prompt } => (
+            "ask_blossom",
+            format!("Ask Blossom: {prompt}"),
+            "Uses the local model".into(),
+        ),
+        CommandRow::InvalidCreate(_) => (
+            "invalid_create",
+            "Invalid create request".into(),
+            "Nothing will run".into(),
+        ),
+        CommandRow::Unsupported { message } => (
+            "unsupported",
+            (*message).into(),
+            "No action available".into(),
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -164,14 +410,22 @@ mod tests {
 
     fn applications() -> Vec<LocalApplication> {
         vec![
-            LocalApplication {
-                desktop_id: "org.mozilla.firefox.desktop".into(),
-                name: "Firefox".into(),
-            },
-            LocalApplication {
-                desktop_id: "org.example.firewatch.desktop".into(),
-                name: "Firewatch".into(),
-            },
+            LocalApplication::new(
+                "org.mozilla.firefox.desktop".into(),
+                "Firefox".into(),
+                "/usr/share/applications/org.mozilla.firefox.desktop".into(),
+                b"[Desktop Entry]\nExec=firefox %u\n",
+                ApplicationOrigin::System,
+            )
+            .unwrap(),
+            LocalApplication::new(
+                "org.example.firewatch.desktop".into(),
+                "Firewatch".into(),
+                "/home/blossom/.local/share/applications/org.example.firewatch.desktop".into(),
+                b"[Desktop Entry]\nExec=firewatch\n",
+                ApplicationOrigin::UserInstalled,
+            )
+            .unwrap(),
         ]
     }
 
@@ -203,6 +457,10 @@ mod tests {
                 expected_rows: 3,
                 expected_first: CommandActivation::OpenApplication {
                     desktop_id: "org.mozilla.firefox.desktop".into(),
+                    desktop_entry_path: "/usr/share/applications/org.mozilla.firefox.desktop"
+                        .into(),
+                    desktop_entry_sha256: sha256(b"[Desktop Entry]\nExec=firefox %u\n"),
+                    origin: ApplicationOrigin::System,
                 },
                 ask_last: true,
             },
@@ -211,6 +469,10 @@ mod tests {
                 expected_rows: 5,
                 expected_first: CommandActivation::OpenApplication {
                     desktop_id: "org.mozilla.firefox.desktop".into(),
+                    desktop_entry_path: "/usr/share/applications/org.mozilla.firefox.desktop"
+                        .into(),
+                    desktop_entry_sha256: sha256(b"[Desktop Entry]\nExec=firefox %u\n"),
+                    origin: ApplicationOrigin::System,
                 },
                 ask_last: true,
             },
@@ -347,5 +609,111 @@ mod tests {
             }
         );
         assert_eq!(CREATE_FILE_TEMPLATE, "create  containing ");
+    }
+
+    #[test]
+    fn broker_rows_are_random_peer_bound_latest_query_only_and_consumed_once() {
+        let first_peer = ShellPeerId::from_bus_unique_name(":1.101").unwrap();
+        let second_peer = ShellPeerId::from_bus_unique_name(":1.102").unwrap();
+        let mut store = BrokerCommandStore::default();
+        let first = store
+            .replace(
+                first_peer.clone(),
+                "fire",
+                route_command("fire", &applications(), &files()),
+            )
+            .unwrap();
+        assert!(first.iter().all(|row| {
+            row.id.len() == 32 && row.id.bytes().all(|byte| byte.is_ascii_hexdigit())
+        }));
+        assert_eq!(store.live_peer_count(), 1);
+        assert_eq!(
+            store.activate(&second_peer, &first[0].id),
+            Err(CommandStoreError::UnknownOrStaleRow)
+        );
+
+        let stale_id = first[0].id.clone();
+        let latest_after_stale = store
+            .replace(
+                first_peer.clone(),
+                "field",
+                route_command("field", &applications(), &files()),
+            )
+            .unwrap();
+        assert_eq!(
+            store.activate(&first_peer, &stale_id),
+            Err(CommandStoreError::UnknownOrStaleRow)
+        );
+        assert_eq!(store.live_peer_count(), 1);
+        assert!(matches!(
+            store
+                .activate(&first_peer, &latest_after_stale[0].id)
+                .unwrap(),
+            CommandActivation::OpenWorkspaceFile { .. }
+        ));
+        assert_eq!(store.live_peer_count(), 0);
+
+        let latest = store
+            .replace(
+                first_peer.clone(),
+                "field",
+                route_command("field", &applications(), &files()),
+            )
+            .unwrap();
+        assert!(matches!(
+            store.activate(&first_peer, &latest[0].id).unwrap(),
+            CommandActivation::OpenWorkspaceFile { .. }
+        ));
+        assert_eq!(
+            store.activate(&first_peer, &latest[0].id),
+            Err(CommandStoreError::UnknownOrStaleRow)
+        );
+    }
+
+    #[test]
+    fn disconnect_clears_rows_and_application_digest_detects_substitution() {
+        let peer = ShellPeerId::from_bus_unique_name(":1.103").unwrap();
+        let mut store = BrokerCommandStore::default();
+        let rows = store
+            .replace(
+                peer.clone(),
+                "firefox",
+                route_command("firefox", &applications(), &files()),
+            )
+            .unwrap();
+        let activation = store.activate(&peer, &rows[0].id).unwrap();
+        assert!(activation.application_entry_matches(b"[Desktop Entry]\nExec=firefox %u\n"));
+        assert!(!activation.application_entry_matches(b"[Desktop Entry]\nExec=malware\n"));
+
+        let rows = store
+            .replace(
+                peer.clone(),
+                "firefox",
+                route_command("firefox", &applications(), &files()),
+            )
+            .unwrap();
+        store.disconnect(&peer);
+        assert_eq!(store.live_peer_count(), 0);
+        assert_eq!(
+            store.activate(&peer, &rows[0].id),
+            Err(CommandStoreError::UnknownOrStaleRow)
+        );
+    }
+
+    #[test]
+    fn store_allows_only_one_bounded_result_set_per_peer() {
+        let mut store = BrokerCommandStore::default();
+        for index in 1..=MAX_COMMAND_PEERS {
+            let peer = ShellPeerId::from_bus_unique_name(&format!(":1.{index}")).unwrap();
+            store
+                .replace(peer, "query", route_command("query", &[], &[]))
+                .unwrap();
+        }
+        assert_eq!(store.live_peer_count(), MAX_COMMAND_PEERS);
+        let extra = ShellPeerId::from_bus_unique_name(":1.999").unwrap();
+        assert_eq!(
+            store.replace(extra, "query", route_command("query", &[], &[])),
+            Err(CommandStoreError::TooManyPeers)
+        );
     }
 }
