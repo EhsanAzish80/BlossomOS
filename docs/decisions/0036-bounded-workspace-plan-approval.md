@@ -5,6 +5,31 @@
 - Accepted: 2026-10-01 as the prerequisite for deterministic workspace organization
 - Owners: Project maintainers
 
+## Accepted implementation clarification: 2026-10-01
+
+The first resolver retains the workspace root and unique involved directory
+authorities, not one descriptor per source file. It permits at most 64 retained
+directories per plan, one pending plan per peer and four pending plans globally.
+Admission is reserved before resolution. This bounds plan-owned descriptors to
+approximately 260 plus fixed broker overhead instead of allowing 32 plans to
+consume roughly 8,000 descriptors.
+
+Before the first effect, execution reopens and verifies every source through
+its retained parent and verifies every destination precondition. If any check
+fails, nothing runs. Multi-file moves are not one atomic transaction: after
+execution starts, the executor writes and synchronizes the inverse journal
+record before each effect, executes in order with
+`renameat2(RENAME_NOREPLACE)`, and stops at the first failure. It reports the
+exact completed count, failing effect and bounded reason. Completed effects are
+left in their verified post-move state with a separately approved undo
+available; v1 does not perform surprise automatic rollback.
+
+Different paths that resolve to the same device and inode are overlapping
+authority and are rejected during preparation. Each source and destination
+must share the retained workspace filesystem device. The complete, unelided
+effect list remains the unit of password-backed approval. This clarification
+supersedes the automatic-rollback wording below where the two conflict.
+
 ## Context
 
 Blossom currently approves one prepared effect at a time. That is appropriate
@@ -141,11 +166,12 @@ cross-peer decisions are rejected.
 Execution consumes the stored prepared plan by value. It never resolves a new
 plan from wire input and never asks a model to repair a stale plan.
 
-Immediately before each effect, trusted code rechecks the source through the
+Before the first effect, trusted code preflights every source through the
 retained workspace and parent authority and compares every recorded identity
-field and content digest. It rechecks that the destination is absent, beneath
+field and content digest. It rechecks that every destination is absent, beneath
 the same workspace root and on the same filesystem. Any mismatch stops the
-plan before that effect and starts rollback of earlier effects.
+plan before the first effect. Each effect is checked again immediately before
+its own execution; a later failure stops the remaining plan.
 
 Each directory is created relative to retained authority with no replacement,
 then opened and verified before a dependent move may use it. Each move uses the
@@ -167,13 +193,11 @@ transaction journal on the state partition. The journal contains the plan
 digest, ordered relative paths, identities, lifecycle state and integrity
 chain. It never stores file contents, extracted text or model prompts.
 
-The journal is updated and synchronized after every completed effect. On
-failure, the executor walks completed effects in reverse order using no-replace
-atomic renames and verifies the restored identities. A directory created by the
-plan is removed during rollback only if it is still empty and has the exact
-recorded identity. A rollback conflict never causes an overwrite or removal of
-user content. It produces an `indeterminate` result with a visible recovery
-record.
+The inverse journal entry for an effect is written and synchronized before that
+effect starts, then marked completed and synchronized after verification. On
+failure, completed effects remain visible and the result states the exact
+completed count, failing effect and bounded reason. The user may request undo,
+but v1 does not automatically run compensating effects.
 
 A plan is `verified` only when every destination contains the expected identity
 and digest, every source path is absent, the workspace and mount identities are
@@ -242,8 +266,9 @@ Before the plan executor is enabled, tests must prove:
    substitution between preparation and execution fail closed;
 6. each admitted move uses no-replace atomic rename and no shell or generic
    command executor;
-7. injected failure after every possible effect boundary either restores the
-   original state completely or reports `indeterminate` with a recovery record;
+7. injected failure after every possible effect boundary stops later effects,
+   reports the exact verified completed count and leaves a durable inverse
+   record from which a separately approved undo plan can be prepared;
 8. verification cannot report success for partial execution, identity drift,
    missing durability or incomplete journal state;
 9. undo is prepared as a fresh inverse plan, refuses changed files and
