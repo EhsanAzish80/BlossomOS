@@ -578,16 +578,15 @@ fn linux_prepare_plan(
         }
     }
 
-    let plan_sha256 = prepared_plan_digest(
+    let digest_input = PreparedPlanDigestInput {
         workspace_root,
-        &workspace_identity,
-        proposal.origin,
-        &proposal.proposal_sha256,
+        workspace_identity: &workspace_identity,
+        origin: proposal.origin,
+        proposal_sha256: &proposal.proposal_sha256,
         created_at_ms,
         expires_at_ms,
-        &prepared_effects,
-        &directories,
-    )?;
+    };
+    let plan_sha256 = prepared_plan_digest(digest_input, &prepared_effects, &directories)?;
     Ok(PreparedWorkspacePlan {
         workspace_root: workspace_root.to_owned(),
         workspace_identity,
@@ -774,13 +773,18 @@ fn read_plan_file_identity(
 }
 
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
-fn prepared_plan_digest(
-    workspace_root: &str,
-    workspace_identity: &WorkspacePlanDirectoryIdentity,
+struct PreparedPlanDigestInput<'a> {
+    workspace_root: &'a str,
+    workspace_identity: &'a WorkspacePlanDirectoryIdentity,
     origin: WorkspacePlanOrigin,
-    proposal_sha256: &str,
+    proposal_sha256: &'a str,
     created_at_ms: u64,
     expires_at_ms: u64,
+}
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn prepared_plan_digest(
+    input: PreparedPlanDigestInput<'_>,
     effects: &[PreparedWorkspacePlanEffect],
     directories: &[RetainedWorkspaceDirectory],
 ) -> Result<String, WorkspacePlanPrepareError> {
@@ -858,12 +862,12 @@ fn prepared_plan_digest(
         .collect();
     let encoded = serde_json::to_vec(&Plan {
         schema: WORKSPACE_PLAN_SCHEMA_VERSION,
-        workspace_root,
-        workspace_identity,
-        origin,
-        proposal_sha256,
-        created_at_ms,
-        expires_at_ms,
+        workspace_root: input.workspace_root,
+        workspace_identity: input.workspace_identity,
+        origin: input.origin,
+        proposal_sha256: input.proposal_sha256,
+        created_at_ms: input.created_at_ms,
+        expires_at_ms: input.expires_at_ms,
         directories,
         effects,
     })
