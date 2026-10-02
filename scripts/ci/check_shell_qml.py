@@ -26,7 +26,7 @@ def contrast_ratio(first: str, second: str) -> float:
 
 
 def main() -> None:
-    expected = {"shell.qml", "quickshell.qml", "CommandBar.qml", "SecurityHost.qml", "wallpaper.svg", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "BlossomButton.qml", "BlossomIconButton.qml", "BlossomDockItem.qml", "icon-apps.svg", "icon-files.svg", "icon-browser.svg", "icon-terminal.svg", "icon-agent.svg", "README.md", "Petal"}
+    expected = {"shell.qml", "quickshell.qml", "CommandBar.qml", "SecurityHost.qml", "wallpaper.svg", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "BlossomButton.qml", "BlossomIconButton.qml", "BlossomDockItem.qml", "BlossomWindowDockItem.qml", "BlossomMenuItem.qml", "icon-apps.svg", "icon-files.svg", "icon-browser.svg", "icon-terminal.svg", "icon-agent.svg", "README.md", "Petal"}
     require({path.name for path in QML.iterdir()} == expected, "unexpected QML surface")
     qml = "\n".join((QML / name).read_text() for name in expected if name.endswith(".qml"))
     petal = QML / "Petal"
@@ -144,6 +144,25 @@ def main() -> None:
     ):
         require(required in shell,
                 f"broker-backed approval trust cue missing: {required}")
+    window_item = (QML / "BlossomWindowDockItem.qml").read_text()
+    for required in (
+        "model: ToplevelManager.toplevels",
+        "toplevel.activate()",
+        "toplevel.minimized = true",
+        "root.dockWindowTarget.close()",
+        "onMenuRequested:",
+        "root.dockWindowMenuX = openWindows.x + x + width / 2",
+        "root.dockWindowTarget = modelData",
+    ):
+        require(required in qml,
+                f"dock window-management contract missing: {required}")
+    require("acceptedButtons: Qt.RightButton" in window_item,
+            "dock window controls must be reachable from a right-click menu")
+    menu_item = (QML / "BlossomMenuItem.qml").read_text()
+    require("implicitHeight: 38" in menu_item and "horizontalAlignment: Text.AlignLeft" in menu_item,
+            "context menus must use compact native-style rows")
+    require('text: "Close Window"' in shell and "height: 94" in shell,
+            "dock window menu must remain compact")
     command_bar = (QML / "CommandBar.qml").read_text()
     theme = (QML / "Petal" / "Theme.qml").read_text()
     require("property color on" not in theme,

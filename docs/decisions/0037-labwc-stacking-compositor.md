@@ -41,9 +41,9 @@ The existing resolver change was qualified in the same VM session. The Linux-onl
 | Command-bar shortcut route | Pass | labwc `rc.xml` binds Super+Space to `quickshell ipc call commandbar toggle`; the live shell exported the `commandbar.toggle()` target and accepted the IPC call. A final keyboard/focus check remains part of the installed-package gate. |
 | Session environment for launched apps | Pass | The user manager contained `WAYLAND_DISPLAY=wayland-0`, `XDG_CURRENT_DESKTOP=labwc:wlroots`, `XDG_SESSION_TYPE=wayland`, and the session bus address. A transient graphical service launched `foot` successfully in `app-graphical.slice`. |
 | Conventional windows and Petal title bars | Partial | labwc loaded with a Petal Openbox theme and created a decorated application window. The spike used labwc's built-in button glyphs; final Petal button assets and a visual accessibility check remain required. |
-| Foreign-toplevel protocol | Protocol pass; product gap | labwc advertised `zwlr_foreign_toplevel_manager_v1` version 3. The current dock has no toplevel-manager implementation, so list, focus, minimize, and close are not yet product-qualified. |
-| Approval and password focus | Fail on current code | `trusted_approval.rs` requires the executable `/usr/bin/Hyprland`. Under labwc it necessarily fails closed before interactive authorization. Focus and raising cannot be qualified until the logind-session trust refactor lands. |
-| Compositor-independent session identity | Feasible, not implemented | logind reported exactly one active, local Wayland user session. Its root-owned leader was greetd, whose direct child was the expected user's labwc process in the same `session-1.scope`. This supports a session-rooted design without trusting a compositor name. |
+| Dock window controls | Pass on installed overlay | The compositor-neutral toplevel manager listed Firefox and the user verified focus, minimize, restore, and close. Its right-click actions use the compact Petal menu pattern rather than a full panel. |
+| Approval and password focus | Pass on installed overlay | The password field took focus in 5 of 5 real-keyboard command-bar runs over focused Firefox. In the additional typing-edge case, text already typed stayed in Firefox and did not enter the newly raised empty password field. |
+| Compositor-independent session identity | Pass in Linux tests | Trusted approval now selects the uniquely verified active local graphical logind session and binds the subject by UID, PID, start time, scope, and parentage. The Linux suite covers zero, multiple, and remote-only session candidates plus identity changes. |
 | Layer shell | Pass | labwc advertised `zwlr_layer_shell_v1` version 4 and the existing shell loaded. |
 | Display configuration | Pass | labwc advertised `zwlr_output_manager_v1` version 4; `wlr-randr` enumerated and described the active QEMU display. |
 | Idle detection | Protocol pass | labwc advertised `ext_idle_notifier_v1` version 2 and `swayidle` was installed for the spike. The end-to-end idle action should be repeated after the guest-agent harness is restored. |
@@ -62,5 +62,5 @@ This removes the compositor executable name from the security decision while kee
 - Blossom gains conventional floating windows, movable title bars, and familiar window controls without version-coupled Hyprland plugins.
 - The shell remains based on layer-shell and uses compositor-neutral Quickshell IPC for the command bar.
 - The compositor migration cannot merge as a cosmetic-only change because trusted approval and focus behavior are security gates.
-- The dock needs a real foreign-toplevel implementation before the migration is complete.
+- The dock window controls and compact action menu are now qualified in the disposable installed-package overlay.
 - Phase 12 begins with known protocol support, while interactive screen locking and multi-output kanshi behavior remain named qualification work rather than assumed support.

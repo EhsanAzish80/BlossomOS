@@ -19,6 +19,8 @@ ShellRoot {
     property bool installerOpened: false
     property string installerFeedback: ""
     property string powerAction: ""
+    property var dockWindowTarget: null
+    property real dockWindowMenuX: 0
     property string clockText: Qt.formatDateTime(new Date(), "ddd HH:mm")
     // QEMU Cocoa can briefly publish the same virtio scanout twice while
     // entering macOS fullscreen. Keep one coherent desktop surface set on
@@ -35,6 +37,7 @@ ShellRoot {
             root.activityVisible = false
             root.quickVisible = false
             root.powerVisible = false
+            root.dockWindowTarget = null
             root.powerAction = ""
             commandBar.hide()
         }
@@ -298,7 +301,7 @@ ShellRoot {
             screen: modelData
             anchors { bottom: true }
             margins { bottom: 14 }
-            implicitWidth: 410
+            implicitWidth: Math.min(760, 410 + Math.min(6, openWindows.count) * 56)
             implicitHeight: 72
             exclusiveZone: 92
             focusable: true
@@ -307,6 +310,7 @@ ShellRoot {
             Rectangle {
                 anchors.fill: parent; radius: Theme.radiusDock; color: Theme.barFill; border { color: Theme.lineStrong; width: 1 }
                 RowLayout {
+                    id: dockContent
                     anchors { fill: parent; margins: 10 } spacing: 8
                     Item { Layout.fillWidth: true }
                     BlossomDockItem { iconSource: "icon-agent.svg"; text: "Blossom"; description: "Blossom command bar"; selected: commandBar.open; accent: true; onClicked: commandBar.show() }
@@ -314,9 +318,75 @@ ShellRoot {
                     BlossomDockItem { iconSource: "icon-files.svg"; text: "Files"; description: "Files"; onClicked: BlossomBroker.openFiles() }
                     BlossomDockItem { iconSource: "icon-browser.svg"; text: "Browser"; description: "Web Browser"; onClicked: BlossomBroker.openBrowser() }
                     BlossomDockItem { iconSource: "icon-terminal.svg"; text: "Terminal"; description: "Terminal"; onClicked: BlossomBroker.openTerminal() }
+                    ListView {
+                        id: openWindows
+                        Layout.preferredWidth: Math.min(300, contentWidth)
+                        Layout.minimumWidth: count > 0 ? 52 : 0
+                        Layout.preferredHeight: 52
+                        orientation: ListView.Horizontal
+                        spacing: 4
+                        clip: true
+                        model: ToplevelManager.toplevels
+                        Accessible.name: "Open windows"
+                        delegate: BlossomWindowDockItem {
+                            required property var modelData
+                            toplevel: modelData
+                            onMenuRequested: {
+                                root.dockWindowMenuX = openWindows.x + x + width / 2
+                                root.dockWindowTarget = modelData
+                            }
+                        }
+                    }
                     Rectangle { width: 1; height: 34; color: Theme.lineStrong }
                     BlossomDockItem { symbol: "≡"; text: "Activity"; description: "Blossom Agent activity"; selected: root.activityVisible; onClicked: root.activityVisible = !root.activityVisible }
                     Item { Layout.fillWidth: true }
+                }
+            }
+            PopupWindow {
+                anchor.window: dock
+                anchor.rect.x: Math.max(8, Math.min(dock.width - width - 8,
+                    root.dockWindowMenuX - width / 2))
+                anchor.rect.y: -height - 10
+                width: 226
+                height: 94
+                visible: root.dockWindowTarget !== null
+                grabFocus: true
+                color: "transparent"
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.radiusControl
+                    color: Theme.panelFill
+                    border { color: Theme.lineStrong; width: 1 }
+                    ColumnLayout {
+                        anchors { fill: parent; margins: 7 }
+                        spacing: 2
+                        BlossomMenuItem {
+                            Layout.fillWidth: true
+                            text: root.dockWindowTarget !== null && root.dockWindowTarget.minimized
+                                ? "Restore" : "Minimize"
+                            onClicked: {
+                                if (root.dockWindowTarget === null)
+                                    return
+                                if (root.dockWindowTarget.minimized) {
+                                    root.dockWindowTarget.minimized = false
+                                    root.dockWindowTarget.activate()
+                                } else {
+                                    root.dockWindowTarget.minimized = true
+                                }
+                                root.dockWindowTarget = null
+                            }
+                        }
+                        BlossomMenuItem {
+                            Layout.fillWidth: true
+                            destructive: true
+                            text: "Close Window"
+                            onClicked: {
+                                if (root.dockWindowTarget !== null)
+                                    root.dockWindowTarget.close()
+                                root.dockWindowTarget = null
+                            }
+                        }
+                    }
                 }
             }
             PopupWindow {
