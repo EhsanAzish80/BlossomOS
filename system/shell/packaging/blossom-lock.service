@@ -7,7 +7,11 @@ ConditionEnvironment=WAYLAND_DISPLAY
 [Service]
 Type=exec
 ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/lock
-Restart=no
+Restart=on-failure
+RestartSec=1s
+RuntimeDirectory=blossom-lock
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=restart
 Environment=QT_QPA_PLATFORM=wayland
 Environment=QML2_IMPORT_PATH=/usr/lib/qt6/qml
 NoNewPrivileges=no

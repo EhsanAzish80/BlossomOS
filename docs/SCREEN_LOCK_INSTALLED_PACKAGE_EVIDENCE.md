@@ -9,10 +9,10 @@ state. This was a local package gate; no full image or GitHub-hosted build ran.
 - Architecture: `aarch64`
 - Guest resources: 4 vCPUs, 8 GiB RAM
 - Disk: disposable qcow2 overlay on the existing ARM64 development image
-- Package: `blossom-shell 0.9.0-6`, built inside the VM and installed with
+- Package: `blossom-shell 0.9.0-7`, built inside the VM and installed with
   `pacman -U`
 - Package SHA-256:
-  `016223d71aeca8e96646da03cdc3770107d4b9def540536349a7dc28816b41a2`
+  `2a861aa8a21aeba57a157e2eef72c06151a236b9d0ae98dd2e0adb36fbf2e759`
 - Authentication: a random disposable password enrolled only in the overlay;
   the password is not recorded in this evidence
 
@@ -47,16 +47,30 @@ real keyboard:
 
 The journal records two `pam_unix` failures followed by one successful PAM
 authentication. The lock-local delays grow through 1, 2, 4, 8 and 16 seconds,
-then remain capped at 30 seconds. They reset for a later lock session and never
-alter login eligibility.
+then remain capped at 30 seconds. A correct password cleared the state and
+unlocked after two failures. The counter and monotonic deadline persisted
+across a deliberate lock-client restart, then reset only after successful
+authentication. They never alter login eligibility.
+
+A separate fault-injection case made PAM's privileged checker unavailable.
+The UI reported that it could not check the password, remained locked, and
+left the incorrect-password counter at zero.
 
 ## Lock-client crash
 
 While the session was locked, the qualification deliberately sent `SIGKILL`
-to the lock client's main process. systemd recorded `Result=signal` and left
-the service failed. The tester observed only labwc's black locked fallback;
-the desktop did not reappear and no interaction was available. The VM was then
-rebooted to recover the disposable test session.
+to the lock client's main process. The tester observed only labwc's black
+locked fallback; the desktop never appeared. systemd restarted the client with
+a new PID, the client reacquired the locked session, and the password surface
+returned. The active retry deadline survived that restart.
+
+## Pending-effect cancellation
+
+The tester opened the command bar, submitted
+`create lock-cancel-proof.txt containing approval cancelled by locking`, and
+waited for its exact approval preview. Super+L closed the approval and acquired
+the session lock. After authenticating, the workspace file was absent and the
+lock service had exited cleanly. No proposed effect survived behind the lock.
 
 ## Automated checks
 
@@ -71,6 +85,7 @@ rebooted to recover the disposable test session.
 
 - This is installed-package evidence in an ARM64 VM, not a clean-image gate or
   physical Intel MacBook evidence.
-- The growing delay is process-local. A process restart resets it; it is an
-  online guessing throttle, not an account-level lockout.
+- The growing delay is session-local and survives a lock-client restart. A
+  logout or reboot resets it; it is an online guessing throttle, not an
+  account-level lockout.
 - The manual portion is one tester's observation, not a usability study.

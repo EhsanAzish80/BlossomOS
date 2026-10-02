@@ -209,6 +209,11 @@ def main() -> None:
         "passwordMaskDelay: 0",
         'text: "Show password"',
         "showPassword.checked ? TextInput.Normal : TextInput.Password",
+        "color: Theme.text",
+        '["/usr/bin/systemctl", "suspend"]',
+        '["/usr/bin/systemctl", "reboot"]',
+        '["/usr/bin/systemctl", "poweroff"]',
+        "result === PamResult.Failed || result === PamResult.MaxTries",
     ):
         require(required in lock_screen,
                 f"protocol-backed lock-screen contract missing: {required}")

@@ -202,11 +202,11 @@ def check_labwc_session_contract() -> None:
             "labwc must not manually start RefuseManualStart graphical-session.target")
     require("blossom-shell-ui.service blossom-desktop-shell.service" in autostart,
             "labwc must start the concrete Blossom shell services")
-    require(
-        "swayidle -w timeout 300 'quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock'"
-        in autostart,
-        "labwc must lock through ext-idle-notify after five minutes",
-    )
+    lock_command = "quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock"
+    require("timeout 300 '" + lock_command + "'" in autostart,
+            "labwc must lock through ext-idle-notify after five minutes")
+    require("before-sleep '" + lock_command + "'" in autostart,
+            "labwc must take the delay inhibitor and lock before suspend")
     environment = (labwc / "environment").read_text()
     require("XDG_CURRENT_DESKTOP=labwc:wlroots" in environment,
             "labwc desktop identity is missing")
@@ -232,7 +232,11 @@ def check_lock_screen_pam() -> None:
         "ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/lock",
         "NoNewPrivileges=no",
         "UMask=0077",
-        "Restart=no",
+        "Restart=on-failure",
+        "RestartSec=1s",
+        "RuntimeDirectory=blossom-lock",
+        "RuntimeDirectoryMode=0700",
+        "RuntimeDirectoryPreserve=restart",
     ]:
         require(required in unit, f"lock-service boundary missing: {required}")
     for forbidden in [
@@ -251,11 +255,30 @@ def check_lock_screen_pam() -> None:
     for required in [
         "property int failedAttempts: 0",
         "property int retrySecondsRemaining: 0",
-        "Math.min(30, Math.pow(2, Math.min(failedAttempts - 1, 5)))",
+        '["/usr/lib/blossom-os/blossom-lock-delay", "status"]',
+        '["/usr/lib/blossom-os/blossom-lock-delay", "failure"]',
+        '["/usr/lib/blossom-os/blossom-lock-delay", "reset"]',
         "Incorrect password. Try again in ",
+        "Can't check the password right now. The screen remains locked.",
     ]:
         require(required in lock_qml,
                 f"lock-local progressive retry delay missing: {required}")
+    delay_helper = (PACKAGE / "blossom-lock-delay").read_text()
+    for required in [
+        'runtime=${XDG_RUNTIME_DIR:-/run/user/$uid}',
+        'state_file="$state_dir/retry-state"',
+        '((delay > 30)) && delay=30',
+        'rm -f "$state_file"',
+    ]:
+        require(required in delay_helper,
+                f"persistent runtime retry helper missing: {required}")
+    logind = (PACKAGE / "50-blossom-lock.conf").read_text()
+    require(logind == "[Login]\nHandleLidSwitch=suspend\nHandleLidSwitchExternalPower=suspend\n",
+            "lid-close suspend policy must be explicit")
+    require("$pkgdir/usr/lib/blossom-os/blossom-lock-delay" in package,
+            "lock retry helper must ship in the shell package")
+    require("$pkgdir/usr/lib/systemd/logind.conf.d/50-blossom-lock.conf" in package,
+            "lid-close policy must ship in the shell package")
 
 
 def check_polkit_helper_preset() -> None:
@@ -348,7 +371,8 @@ def check_policy() -> None:
 def main() -> None:
     expected = {
         "README.md", UNIT, UI_UNIT, DESKTOP_UNIT, RECOVERY_UNIT, RECOVERY,
-        POLKIT_AGENT_UNIT, LOCK_UNIT, "50-blossom-core.preset", POLICY, "blossom-lock.pam",
+        POLKIT_AGENT_UNIT, LOCK_UNIT, "50-blossom-core.preset", POLICY,
+        "blossom-lock.pam", "blossom-lock-delay", "50-blossom-lock.conf",
     }
     require({path.name for path in PACKAGE.iterdir()} == expected, "unexpected shell package surface")
     check_lock()

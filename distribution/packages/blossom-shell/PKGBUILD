@@ -1,6 +1,6 @@
 pkgname=blossom-shell
 pkgver=0.9.0
-pkgrel=6
+pkgrel=7
 pkgdesc='Blossom OS narrow desktop shell surface'
 arch=('x86_64' 'aarch64')
 license=('Apache-2.0' 'OFL-1.1')
@@ -88,6 +88,10 @@ package() {
     "$pkgdir/usr/share/themes/Petal/openbox-3/themerc"
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-lock.pam" \
     "$pkgdir/etc/pam.d/blossom-lock"
+  install -Dm0755 "$repo_root/system/shell/packaging/blossom-lock-delay" \
+    "$pkgdir/usr/lib/blossom-os/blossom-lock-delay"
+  install -Dm0644 "$repo_root/system/shell/packaging/50-blossom-lock.conf" \
+    "$pkgdir/usr/lib/systemd/logind.conf.d/50-blossom-lock.conf"
   find "$pkgdir/usr/share/blossom-os/shell" -type f -exec chmod 0644 {} +
   find "$pkgdir/usr/share/blossom-os/lock" -type f -exec chmod 0644 {} +
   find "$pkgdir/usr/share/blossom-os/installer" -type f -exec chmod 0644 {} +

@@ -22,6 +22,13 @@ ShellRoot {
     }
 
     Timer {
+        id: retryPamAfterSystemError
+        interval: 3000
+        repeat: false
+        onTriggered: restartPam.restart()
+    }
+
+    Timer {
         id: retryDelay
         interval: 1000
         repeat: true
@@ -38,14 +45,39 @@ ShellRoot {
         }
     }
 
+    Process {
+        id: retryState
+        property string action: ""
+        stdout: StdioCollector {
+            onStreamFinished: root.handleRetryState(retryState.action, text)
+        }
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0) {
+                retryDelay.stop()
+                lock.feedback = "Can't enforce the password retry delay. The screen remains locked."
+            }
+        }
+    }
+
+    Process {
+        id: resetRetryState
+        command: ["/usr/lib/blossom-os/blossom-lock-delay", "reset"]
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0) {
+                lock.feedback = "Can't clear the password retry state. The screen remains locked."
+                return
+            }
+            lock.feedback = ""
+            lock.locked = false
+            stopSelf.running = true
+        }
+    }
+
     PamContext {
         id: pam
         config: "blossom-lock"
         user: "blossom"
-        Component.onCompleted: {
-            if (!start())
-                lock.feedback = "Authentication could not start. The screen remains locked."
-        }
+        Component.onCompleted: root.readRetryState()
         onPamMessage: {
             if (responseRequired) {
                 lock.feedback = ""
@@ -59,21 +91,68 @@ ShellRoot {
             if (lock.activePasswordField !== null)
                 lock.activePasswordField.text = ""
             if (result === PamResult.Success) {
-                lock.feedback = ""
-                lock.locked = false
-                stopSelf.running = true
-            } else {
-                lock.beginFailureDelay()
+                resetRetryState.running = true
+            } else if (result === PamResult.Failed || result === PamResult.MaxTries) {
+                root.recordAuthenticationFailure()
             }
         }
         onError: error => {
-            lock.beginFailureDelay()
+            lock.feedback = "Can't check the password right now. The screen remains locked."
+            retryPamAfterSystemError.restart()
         }
     }
 
     Process {
         id: stopSelf
         command: ["/usr/bin/systemctl", "--user", "stop", "blossom-lock.service"]
+    }
+
+    Process {
+        id: suspendSystem
+        command: ["/usr/bin/systemctl", "suspend"]
+    }
+
+    Process {
+        id: restartSystem
+        command: ["/usr/bin/systemctl", "reboot"]
+    }
+
+    Process {
+        id: powerOffSystem
+        command: ["/usr/bin/systemctl", "poweroff"]
+    }
+
+    function readRetryState(): void {
+        retryState.action = "status"
+        retryState.exec(["/usr/lib/blossom-os/blossom-lock-delay", "status"])
+    }
+
+    function recordAuthenticationFailure(): void {
+        retryState.action = "failure"
+        retryState.exec(["/usr/lib/blossom-os/blossom-lock-delay", "failure"])
+    }
+
+    function handleRetryState(action: string, output: string): void {
+        const fields = output.trim().split(/\s+/)
+        if (fields.length !== 2) {
+            lock.feedback = "Can't enforce the password retry delay. The screen remains locked."
+            return
+        }
+        const attempts = Number(fields[0])
+        const remaining = Number(fields[1])
+        if (!Number.isInteger(attempts) || attempts < 0
+                || !Number.isInteger(remaining) || remaining < 0 || remaining > 30) {
+            lock.feedback = "Can't enforce the password retry delay. The screen remains locked."
+            return
+        }
+        lock.failedAttempts = attempts
+        lock.retrySecondsRemaining = remaining
+        if (remaining > 0) {
+            lock.feedback = "Incorrect password. Try again in " + remaining + " seconds."
+            retryDelay.start()
+        } else if (!pam.start()) {
+            lock.feedback = "Authentication could not start. The screen remains locked."
+        }
     }
 
     WlSessionLock {
@@ -83,16 +162,6 @@ ShellRoot {
         property var activePasswordField: null
         property int failedAttempts: 0
         property int retrySecondsRemaining: 0
-
-        function beginFailureDelay(): void {
-            if (retryDelay.running)
-                return
-            failedAttempts += 1
-            retrySecondsRemaining = Math.min(30, Math.pow(2, Math.min(failedAttempts - 1, 5)))
-            feedback = "Incorrect password. Try again in "
-                + retrySecondsRemaining + " seconds."
-            retryDelay.start()
-        }
 
         function authenticate(response: string): void {
             if (!root.pamContext.active || !root.pamContext.responseRequired || response.length === 0)
@@ -105,8 +174,122 @@ ShellRoot {
             id: lockSurface
             color: Theme.ink0
             Rectangle {
+                id: lockBackground
                 anchors.fill: parent
                 color: Theme.ink0
+                property bool powerMenuOpen: false
+
+                Button {
+                    id: powerMenuButton
+                    anchors { left: parent.left; top: parent.top; margins: Theme.s5 }
+                    z: 3
+                    visible: lockSurface.screen === Quickshell.screens[0]
+                    text: "Power"
+                    Accessible.name: "Power options"
+                    onClicked: {
+                        lockBackground.powerMenuOpen = !lockBackground.powerMenuOpen
+                        if (lockBackground.powerMenuOpen)
+                            sleepButton.forceActiveFocus(Qt.PopupFocusReason)
+                    }
+                    Keys.onEscapePressed: lockBackground.powerMenuOpen = false
+                    contentItem: Text {
+                        text: powerMenuButton.text
+                        color: Theme.text
+                        font.family: Theme.sans
+                        font.pixelSize: Theme.label
+                        font.weight: Font.DemiBold
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    background: Rectangle {
+                        radius: Theme.radiusControl
+                        color: powerMenuButton.down ? Theme.pressed
+                            : powerMenuButton.hovered ? Theme.hover : Theme.panelFill
+                        border { color: Theme.lineStrong; width: 1 }
+                    }
+                }
+
+                Rectangle {
+                    anchors { left: powerMenuButton.left; top: powerMenuButton.bottom; topMargin: Theme.s2 }
+                    z: 4
+                    width: 180
+                    height: powerMenuColumn.implicitHeight + Theme.s3 * 2
+                    visible: lockBackground.powerMenuOpen
+                    radius: Theme.radiusControl
+                    color: Theme.panelFill
+                    border { color: Theme.lineStrong; width: 1 }
+                    ColumnLayout {
+                        id: powerMenuColumn
+                        anchors { fill: parent; margins: Theme.s3 }
+                        spacing: Theme.s1
+                        Button {
+                            id: sleepButton
+                            Layout.fillWidth: true
+                            text: "Sleep"
+                            Accessible.name: text
+                            Keys.onEscapePressed: lockBackground.powerMenuOpen = false
+                            onClicked: {
+                                lockBackground.powerMenuOpen = false
+                                suspendSystem.running = true
+                            }
+                            contentItem: Text {
+                                text: sleepButton.text
+                                color: Theme.text
+                                font.family: Theme.sans
+                                font.pixelSize: Theme.label
+                                horizontalAlignment: Text.AlignLeft
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                radius: Theme.radiusChip
+                                color: sleepButton.down ? Theme.pressed
+                                    : sleepButton.hovered ? Theme.hover : "transparent"
+                            }
+                        }
+                        Button {
+                            id: restartButton
+                            Layout.fillWidth: true
+                            text: "Restart"
+                            Accessible.name: text
+                            Keys.onEscapePressed: lockBackground.powerMenuOpen = false
+                            onClicked: restartSystem.running = true
+                            contentItem: Text {
+                                text: restartButton.text
+                                color: Theme.text
+                                font.family: Theme.sans
+                                font.pixelSize: Theme.label
+                                horizontalAlignment: Text.AlignLeft
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                radius: Theme.radiusChip
+                                color: restartButton.down ? Theme.pressed
+                                    : restartButton.hovered ? Theme.hover : "transparent"
+                            }
+                        }
+                        Button {
+                            id: shutDownButton
+                            Layout.fillWidth: true
+                            text: "Shut down"
+                            Accessible.name: text
+                            Keys.onEscapePressed: lockBackground.powerMenuOpen = false
+                            onClicked: powerOffSystem.running = true
+                            contentItem: Text {
+                                text: shutDownButton.text
+                                color: Theme.danger
+                                font.family: Theme.sans
+                                font.pixelSize: Theme.label
+                                horizontalAlignment: Text.AlignLeft
+                                verticalAlignment: Text.AlignVCenter
+                            }
+                            background: Rectangle {
+                                radius: Theme.radiusChip
+                                color: shutDownButton.down ? Theme.dangerTint
+                                    : shutDownButton.hovered ? Theme.hover : "transparent"
+                            }
+                        }
+                    }
+                }
                 ColumnLayout {
                     anchors.centerIn: parent
                     width: Math.min(440, parent.width - 48)
@@ -162,6 +345,13 @@ ShellRoot {
                         font.family: Theme.sans
                         font.pixelSize: Theme.label
                         Accessible.name: text
+                        contentItem: Text {
+                            leftPadding: showPassword.indicator.width + showPassword.spacing
+                            text: showPassword.text
+                            color: Theme.text
+                            font: showPassword.font
+                            verticalAlignment: Text.AlignVCenter
+                        }
                     }
                     Label {
                         Layout.fillWidth: true
