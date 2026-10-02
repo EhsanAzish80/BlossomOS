@@ -1,6 +1,6 @@
 # ADR-0037: Adopt labwc after the desktop trust prerequisites are met
 
-**Status:** Accepted
+**Status:** Accepted conditionally
 
 **Date:** 2026-10-01
 
@@ -19,6 +19,7 @@ Blossom will migrate to labwc, but the production switch is gated on all of the 
 3. Add the broker-backed dock window list and qualify list, focus, minimize, and close behavior.
 4. Ship the labwc session, autostart, environment import, Petal Openbox theme, portal selection, and lock/idle/display tools as packages with source checks.
 5. Rerun trusted approval, exact-effect disclosure, app launch, command-bar focus, and password-focus gates on the resulting installed packages before an image gate.
+6. Keep the password-agent window rule as a focus aid, not a trust signal. Because an app ID can be spoofed by another same-user process, the shell shows a non-interactive top-layer cue only while the broker has a real pending approval. The cue tells the person to verify the fixed system-broker header; no pending broker request means no cue.
 
 Until those prerequisites pass, Hyprland remains the production compositor. This is a migration decision, not evidence that the current image already satisfies it.
 

@@ -169,6 +169,44 @@ def check_polkit_agent_unit() -> None:
         require(value not in text, f"forbidden PolicyKit agent authority: {value}")
 
 
+def check_labwc_session_contract() -> None:
+    labwc = SHELL / "labwc"
+    rc = (labwc / "rc.xml").read_text()
+    ET.parse(labwc / "rc.xml")
+    for value in [
+        'key="W-Space"',
+        "quickshell ipc --any-display -p /usr/share/blossom-os/shell call commandbar toggle",
+        'identifier="lxqt-policykit-agent"',
+        'identifier="org.blossomos.ShellApproval"',
+        'action name="Focus"',
+        'action name="Raise"',
+        'action name="ToggleAlwaysOnTop"',
+    ]:
+        require(value in rc, f"missing labwc command or approval-focus rule: {value}")
+    require("password" not in rc.lower() and "pkexec" not in rc and "sudo" not in rc,
+            "labwc configuration must not contain credentials or privilege helpers")
+    autostart = (labwc / "autostart").read_text()
+    require(
+        "systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
+        in autostart,
+        "labwc must export graphical variables to the user manager",
+    )
+    require(
+        "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
+        in autostart,
+        "labwc must export graphical variables to D-Bus activation",
+    )
+    require("graphical-session.target" not in autostart,
+            "labwc must not manually start RefuseManualStart graphical-session.target")
+    require("blossom-shell-ui.service blossom-desktop-shell.service" in autostart,
+            "labwc must start the concrete Blossom shell services")
+    environment = (labwc / "environment").read_text()
+    require("XDG_CURRENT_DESKTOP=labwc:wlroots" in environment,
+            "labwc desktop identity is missing")
+    require((labwc / "Petal/openbox-3/themerc").is_file(),
+            "Petal labwc title-bar theme is missing")
+
+
 def check_polkit_helper_preset() -> None:
     preset = (PACKAGE / "50-blossom-core.preset").read_text()
     require(preset == "enable polkit-agent-helper.socket\n",
@@ -187,6 +225,14 @@ def check_polkit_helper_preset() -> None:
             "blossom-shell must ship the IBM Plex OFL licence")
     require("license=('Apache-2.0' 'OFL-1.1')" in shell_package,
             "blossom-shell package metadata must declare the IBM Plex OFL")
+    for path in [
+        "system/shell/labwc/rc.xml",
+        "system/shell/labwc/autostart",
+        "system/shell/labwc/environment",
+        "system/shell/labwc/Petal/openbox-3/themerc",
+    ]:
+        require(path in shell_package,
+                f"blossom-shell must package reviewed labwc asset: {path}")
 
 
 def check_real_pam_qualification() -> None:
@@ -261,6 +307,7 @@ def main() -> None:
     check_desktop_unit()
     check_recovery()
     check_polkit_agent_unit()
+    check_labwc_session_contract()
     check_polkit_helper_preset()
     check_real_pam_qualification()
     check_policy()

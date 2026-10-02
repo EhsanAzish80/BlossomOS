@@ -119,6 +119,8 @@ def main() -> None:
     ]:
         require(setting in cmake, f"missing relocatable plugin packaging: {setting}")
     host = (PLUGIN / "shellmain.cpp").read_text()
+    require('setDesktopFileName(QStringLiteral("org.blossomos.ShellApproval"))' in host,
+            "approval host must expose the fixed labwc application identity")
     require('file:///usr/share/blossom-os/shell/SecurityHost.qml' in host,
             "security host must load only the fixed installed accessibility entrypoint")
     require("QApplication application" in host,

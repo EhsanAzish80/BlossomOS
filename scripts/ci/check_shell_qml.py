@@ -87,7 +87,6 @@ def main() -> None:
     ]:
         require(action in qml, f"missing closed UI action: {action}")
     for forbidden in [
-        "Quickshell.Io",
         "Process",
         "FileView",
         "Socket",
@@ -136,6 +135,15 @@ def main() -> None:
     require('import "Petal"' not in approval_qml and "Theme." not in approval_qml,
             "approval presentation must remain independent from the Petal theme")
     shell = (QML / "shell.qml").read_text()
+    for required in (
+        'WlrLayershell.namespace: "blossom-approval-trust-cue"',
+        '["waiting", "submitting"].includes(BlossomBroker.state)',
+        'text: "🔒  Blossom approval pending · verify the system-broker header"',
+        "WlrLayer.Overlay",
+        "focusable: false",
+    ):
+        require(required in shell,
+                f"broker-backed approval trust cue missing: {required}")
     command_bar = (QML / "CommandBar.qml").read_text()
     theme = (QML / "Petal" / "Theme.qml").read_text()
     require("property color on" not in theme,
@@ -155,9 +163,11 @@ def main() -> None:
     ) is not None, "approval must dismiss shell popups before presenting its standard Qt window")
     require("BlossomBroker.failureReason" in shell,
             "agent failure surface must report the bounded broker reason")
-    require('appid: "blossom"' in shell and 'name: "command-bar"' in shell and
-            "GlobalShortcut" in shell and "onPressed: commandBar.toggle()" in shell,
-            "command bar must register its Hyprland global shortcut")
+    require("import Quickshell.Io" in shell and 'target: "commandbar"' in shell and
+            "function toggle(): void { commandBar.toggle() }" in shell,
+            "command bar must export its compositor-neutral IPC shortcut")
+    require("Process" not in shell and "FileView" not in shell and "Socket" not in shell,
+            "Quickshell.Io may expose only the closed command-bar IPC handler")
     for required in (
         'text: "Open an app, find a file, or ask Blossom"',
         "input.clear()",
@@ -178,7 +188,7 @@ def main() -> None:
             "command bar must not retain and select prompt history")
     require("#" not in command_bar and "Qt.rgba" not in command_bar,
             "command bar colors must come only from Petal tokens")
-    require("onClicked: commandBar.show()" in shell and shell.count("commandBar.show()") == 2,
+    require(shell.count("onClicked: commandBar.show()") == 2,
             "both Blossom flower controls must open the command bar")
     require("};" not in shell,
             "shell QML must not terminate grouped properties, child objects, or handlers with semicolons")

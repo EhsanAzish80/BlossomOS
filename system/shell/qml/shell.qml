@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Hyprland
+import Quickshell.Io
 import Quickshell.Wayland
 import Blossom.Shell
 import "Petal"
@@ -39,11 +39,12 @@ ShellRoot {
             commandBar.hide()
         }
     }
-    GlobalShortcut {
-        appid: "blossom"
-        name: "command-bar"
-        description: "Open the Blossom command bar"
-        onPressed: commandBar.toggle()
+    IpcHandler {
+        target: "commandbar"
+        property bool opened: commandBar.open
+        function toggle(): void { commandBar.toggle() }
+        function show(): void { commandBar.show() }
+        function hide(): void { commandBar.hide() }
     }
     Component.onCompleted: {
         BlossomBroker.refreshActivity()
@@ -85,6 +86,39 @@ ShellRoot {
     // therefore cannot adopt or decide this pending request.
     ApprovalPanel {}
     CommandBar { id: commandBar }
+
+    // This cue is rendered by the broker-backed shell, not by the polkit
+    // agent.  It is deliberately non-interactive: it only tells the person
+    // that a real Blossom request is pending before they trust a password
+    // dialog that another same-user process could imitate.
+    Variants {
+        model: root.desktopScreens
+        PanelWindow {
+            required property var modelData
+            screen: modelData
+            anchors { top: true; left: true; right: true }
+            implicitHeight: 34
+            aboveWindows: true
+            focusable: false
+            exclusiveZone: 0
+            exclusionMode: ExclusionMode.Ignore
+            visible: ["waiting", "submitting"].includes(BlossomBroker.state)
+            WlrLayershell.layer: WlrLayer.Overlay
+            WlrLayershell.namespace: "blossom-approval-trust-cue"
+            color: Theme.decisionTint
+
+            Label {
+                anchors.centerIn: parent
+                text: "🔒  Blossom approval pending · verify the system-broker header"
+                color: Theme.decision
+                font.family: Theme.sans
+                font.pixelSize: Theme.label
+                font.bold: true
+                Accessible.role: Accessible.AlertMessage
+                Accessible.name: text
+            }
+        }
+    }
 
     Variants {
         model: root.desktopScreens

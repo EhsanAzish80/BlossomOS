@@ -1,6 +1,6 @@
 pkgname=blossom-shell
 pkgver=0.9.0
-pkgrel=3
+pkgrel=4
 pkgdesc='Blossom OS narrow desktop shell surface'
 arch=('x86_64' 'aarch64')
 license=('Apache-2.0' 'OFL-1.1')
@@ -70,6 +70,14 @@ package() {
     "$pkgdir/etc/fonts/conf.d/50-blossom-fonts.conf"
   install -Dm0644 "$repo_root/system/shell/fonts/IBM-Plex-OFL.txt" \
     "$pkgdir/usr/share/licenses/blossom-shell/IBM-Plex-OFL.txt"
+  install -Dm0644 "$repo_root/system/shell/labwc/rc.xml" \
+    "$pkgdir/usr/share/blossom-os/labwc/rc.xml"
+  install -Dm0755 "$repo_root/system/shell/labwc/autostart" \
+    "$pkgdir/usr/share/blossom-os/labwc/autostart"
+  install -Dm0644 "$repo_root/system/shell/labwc/environment" \
+    "$pkgdir/usr/share/blossom-os/labwc/environment"
+  install -Dm0644 "$repo_root/system/shell/labwc/Petal/openbox-3/themerc" \
+    "$pkgdir/usr/share/themes/Petal/openbox-3/themerc"
   find "$pkgdir/usr/share/blossom-os/shell" -type f -exec chmod 0644 {} +
   find "$pkgdir/usr/share/blossom-os/installer" -type f -exec chmod 0644 {} +
 }
