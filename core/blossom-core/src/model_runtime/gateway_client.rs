@@ -138,10 +138,8 @@ impl PrivateGatewayClient {
 }
 
 fn map_failure_category(category: super::ProviderFailureCategory) -> PrivateGatewayClientError {
-    match category {
-        super::ProviderFailureCategory::Malformed => PrivateGatewayClientError::Protocol,
-        _ => PrivateGatewayClientError::InferenceFailed,
-    }
+    let _ = category;
+    PrivateGatewayClientError::InferenceFailed
 }
 
 #[derive(Default)]
@@ -201,15 +199,20 @@ mod tests {
     }
 
     #[test]
-    fn malformed_provider_output_is_a_protocol_denial_not_an_inference_outage() {
-        assert_eq!(
-            map_failure_category(crate::ProviderFailureCategory::Malformed),
-            PrivateGatewayClientError::Protocol
-        );
-        assert_eq!(
-            map_failure_category(crate::ProviderFailureCategory::Unavailable),
-            PrivateGatewayClientError::InferenceFailed
-        );
+    fn every_provider_failure_is_model_inference_failure_not_gateway_unavailability() {
+        for category in [
+            crate::ProviderFailureCategory::Unavailable,
+            crate::ProviderFailureCategory::TimedOut,
+            crate::ProviderFailureCategory::Disconnected,
+            crate::ProviderFailureCategory::Malformed,
+            crate::ProviderFailureCategory::ProviderFailed,
+            crate::ProviderFailureCategory::OutputLimit,
+        ] {
+            assert_eq!(
+                map_failure_category(category),
+                PrivateGatewayClientError::InferenceFailed
+            );
+        }
     }
 
     #[cfg(target_os = "linux")]

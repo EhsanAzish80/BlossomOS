@@ -883,9 +883,7 @@ fn map_gateway_client_error(error: PrivateGatewayClientError) -> AgentTurnError 
     eprintln!("model gateway client rejected request: {error}");
     match error {
         PrivateGatewayClientError::ConnectionUnavailable => AgentTurnError::GatewayUnavailable,
-        PrivateGatewayClientError::UnexpectedGatewayIdentity => {
-            AgentTurnError::UnexpectedGatewayIdentity
-        }
+        PrivateGatewayClientError::UnexpectedGatewayIdentity => AgentTurnError::GatewayUnavailable,
         PrivateGatewayClientError::Protocol => AgentTurnError::Protocol,
         PrivateGatewayClientError::InferenceFailed => AgentTurnError::InferenceFailed,
     }
@@ -986,6 +984,31 @@ mod tests {
     use std::process::{Child, Command, Stdio};
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{Duration, Instant};
+
+    #[cfg(feature = "production-dbus-service")]
+    #[test]
+    fn every_gateway_client_error_has_one_explicit_shell_result() {
+        for (error, expected) in [
+            (
+                PrivateGatewayClientError::ConnectionUnavailable,
+                AgentTurnError::GatewayUnavailable,
+            ),
+            (
+                PrivateGatewayClientError::UnexpectedGatewayIdentity,
+                AgentTurnError::GatewayUnavailable,
+            ),
+            (
+                PrivateGatewayClientError::Protocol,
+                AgentTurnError::Protocol,
+            ),
+            (
+                PrivateGatewayClientError::InferenceFailed,
+                AgentTurnError::InferenceFailed,
+            ),
+        ] {
+            assert_eq!(map_gateway_client_error(error), expected);
+        }
+    }
 
     struct CountingExecutor {
         calls: Arc<AtomicUsize>,

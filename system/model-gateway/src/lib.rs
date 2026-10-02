@@ -62,6 +62,28 @@ struct PrivateConnectionContext<'a> {
 }
 
 #[cfg(unix)]
+fn provider_failure_reason(
+    category: blossom_core::ProviderFailureCategory,
+) -> audit::GatewayAuditReason {
+    match category {
+        blossom_core::ProviderFailureCategory::Disconnected => {
+            audit::GatewayAuditReason::OutputTruncated
+        }
+        blossom_core::ProviderFailureCategory::Malformed => {
+            audit::GatewayAuditReason::OutputInvalid
+        }
+        blossom_core::ProviderFailureCategory::OutputLimit => {
+            audit::GatewayAuditReason::OutputOversize
+        }
+        blossom_core::ProviderFailureCategory::Unavailable
+        | blossom_core::ProviderFailureCategory::TimedOut
+        | blossom_core::ProviderFailureCategory::ProviderFailed => {
+            audit::GatewayAuditReason::ProviderRejected
+        }
+    }
+}
+
+#[cfg(unix)]
 #[cfg_attr(
     not(all(target_os = "linux", feature = "production-private-inference")),
     allow(
@@ -238,6 +260,7 @@ where
     let cancellation = InferenceCancellation::new();
     let cancellation_reader = cancellation.clone();
     let request_id = request.request_id().clone();
+    let terminal_request_id = request_id.as_str().to_owned();
     let finished = Arc::new(AtomicBool::new(false));
     let reader_finished = finished.clone();
     let mut read_stream = stream
@@ -266,16 +289,22 @@ where
     });
 
     let mut write_failed = false;
-    let mut pending_terminal: Option<(Vec<u8>, GatewayAuditOutcome)> = None;
+    let mut pending_terminal: Option<(
+        Vec<u8>,
+        GatewayAuditOutcome,
+        Option<audit::GatewayAuditReason>,
+    )> = None;
     let mut output_bytes = 0_usize;
     let mut proposed_intents = 0_usize;
     let mut usage = None;
+    let mut last_sequence = None;
     let inference_result = {
         let mut emit = |event: &blossom_core::NormalizedStreamEvent| {
             if write_failed {
                 cancellation.cancel();
                 return;
             }
+            last_sequence = Some(event.sequence);
             match &event.event {
                 blossom_core::NormalizedStreamKind::TextDelta { content } => {
                     output_bytes = output_bytes.saturating_add(content.len());
@@ -290,32 +319,34 @@ where
                 _ => {}
             }
             let terminal = match &event.event {
-                blossom_core::NormalizedStreamKind::Finished { completion } => {
-                    Some(match completion {
+                blossom_core::NormalizedStreamKind::Finished { completion } => Some((
+                    match completion {
                         blossom_core::NormalizedCompletion::Text { .. } => {
                             GatewayAuditOutcome::CompletedText
                         }
                         blossom_core::NormalizedCompletion::ToolIntents { .. } => {
                             GatewayAuditOutcome::CompletedProposals
                         }
-                    })
-                }
+                    },
+                    None,
+                )),
                 blossom_core::NormalizedStreamKind::Cancelled => {
-                    Some(GatewayAuditOutcome::Cancelled)
+                    Some((GatewayAuditOutcome::Cancelled, None))
                 }
-                blossom_core::NormalizedStreamKind::Failed { .. } => {
-                    Some(GatewayAuditOutcome::ProviderFailed)
+                blossom_core::NormalizedStreamKind::Failed { category } => {
+                    let reason = provider_failure_reason(*category);
+                    Some((GatewayAuditOutcome::ProviderFailed, Some(reason)))
                 }
                 _ => None,
             };
             let encoded = encode_gateway_event(event)
                 .map_err(|_| ())
                 .and_then(|frame| {
-                    if let Some(outcome) = terminal {
+                    if let Some((outcome, reason)) = terminal {
                         if pending_terminal.is_some() {
                             return Err(());
                         }
-                        pending_terminal = Some((frame, outcome));
+                        pending_terminal = Some((frame, outcome, reason));
                         Ok(())
                     } else {
                         stream.write_all(&frame).map_err(|_| ())
@@ -328,6 +359,34 @@ where
         };
         inference(&request, cancellation.clone(), &mut emit)
     };
+    if inference_result.is_err()
+        && pending_terminal.is_none()
+        && !write_failed
+        && let Some(last_sequence) = last_sequence
+    {
+        let sequence = last_sequence.saturating_add(1);
+        let failure = blossom_core::NormalizedStreamEvent {
+            version: blossom_core::MODEL_PROTOCOL_VERSION,
+            request_id: terminal_request_id,
+            sequence,
+            event: blossom_core::NormalizedStreamKind::Failed {
+                category: blossom_core::ProviderFailureCategory::ProviderFailed,
+            },
+        };
+        match encode_gateway_event(&failure) {
+            Ok(frame) => {
+                pending_terminal = Some((
+                    frame,
+                    GatewayAuditOutcome::ProviderFailed,
+                    Some(audit::GatewayAuditReason::ProviderRejected),
+                ));
+            }
+            Err(_) => {
+                write_failed = true;
+                cancellation.cancel();
+            }
+        }
+    }
     finished.store(true, Ordering::Release);
     let _ = stream.shutdown(Shutdown::Read);
     let cancellation_valid = cancellation_thread.join().unwrap_or(false);
@@ -337,7 +396,7 @@ where
         GatewayAuditOutcome::DeliveryFailed
     } else if inference_result.is_err() {
         GatewayAuditOutcome::ProviderFailed
-    } else if let Some((_, outcome)) = pending_terminal.as_ref() {
+    } else if let Some((_, outcome, _)) = pending_terminal.as_ref() {
         *outcome
     } else {
         GatewayAuditOutcome::ProviderFailed
@@ -347,6 +406,7 @@ where
             instance_sha256: context.instance_sha256.into(),
             request_id_sha256,
             outcome: terminal_outcome,
+            reason: pending_terminal.as_ref().and_then(|(_, _, reason)| *reason),
             elapsed_ms: u64::try_from(started_at.elapsed().as_millis()).unwrap_or(u64::MAX),
             output_bytes,
             proposed_intents,
@@ -358,7 +418,7 @@ where
         return Err(GatewayProcessError::PrivateConnectionUnavailable);
     }
     let inference_failed = inference_result.is_err();
-    let (terminal, terminal_outcome) =
+    let (terminal, terminal_outcome, _) =
         pending_terminal.ok_or(GatewayProcessError::PrivateConnectionUnavailable)?;
     if inference_failed && terminal_outcome != GatewayAuditOutcome::ProviderFailed {
         return Err(GatewayProcessError::PrivateConnectionUnavailable);
@@ -694,6 +754,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn provider_failure_reason_is_bounded_and_content_free_for_every_class() {
+        use audit::GatewayAuditReason;
+        use blossom_core::ProviderFailureCategory;
+
+        for (category, expected) in [
+            (
+                ProviderFailureCategory::Unavailable,
+                GatewayAuditReason::ProviderRejected,
+            ),
+            (
+                ProviderFailureCategory::TimedOut,
+                GatewayAuditReason::ProviderRejected,
+            ),
+            (
+                ProviderFailureCategory::ProviderFailed,
+                GatewayAuditReason::ProviderRejected,
+            ),
+            (
+                ProviderFailureCategory::Disconnected,
+                GatewayAuditReason::OutputTruncated,
+            ),
+            (
+                ProviderFailureCategory::Malformed,
+                GatewayAuditReason::OutputInvalid,
+            ),
+            (
+                ProviderFailureCategory::OutputLimit,
+                GatewayAuditReason::OutputOversize,
+            ),
+        ] {
+            assert_eq!(provider_failure_reason(category), expected);
+        }
+    }
+
+    #[test]
     fn production_entry_point_is_fail_closed() {
         assert_eq!(
             run_production(),
@@ -948,6 +1043,59 @@ mod tests {
                 }
             ));
             assert_eq!(server_thread.join().unwrap(), Ok(()));
+        }
+
+        #[test]
+        fn provider_error_after_start_is_synthesized_as_model_failure_not_eof() {
+            let (mut client, server) = UnixStream::pair().unwrap();
+            client
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let server_thread = std::thread::spawn(move || {
+                let mut audit = TestAudit::default();
+                let result = serve_authorized_private_connection(
+                    server,
+                    PrivateConnectionContext {
+                        profile: GatewayProfile::LlamaCppCpuV1,
+                        provider: ModelProviderKind::LlamaCpp,
+                        model: ModelProfile::parse("fixture-model:1".into()).unwrap(),
+                        boot_id_sha256: &"a".repeat(64),
+                        instance_nonce: "private-error-1",
+                        instance_sha256: &"d".repeat(64),
+                        client_uid_sha256: &"e".repeat(64),
+                    },
+                    &mut audit,
+                    |request, cancellation, emit| {
+                        let mut state = ModelStreamState::new(request, cancellation);
+                        emit(&state.apply(0, ProviderStreamInput::Started).unwrap());
+                        Err(GatewayProcessError::PrivateConnectionUnavailable)
+                    },
+                );
+                (result, audit)
+            });
+            let mut reader = ClientReader::new();
+            let _ = reader.read_one(&mut client);
+            let request_id = InferenceRequestId::parse("private-error-1".into()).unwrap();
+            client.write_all(&private_frame(&request_id)).unwrap();
+            let started = decode_gateway_event(&reader.read_one(&mut client)).unwrap();
+            assert!(matches!(started.event, NormalizedStreamKind::Started));
+            let failed = decode_gateway_event(&reader.read_one(&mut client)).unwrap();
+            assert!(matches!(
+                failed.event,
+                NormalizedStreamKind::Failed {
+                    category: blossom_core::ProviderFailureCategory::ProviderFailed
+                }
+            ));
+            let (result, audit) = server_thread.join().unwrap();
+            assert_eq!(result, Ok(()));
+            assert!(audit.0.iter().any(|event| matches!(
+                event,
+                audit::GatewayAuditEvent::RequestTerminal {
+                    outcome: audit::GatewayAuditOutcome::ProviderFailed,
+                    reason: Some(audit::GatewayAuditReason::ProviderRejected),
+                    ..
+                }
+            )));
         }
 
         #[test]

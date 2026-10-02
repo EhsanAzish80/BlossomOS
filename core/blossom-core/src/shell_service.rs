@@ -202,7 +202,9 @@ impl<E: Executor, B: BatterySummaryProvider> ShellDiagnosticService<E, B> {
                 };
                 let completion = match completion {
                     Ok(completion) => completion,
-                    Err(AgentTurnError::Protocol) => return Ok(ShellServiceOutcome::ModelFailed),
+                    Err(AgentTurnError::Protocol | AgentTurnError::InferenceFailed) => {
+                        return Ok(ShellServiceOutcome::ModelFailed);
+                    }
                     Err(error) => return Err(ShellServiceError::Agent(error)),
                 };
                 let NormalizedCompletion::ToolIntents { intents } = completion else {
