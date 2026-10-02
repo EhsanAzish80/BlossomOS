@@ -5,7 +5,8 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[2]
-QML = ROOT / "system" / "shell" / "qml"
+SHELL = ROOT / "system" / "shell"
+QML = SHELL / "qml"
 
 
 def require(condition: bool, message: str) -> None:
@@ -26,7 +27,7 @@ def contrast_ratio(first: str, second: str) -> float:
 
 
 def main() -> None:
-    expected = {"shell.qml", "quickshell.qml", "CommandBar.qml", "SecurityHost.qml", "wallpaper.svg", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "BlossomButton.qml", "BlossomIconButton.qml", "BlossomDockItem.qml", "icon-apps.svg", "icon-files.svg", "icon-browser.svg", "icon-terminal.svg", "icon-agent.svg", "README.md", "Petal"}
+    expected = {"shell.qml", "quickshell.qml", "CommandBar.qml", "SecurityHost.qml", "wallpaper.svg", "ApprovalPanel.qml", "ActivityPanel.qml", "SecurityField.qml", "BlossomButton.qml", "BlossomIconButton.qml", "BlossomDockItem.qml", "BlossomWindowDockItem.qml", "BlossomMenuItem.qml", "icon-apps.svg", "icon-files.svg", "icon-browser.svg", "icon-terminal.svg", "icon-agent.svg", "README.md", "Petal"}
     require({path.name for path in QML.iterdir()} == expected, "unexpected QML surface")
     qml = "\n".join((QML / name).read_text() for name in expected if name.endswith(".qml"))
     petal = QML / "Petal"
@@ -87,7 +88,6 @@ def main() -> None:
     ]:
         require(action in qml, f"missing closed UI action: {action}")
     for forbidden in [
-        "Quickshell.Io",
         "Process",
         "FileView",
         "Socket",
@@ -136,6 +136,98 @@ def main() -> None:
     require('import "Petal"' not in approval_qml and "Theme." not in approval_qml,
             "approval presentation must remain independent from the Petal theme")
     shell = (QML / "shell.qml").read_text()
+    for required in (
+        'WlrLayershell.namespace: "blossom-approval-trust-cue"',
+        '["waiting", "submitting"].includes(BlossomBroker.state)',
+        'text: "🔒  Blossom approval pending · verify the system-broker header"',
+        "WlrLayer.Overlay",
+        "focusable: false",
+    ):
+        require(required in shell,
+                f"broker-backed approval trust cue missing: {required}")
+    window_item = (QML / "BlossomWindowDockItem.qml").read_text()
+    for required in (
+        "model: ToplevelManager.toplevels",
+        "toplevel.activate()",
+        "toplevel.minimized = true",
+        "root.dockWindowTarget.close()",
+        "onMenuRequested:",
+        "root.dockWindowMenuX = openWindows.x + x + width / 2",
+        "root.dockWindowTarget = modelData",
+    ):
+        require(required in qml,
+                f"dock window-management contract missing: {required}")
+    require("acceptedButtons: Qt.RightButton" in window_item,
+            "dock window controls must be reachable from a right-click menu")
+    for required in (
+        "Qt.Key_Menu",
+        "Qt.Key_F10",
+        "Qt.ShiftModifier",
+    ):
+        require(required in window_item,
+                f"context-menu keyboard opening is missing: {required}")
+    menu_item = (QML / "BlossomMenuItem.qml").read_text()
+    require("implicitHeight: 38" in menu_item and "horizontalAlignment: Text.AlignLeft" in menu_item,
+            "context menus must use compact native-style rows")
+    require('text: "Close Window"' in shell and "height: 94" in shell,
+            "dock window menu must remain compact")
+    require("Accessible.role: Accessible.MenuItem" in menu_item,
+            "context-menu rows must expose their menu role to AT-SPI")
+    for required in (
+        "Qt.Key_Down",
+        "Qt.Key_Up",
+        "Qt.Key_Escape",
+        "root.dockWindowTarget = null",
+        "minimizeWindowItem.forceActiveFocus",
+    ):
+        require(required in shell,
+                f"context-menu keyboard contract missing: {required}")
+    busy_close = re.search(
+        r"if \(busy\) \{\s*//.*?root\.dockWindowTarget = null",
+        shell,
+        re.DOTALL,
+    )
+    require(busy_close is not None,
+            "context menus must close before approval can begin")
+    forbidden_menu_calls = (
+        "requestAgentTurn",
+        "beginAgentTurn",
+        "StartAgentTurn",
+        "queryCommands",
+    )
+    for forbidden in forbidden_menu_calls:
+        require(forbidden not in menu_item and forbidden not in window_item,
+                f"context menus must not start agent work: {forbidden}")
+    lock_screen = (SHELL / "lock" / "shell.qml").read_text()
+    for required in (
+        "WlSessionLock {",
+        "WlSessionLockSurface {",
+        'config: "blossom-lock"',
+        "result === PamResult.Success",
+        "Incorrect password. Try again in ",
+        "retryDelay.running",
+        "passwordMaskDelay: 0",
+        'text: "Show password"',
+        "showPassword.checked ? TextInput.Normal : TextInput.Password",
+        "color: Theme.text",
+        '["/usr/bin/systemctl", "suspend"]',
+        '["/usr/bin/systemctl", "reboot"]',
+        '["/usr/bin/systemctl", "poweroff"]',
+        "result === PamResult.Failed || result === PamResult.MaxTries",
+        "onSecureChanged:",
+        'command: ["/usr/lib/blossom-os/blossom-lock-delay", "secure"]',
+    ):
+        require(required in lock_screen,
+                f"protocol-backed lock-screen contract missing: {required}")
+    for required in (
+        'target: "lockscreen"',
+        "BlossomBroker.cancelPending()",
+        "root.dockWindowTarget = null",
+        "commandBar.hide()",
+        "BlossomBroker.lockScreen()",
+    ):
+        require(required in shell,
+                f"lock preparation contract missing: {required}")
     command_bar = (QML / "CommandBar.qml").read_text()
     theme = (QML / "Petal" / "Theme.qml").read_text()
     require("property color on" not in theme,
@@ -155,9 +247,11 @@ def main() -> None:
     ) is not None, "approval must dismiss shell popups before presenting its standard Qt window")
     require("BlossomBroker.failureReason" in shell,
             "agent failure surface must report the bounded broker reason")
-    require('appid: "blossom"' in shell and 'name: "command-bar"' in shell and
-            "GlobalShortcut" in shell and "onPressed: commandBar.toggle()" in shell,
-            "command bar must register its Hyprland global shortcut")
+    require("import Quickshell.Io" in shell and 'target: "commandbar"' in shell and
+            "function toggle(): void { commandBar.toggle() }" in shell,
+            "command bar must export its compositor-neutral IPC shortcut")
+    require("Process" not in shell and "FileView" not in shell and "Socket" not in shell,
+            "Quickshell.Io may expose only the closed command-bar IPC handler")
     for required in (
         'text: "Open an app, find a file, or ask Blossom"',
         "input.clear()",
@@ -178,7 +272,7 @@ def main() -> None:
             "command bar must not retain and select prompt history")
     require("#" not in command_bar and "Qt.rgba" not in command_bar,
             "command bar colors must come only from Petal tokens")
-    require("onClicked: commandBar.show()" in shell and shell.count("commandBar.show()") == 2,
+    require(shell.count("onClicked: commandBar.show()") == 2,
             "both Blossom flower controls must open the command bar")
     require("};" not in shell,
             "shell QML must not terminate grouped properties, child objects, or handlers with semicolons")

@@ -53,7 +53,10 @@ def main() -> None:
     ]:
         require(forbidden not in text, f"forbidden client authority: {forbidden}")
     header = (PLUGIN / "blossombroker.h").read_text()
-    require(header.count("Q_INVOKABLE") == 29, "client invokable surface drift")
+    require(header.count("Q_INVOKABLE") == 30, "client invokable surface drift")
+    require("Q_INVOKABLE void lockScreen();" in header and
+            'launchDesktop(QStringLiteral("lock"))' in text,
+            "lock request must use the fixed desktop-launcher bridge")
     require("onboardingRequired" in header and "dismissOnboarding" in header,
             "fixed onboarding surface is missing")
     client = (PLUGIN / "blossombroker.cpp").read_text()
@@ -119,6 +122,8 @@ def main() -> None:
     ]:
         require(setting in cmake, f"missing relocatable plugin packaging: {setting}")
     host = (PLUGIN / "shellmain.cpp").read_text()
+    require('setDesktopFileName(QStringLiteral("org.blossomos.ShellApproval"))' in host,
+            "approval host must expose the fixed labwc application identity")
     require('file:///usr/share/blossom-os/shell/SecurityHost.qml' in host,
             "security host must load only the fixed installed accessibility entrypoint")
     require("QApplication application" in host,

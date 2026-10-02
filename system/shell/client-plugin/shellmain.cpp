@@ -6,6 +6,7 @@
 int main(int argc, char *argv[]) {
     QApplication application(argc, argv);
     QCoreApplication::setApplicationName(QStringLiteral("Blossom OS Shell"));
+    application.setDesktopFileName(QStringLiteral("org.blossomos.ShellApproval"));
 
     QQmlApplicationEngine engine;
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed,

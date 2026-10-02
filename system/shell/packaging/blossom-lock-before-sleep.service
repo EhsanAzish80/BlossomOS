@@ -1,0 +1,18 @@
+[Unit]
+Description=Secure the Blossom OS session before sleep
+DefaultDependencies=no
+Requires=user@1000.service
+After=user@1000.service
+Before=sleep.target
+StopWhenUnneeded=yes
+
+[Service]
+Type=oneshot
+User=blossom
+Group=blossom
+Environment=HOME=/home/blossom
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+ExecStart=/usr/bin/systemctl --user start blossom-lock.service
+ExecStart=/usr/lib/blossom-os/blossom-lock-delay wait-secure
+RemainAfterExit=yes

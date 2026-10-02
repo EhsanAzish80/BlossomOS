@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Hyprland
+import Quickshell.Io
 import Quickshell.Wayland
 import Blossom.Shell
 import "Petal"
@@ -19,6 +19,8 @@ ShellRoot {
     property bool installerOpened: false
     property string installerFeedback: ""
     property string powerAction: ""
+    property var dockWindowTarget: null
+    property real dockWindowMenuX: 0
     property string clockText: Qt.formatDateTime(new Date(), "ddd HH:mm")
     // QEMU Cocoa can briefly publish the same virtio scanout twice while
     // entering macOS fullscreen. Keep one coherent desktop surface set on
@@ -35,15 +37,21 @@ ShellRoot {
             root.activityVisible = false
             root.quickVisible = false
             root.powerVisible = false
+            root.dockWindowTarget = null
             root.powerAction = ""
             commandBar.hide()
         }
     }
-    GlobalShortcut {
-        appid: "blossom"
-        name: "command-bar"
-        description: "Open the Blossom command bar"
-        onPressed: commandBar.toggle()
+    IpcHandler {
+        target: "commandbar"
+        property bool opened: commandBar.open
+        function toggle(): void { commandBar.toggle() }
+        function show(): void { commandBar.show() }
+        function hide(): void { commandBar.hide() }
+    }
+    IpcHandler {
+        target: "lockscreen"
+        function lock(): void { root.requestSessionLock() }
     }
     Component.onCompleted: {
         BlossomBroker.refreshActivity()
@@ -58,6 +66,9 @@ ShellRoot {
             const finished = ["unavailable", "unsupported", "model_failed", "verified", "verification_failed", "cancelled", "expired"]
                 .includes(BlossomBroker.state)
             if (busy) {
+                // Ordinary menus never remain above, or compete for focus
+                // with, the broker-controlled approval ceremony.
+                root.dockWindowTarget = null
                 if (root.activityVisible)
                     root.agentHiddenForApproval = true
                 root.activityVisible = false
@@ -80,11 +91,57 @@ ShellRoot {
         }
     }
 
+    function requestSessionLock(): void {
+        if (["waiting", "submitting", "cancelling"].includes(BlossomBroker.state))
+            BlossomBroker.cancelPending()
+        root.launcherVisible = false
+        root.activityVisible = false
+        root.quickVisible = false
+        root.powerVisible = false
+        root.dockWindowTarget = null
+        root.powerAction = ""
+        commandBar.hide()
+        BlossomBroker.lockScreen()
+    }
+
     // The approval must live in the client connection that started the
     // request.  The separate accessibility host has its own D-Bus peer and
     // therefore cannot adopt or decide this pending request.
     ApprovalPanel {}
     CommandBar { id: commandBar }
+
+    // This cue is rendered by the broker-backed shell, not by the polkit
+    // agent.  It is deliberately non-interactive: it only tells the person
+    // that a real Blossom request is pending before they trust a password
+    // dialog that another same-user process could imitate.
+    Variants {
+        model: root.desktopScreens
+        PanelWindow {
+            required property var modelData
+            screen: modelData
+            anchors { top: true; left: true; right: true }
+            implicitHeight: 34
+            aboveWindows: true
+            focusable: false
+            exclusiveZone: 0
+            exclusionMode: ExclusionMode.Ignore
+            visible: ["waiting", "submitting"].includes(BlossomBroker.state)
+            WlrLayershell.layer: WlrLayer.Overlay
+            WlrLayershell.namespace: "blossom-approval-trust-cue"
+            color: Theme.decisionTint
+
+            Label {
+                anchors.centerIn: parent
+                text: "🔒  Blossom approval pending · verify the system-broker header"
+                color: Theme.decision
+                font.family: Theme.sans
+                font.pixelSize: Theme.label
+                font.bold: true
+                Accessible.role: Accessible.AlertMessage
+                Accessible.name: text
+            }
+        }
+    }
 
     Variants {
         model: root.desktopScreens
@@ -213,6 +270,7 @@ ShellRoot {
                         anchors { fill: parent; margins: 20 } spacing: 12
                         Label { Layout.fillWidth: true; text: "System"; color: Theme.text; font.family: Theme.sans; font.pixelSize: Theme.title; font.bold: true }
                         Label { Layout.fillWidth: true; text: "Super+Tab switches windows · Super+Q closes the active window"; color: Theme.textSecondary; font.family: Theme.sans; wrapMode: Text.WordWrap }
+                        BlossomButton { Layout.fillWidth: true; text: "Lock"; onClicked: root.requestSessionLock() }
                         BlossomButton { Layout.fillWidth: true; text: "Log Out"; onClicked: { root.powerAction = "logout"; root.powerVisible = false } }
                         BlossomButton { Layout.fillWidth: true; text: "Restart"; onClicked: { root.powerAction = "restart"; root.powerVisible = false } }
                         BlossomButton { Layout.fillWidth: true; destructive: true; text: "Shut Down"; onClicked: { root.powerAction = "shutdown"; root.powerVisible = false } }
@@ -264,7 +322,7 @@ ShellRoot {
             screen: modelData
             anchors { bottom: true }
             margins { bottom: 14 }
-            implicitWidth: 410
+            implicitWidth: Math.min(760, 410 + Math.min(6, openWindows.count) * 56)
             implicitHeight: 72
             exclusiveZone: 92
             focusable: true
@@ -273,6 +331,7 @@ ShellRoot {
             Rectangle {
                 anchors.fill: parent; radius: Theme.radiusDock; color: Theme.barFill; border { color: Theme.lineStrong; width: 1 }
                 RowLayout {
+                    id: dockContent
                     anchors { fill: parent; margins: 10 } spacing: 8
                     Item { Layout.fillWidth: true }
                     BlossomDockItem { iconSource: "icon-agent.svg"; text: "Blossom"; description: "Blossom command bar"; selected: commandBar.open; accent: true; onClicked: commandBar.show() }
@@ -280,9 +339,94 @@ ShellRoot {
                     BlossomDockItem { iconSource: "icon-files.svg"; text: "Files"; description: "Files"; onClicked: BlossomBroker.openFiles() }
                     BlossomDockItem { iconSource: "icon-browser.svg"; text: "Browser"; description: "Web Browser"; onClicked: BlossomBroker.openBrowser() }
                     BlossomDockItem { iconSource: "icon-terminal.svg"; text: "Terminal"; description: "Terminal"; onClicked: BlossomBroker.openTerminal() }
+                    ListView {
+                        id: openWindows
+                        Layout.preferredWidth: Math.min(300, contentWidth)
+                        Layout.minimumWidth: count > 0 ? 52 : 0
+                        Layout.preferredHeight: 52
+                        orientation: ListView.Horizontal
+                        spacing: 4
+                        clip: true
+                        model: ToplevelManager.toplevels
+                        Accessible.name: "Open windows"
+                        delegate: BlossomWindowDockItem {
+                            required property var modelData
+                            toplevel: modelData
+                            onMenuRequested: {
+                                root.dockWindowMenuX = openWindows.x + x + width / 2
+                                root.dockWindowTarget = modelData
+                            }
+                        }
+                    }
                     Rectangle { width: 1; height: 34; color: Theme.lineStrong }
                     BlossomDockItem { symbol: "≡"; text: "Activity"; description: "Blossom Agent activity"; selected: root.activityVisible; onClicked: root.activityVisible = !root.activityVisible }
                     Item { Layout.fillWidth: true }
+                }
+            }
+            PopupWindow {
+                anchor.window: dock
+                anchor.rect.x: Math.max(8, Math.min(dock.width - width - 8,
+                    root.dockWindowMenuX - width / 2))
+                anchor.rect.y: -height - 10
+                width: 226
+                height: 94
+                visible: root.dockWindowTarget !== null
+                grabFocus: true
+                color: "transparent"
+                onVisibleChanged: {
+                    if (visible)
+                        minimizeWindowItem.forceActiveFocus(Qt.PopupFocusReason)
+                }
+                Rectangle {
+                    id: dockWindowMenuSurface
+                    anchors.fill: parent
+                    radius: Theme.radiusControl
+                    color: Theme.panelFill
+                    border { color: Theme.lineStrong; width: 1 }
+                    Keys.onPressed: event => {
+                        if (event.key === Qt.Key_Down) {
+                            closeWindowItem.forceActiveFocus(Qt.TabFocusReason)
+                            event.accepted = true
+                        } else if (event.key === Qt.Key_Up) {
+                            minimizeWindowItem.forceActiveFocus(Qt.BacktabFocusReason)
+                            event.accepted = true
+                        } else if (event.key === Qt.Key_Escape) {
+                            root.dockWindowTarget = null
+                            event.accepted = true
+                        }
+                    }
+                    ColumnLayout {
+                        anchors { fill: parent; margins: 7 }
+                        spacing: 2
+                        BlossomMenuItem {
+                            id: minimizeWindowItem
+                            Layout.fillWidth: true
+                            text: root.dockWindowTarget !== null && root.dockWindowTarget.minimized
+                                ? "Restore" : "Minimize"
+                            onClicked: {
+                                if (root.dockWindowTarget === null)
+                                    return
+                                if (root.dockWindowTarget.minimized) {
+                                    root.dockWindowTarget.minimized = false
+                                    root.dockWindowTarget.activate()
+                                } else {
+                                    root.dockWindowTarget.minimized = true
+                                }
+                                root.dockWindowTarget = null
+                            }
+                        }
+                        BlossomMenuItem {
+                            id: closeWindowItem
+                            Layout.fillWidth: true
+                            destructive: true
+                            text: "Close Window"
+                            onClicked: {
+                                if (root.dockWindowTarget !== null)
+                                    root.dockWindowTarget.close()
+                                root.dockWindowTarget = null
+                            }
+                        }
+                    }
                 }
             }
             PopupWindow {

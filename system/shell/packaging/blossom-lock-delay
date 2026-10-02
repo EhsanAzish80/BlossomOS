@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+action=${1:-}
+uid=$(id -u)
+runtime=${XDG_RUNTIME_DIR:-/run/user/$uid}
+if [[ $runtime != "/run/user/$uid" ]]; then
+  echo "unexpected runtime directory" >&2
+  exit 70
+fi
+
+state_dir="$runtime/blossom-lock"
+state_file="$state_dir/retry-state"
+secure_file="$state_dir/secure"
+install -d -m 0700 "$state_dir"
+
+attempts=0
+deadline=0
+if [[ -f $state_file ]]; then
+  read -r attempts deadline <"$state_file" || true
+  [[ $attempts =~ ^[0-9]+$ ]] || attempts=0
+  [[ $deadline =~ ^[0-9]+$ ]] || deadline=0
+fi
+
+now=${SECONDS:-0}
+if [[ -r /proc/uptime ]]; then
+  read -r uptime _ </proc/uptime
+  now=${uptime%%.*}
+fi
+
+write_state() {
+  local temporary="$state_dir/retry-state.$$"
+  umask 077
+  printf '%s %s\n' "$attempts" "$deadline" >"$temporary"
+  mv -f "$temporary" "$state_file"
+}
+
+case "$action" in
+  status)
+    remaining=$((deadline > now ? deadline - now : 0))
+    printf '%s %s\n' "$attempts" "$remaining"
+    ;;
+  failure)
+    attempts=$((attempts + 1))
+    exponent=$((attempts - 1))
+    ((exponent > 5)) && exponent=5
+    delay=$((1 << exponent))
+    ((delay > 30)) && delay=30
+    deadline=$((now + delay))
+    write_state
+    printf '%s %s\n' "$attempts" "$delay"
+    ;;
+  reset)
+    rm -f "$state_file" "$secure_file"
+    ;;
+  prepare)
+    rm -f "$secure_file"
+    ;;
+  secure)
+    temporary="$state_dir/secure.$$"
+    umask 077
+    : >"$temporary"
+    mv -f "$temporary" "$secure_file"
+    ;;
+  wait-secure)
+    for _ in {1..100}; do
+      [[ -f $secure_file ]] && exit 0
+      sleep 0.05
+    done
+    echo "lock did not become secure before sleep" >&2
+    exit 1
+    ;;
+  *)
+    echo "usage: blossom-lock-delay {status|failure|reset|prepare|secure|wait-secure}" >&2
+    exit 64
+    ;;
+esac

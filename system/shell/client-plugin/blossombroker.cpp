@@ -330,6 +330,10 @@ void BlossomBroker::toggleDoNotDisturb() {
     launchDesktop(QStringLiteral("notifications"));
 }
 
+void BlossomBroker::lockScreen() {
+    launchDesktop(QStringLiteral("lock"));
+}
+
 void BlossomBroker::logOut() {
     launchDesktop(QStringLiteral("logout"));
 }

@@ -18,6 +18,8 @@ DESKTOP_UNIT = "blossom-desktop-shell.service"
 RECOVERY_UNIT = "blossom-shell-recovery.service"
 RECOVERY = "blossom-shell-recovery"
 POLKIT_AGENT_UNIT = "blossom-polkit-agent.service"
+LOCK_UNIT = "blossom-lock.service"
+SLEEP_LOCK_UNIT = "blossom-lock-before-sleep.service"
 POLICY = "org.blossomos.shell.policy"
 MODEL_EFFECT_ACTION = "org.blossomos.shell.approve-model-effect"
 
@@ -169,6 +171,138 @@ def check_polkit_agent_unit() -> None:
         require(value not in text, f"forbidden PolicyKit agent authority: {value}")
 
 
+def check_labwc_session_contract() -> None:
+    labwc = SHELL / "labwc"
+    rc = (labwc / "rc.xml").read_text()
+    ET.parse(labwc / "rc.xml")
+    for value in [
+        'key="W-Space"',
+        "quickshell ipc --any-display -p /usr/share/blossom-os/shell call commandbar toggle",
+        "quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock",
+        'identifier="lxqt-policykit-agent"',
+        'identifier="org.blossomos.ShellApproval"',
+        'action name="Focus"',
+        'action name="Raise"',
+        'action name="ToggleAlwaysOnTop"',
+    ]:
+        require(value in rc, f"missing labwc command or approval-focus rule: {value}")
+    require("password" not in rc.lower() and "pkexec" not in rc and "sudo" not in rc,
+            "labwc configuration must not contain credentials or privilege helpers")
+    autostart = (labwc / "autostart").read_text()
+    require(
+        "systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
+        in autostart,
+        "labwc must export graphical variables to the user manager",
+    )
+    require(
+        "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_DESKTOP XDG_SESSION_TYPE"
+        in autostart,
+        "labwc must export graphical variables to D-Bus activation",
+    )
+    require("graphical-session.target" not in autostart,
+            "labwc must not manually start RefuseManualStart graphical-session.target")
+    require("blossom-shell-ui.service blossom-desktop-shell.service" in autostart,
+            "labwc must start the concrete Blossom shell services")
+    lock_command = "quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock"
+    require("timeout 300 '" + lock_command + "'" in autostart,
+            "labwc must lock through ext-idle-notify after five minutes")
+    require("before-sleep" not in autostart,
+            "swayidle 1.9 before-sleep is unreliable and must not guard suspend")
+    environment = (labwc / "environment").read_text()
+    require("XDG_CURRENT_DESKTOP=labwc:wlroots" in environment,
+            "labwc desktop identity is missing")
+    require((labwc / "Petal/openbox-3/themerc").is_file(),
+            "Petal labwc title-bar theme is missing")
+
+
+def check_lock_screen_pam() -> None:
+    pam = (PACKAGE / "blossom-lock.pam").read_text()
+    require(pam == "#%PAM-1.0\nauth required pam_unix.so try_first_pass\n",
+            "lock PAM policy must authenticate without account-level lockout")
+    require("pam_faillock" not in pam,
+            "screen unlock must not lock the owner account with pam_faillock")
+    package = (ROOT / "distribution/packages/blossom-shell/PKGBUILD").read_text()
+    require("'swayidle'" in package,
+            "lock package must depend on the ext-idle-notify client")
+    require("$pkgdir/etc/pam.d/blossom-lock" in package,
+            "lock-specific PAM policy must ship in the shell package")
+    require("$pkgdir/usr/lib/systemd/user/blossom-lock.service" in package,
+            "separate lock service must ship in the shell package")
+    unit = (PACKAGE / LOCK_UNIT).read_text()
+    for required in [
+        "ExecStartPre=/usr/lib/blossom-os/blossom-lock-delay prepare",
+        "ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/lock",
+        "NoNewPrivileges=no",
+        "UMask=0077",
+        "Restart=on-failure",
+        "RestartSec=1s",
+        "RuntimeDirectory=blossom-lock",
+        "RuntimeDirectoryMode=0700",
+        "RuntimeDirectoryPreserve=restart",
+    ]:
+        require(required in unit, f"lock-service boundary missing: {required}")
+    for forbidden in [
+        "PrivateTmp=", "ProtectSystem=", "ProtectHome=", "ReadWritePaths=",
+        "ProtectKernelTunables=", "ProtectKernelModules=", "ProtectControlGroups=",
+        "LockPersonality=", "RestrictAddressFamilies=", "SystemCallArchitectures=",
+        "RestrictRealtime=", "SystemCallFilter=", "MemoryDenyWriteExecute=",
+    ]:
+        require(forbidden not in unit,
+                f"lock user service must not activate a PAM-breaking namespace or no-new-privileges boundary: {forbidden}")
+    ui_unit = (PACKAGE / UI_UNIT).read_text()
+    desktop_unit = (PACKAGE / DESKTOP_UNIT).read_text()
+    require("NoNewPrivileges=yes" in ui_unit and "NoNewPrivileges=yes" in desktop_unit,
+            "general shell processes must retain NoNewPrivileges")
+    lock_qml = (ROOT / "system/shell/lock/shell.qml").read_text()
+    for required in [
+        "property int failedAttempts: 0",
+        "property int retrySecondsRemaining: 0",
+        '["/usr/lib/blossom-os/blossom-lock-delay", "status"]',
+        '["/usr/lib/blossom-os/blossom-lock-delay", "failure"]',
+        '["/usr/lib/blossom-os/blossom-lock-delay", "reset"]',
+        "Incorrect password. Try again in ",
+        "Can't check the password right now. The screen remains locked.",
+    ]:
+        require(required in lock_qml,
+                f"lock-local progressive retry delay missing: {required}")
+    delay_helper = (PACKAGE / "blossom-lock-delay").read_text()
+    for required in [
+        'runtime=${XDG_RUNTIME_DIR:-/run/user/$uid}',
+        'state_file="$state_dir/retry-state"',
+        '((delay > 30)) && delay=30',
+        'rm -f "$state_file"',
+        'rm -f "$secure_file"',
+        "wait-secure)",
+        '[[ -f $secure_file ]] && exit 0',
+    ]:
+        require(required in delay_helper,
+                f"persistent runtime retry helper missing: {required}")
+    logind = (PACKAGE / "50-blossom-lock.conf").read_text()
+    require(logind == "[Login]\nHandleLidSwitch=suspend\nHandleLidSwitchExternalPower=suspend\n",
+            "lid-close suspend policy must be explicit")
+    require("$pkgdir/usr/lib/blossom-os/blossom-lock-delay" in package,
+            "lock retry helper must ship in the shell package")
+    require("$pkgdir/usr/lib/systemd/logind.conf.d/50-blossom-lock.conf" in package,
+            "lid-close policy must ship in the shell package")
+    sleep_unit = (PACKAGE / SLEEP_LOCK_UNIT).read_text()
+    for required in [
+        "DefaultDependencies=no",
+        "Requires=user@1000.service",
+        "Before=sleep.target",
+        "StopWhenUnneeded=yes",
+        "User=blossom",
+        "ExecStart=/usr/bin/systemctl --user start blossom-lock.service",
+        "ExecStart=/usr/lib/blossom-os/blossom-lock-delay wait-secure",
+        "RemainAfterExit=yes",
+    ]:
+        require(required in sleep_unit,
+                f"pre-sleep secure-lock unit missing: {required}")
+    require("$pkgdir/usr/lib/systemd/system/blossom-lock-before-sleep.service" in package,
+            "pre-sleep secure-lock unit must ship in the shell package")
+    require("sleep.target.requires/blossom-lock-before-sleep.service" in package,
+            "sleep target must require secure lock confirmation")
+
+
 def check_polkit_helper_preset() -> None:
     preset = (PACKAGE / "50-blossom-core.preset").read_text()
     require(preset == "enable polkit-agent-helper.socket\n",
@@ -187,6 +321,14 @@ def check_polkit_helper_preset() -> None:
             "blossom-shell must ship the IBM Plex OFL licence")
     require("license=('Apache-2.0' 'OFL-1.1')" in shell_package,
             "blossom-shell package metadata must declare the IBM Plex OFL")
+    for path in [
+        "system/shell/labwc/rc.xml",
+        "system/shell/labwc/autostart",
+        "system/shell/labwc/environment",
+        "system/shell/labwc/Petal/openbox-3/themerc",
+    ]:
+        require(path in shell_package,
+                f"blossom-shell must package reviewed labwc asset: {path}")
 
 
 def check_real_pam_qualification() -> None:
@@ -251,7 +393,8 @@ def check_policy() -> None:
 def main() -> None:
     expected = {
         "README.md", UNIT, UI_UNIT, DESKTOP_UNIT, RECOVERY_UNIT, RECOVERY,
-        POLKIT_AGENT_UNIT, "50-blossom-core.preset", POLICY,
+        POLKIT_AGENT_UNIT, LOCK_UNIT, SLEEP_LOCK_UNIT, "50-blossom-core.preset", POLICY,
+        "blossom-lock.pam", "blossom-lock-delay", "50-blossom-lock.conf",
     }
     require({path.name for path in PACKAGE.iterdir()} == expected, "unexpected shell package surface")
     check_lock()
@@ -261,6 +404,8 @@ def main() -> None:
     check_desktop_unit()
     check_recovery()
     check_polkit_agent_unit()
+    check_labwc_session_contract()
+    check_lock_screen_pam()
     check_polkit_helper_preset()
     check_real_pam_qualification()
     check_policy()

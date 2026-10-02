@@ -1,11 +1,12 @@
 pkgname=blossom-shell
 pkgver=0.9.0
-pkgrel=3
+pkgrel=8
 pkgdesc='Blossom OS narrow desktop shell surface'
 arch=('x86_64' 'aarch64')
 license=('Apache-2.0' 'OFL-1.1')
 depends=('blossom-core' 'grim' 'hyprland' 'lxqt-policykit' 'libnotify' 'mako'
          'quickshell' 'qt6-base' 'qt6-declarative' 'qt6-wayland' 'ttf-ibm-plex'
+         'swayidle'
          'xdg-desktop-portal' 'xdg-desktop-portal-gtk'
          'xdg-desktop-portal-hyprland')
 makedepends=('cmake' 'ninja')
@@ -30,6 +31,11 @@ package() {
   install -d "$pkgdir/usr/share/blossom-os/shell"
   cp -a "$repo_root/system/shell/qml/." \
     "$pkgdir/usr/share/blossom-os/shell/"
+  install -d "$pkgdir/usr/share/blossom-os/lock"
+  cp -a "$repo_root/system/shell/lock/." \
+    "$pkgdir/usr/share/blossom-os/lock/"
+  cp -a "$repo_root/system/shell/qml/Petal" \
+    "$pkgdir/usr/share/blossom-os/lock/Petal"
   install -Dm0755 "$srcdir/client-build/blossom-shell-ui" \
     "$pkgdir/usr/lib/blossom-os/blossom-shell-ui"
   install -Dm0755 "$srcdir/launcher-build/blossom-desktop-launcher" \
@@ -47,6 +53,13 @@ package() {
   find "$pkgdir/usr/lib/qt6/qml/Blossom/Shell" -type f -name '*.so' -exec chmod 0755 {} +
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-ui.service" \
     "$pkgdir/usr/lib/systemd/user/blossom-shell-ui.service"
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-lock.service" \
+    "$pkgdir/usr/lib/systemd/user/blossom-lock.service"
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-lock-before-sleep.service" \
+    "$pkgdir/usr/lib/systemd/system/blossom-lock-before-sleep.service"
+  install -d "$pkgdir/usr/lib/systemd/system/sleep.target.requires"
+  ln -s ../blossom-lock-before-sleep.service \
+    "$pkgdir/usr/lib/systemd/system/sleep.target.requires/blossom-lock-before-sleep.service"
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-desktop-shell.service" \
     "$pkgdir/usr/lib/systemd/user/blossom-desktop-shell.service"
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-recovery.service" \
@@ -70,6 +83,21 @@ package() {
     "$pkgdir/etc/fonts/conf.d/50-blossom-fonts.conf"
   install -Dm0644 "$repo_root/system/shell/fonts/IBM-Plex-OFL.txt" \
     "$pkgdir/usr/share/licenses/blossom-shell/IBM-Plex-OFL.txt"
+  install -Dm0644 "$repo_root/system/shell/labwc/rc.xml" \
+    "$pkgdir/usr/share/blossom-os/labwc/rc.xml"
+  install -Dm0755 "$repo_root/system/shell/labwc/autostart" \
+    "$pkgdir/usr/share/blossom-os/labwc/autostart"
+  install -Dm0644 "$repo_root/system/shell/labwc/environment" \
+    "$pkgdir/usr/share/blossom-os/labwc/environment"
+  install -Dm0644 "$repo_root/system/shell/labwc/Petal/openbox-3/themerc" \
+    "$pkgdir/usr/share/themes/Petal/openbox-3/themerc"
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-lock.pam" \
+    "$pkgdir/etc/pam.d/blossom-lock"
+  install -Dm0755 "$repo_root/system/shell/packaging/blossom-lock-delay" \
+    "$pkgdir/usr/lib/blossom-os/blossom-lock-delay"
+  install -Dm0644 "$repo_root/system/shell/packaging/50-blossom-lock.conf" \
+    "$pkgdir/usr/lib/systemd/logind.conf.d/50-blossom-lock.conf"
   find "$pkgdir/usr/share/blossom-os/shell" -type f -exec chmod 0644 {} +
+  find "$pkgdir/usr/share/blossom-os/lock" -type f -exec chmod 0644 {} +
   find "$pkgdir/usr/share/blossom-os/installer" -type f -exec chmod 0644 {} +
 }

@@ -67,6 +67,7 @@ public:
     Q_INVOKABLE void lowerVolume();
     Q_INVOKABLE void raiseVolume();
     Q_INVOKABLE void toggleDoNotDisturb();
+    Q_INVOKABLE void lockScreen();
     Q_INVOKABLE void logOut();
     Q_INVOKABLE void restartSystem();
     Q_INVOKABLE void powerOff();

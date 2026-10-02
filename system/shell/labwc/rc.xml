@@ -1,0 +1,34 @@
+<?xml version="1.0"?>
+<labwc_config>
+  <theme>
+    <name>Petal</name>
+    <cornerRadius>10</cornerRadius>
+    <font name="IBM Plex Sans" size="11" />
+  </theme>
+  <keyboard>
+    <default />
+    <keybind key="W-Space">
+      <action name="Execute" command="quickshell ipc --any-display -p /usr/share/blossom-os/shell call commandbar toggle" />
+    </keybind>
+    <keybind key="W-L">
+      <action name="Execute" command="quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock" />
+    </keybind>
+    <keybind key="W-Return"><action name="Execute" command="foot" /></keybind>
+    <keybind key="W-Q"><action name="Close" /></keybind>
+  </keyboard>
+  <mouse><default /></mouse>
+  <windowRules>
+    <!-- This improves focus only. The broker-backed overlay cue is the trust
+         signal because a same-user process can spoof an application ID. -->
+    <windowRule identifier="lxqt-policykit-agent">
+      <action name="Focus" />
+      <action name="Raise" />
+      <action name="ToggleAlwaysOnTop" />
+    </windowRule>
+    <windowRule identifier="org.blossomos.ShellApproval">
+      <action name="Focus" />
+      <action name="Raise" />
+      <action name="ToggleAlwaysOnTop" />
+    </windowRule>
+  </windowRules>
+</labwc_config>

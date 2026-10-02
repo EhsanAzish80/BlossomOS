@@ -20,7 +20,6 @@ const ALLOW_USER_INTERACTION: u32 = 1;
 const CHALLENGE_LIMIT: usize = 3;
 const CHALLENGE_WINDOW: Duration = Duration::from_secs(60);
 const CHALLENGE_COOLDOWN: Duration = Duration::from_secs(120);
-const TRUSTED_COMPOSITOR: &str = "/usr/bin/Hyprland";
 
 // PolicyKit's CheckAuthorization result has the fixed D-Bus signature
 // `(bba{ss})`.  It is never an optional value; modeling it as Option changes
@@ -165,18 +164,18 @@ async fn check(
         },
         Err(_) => return TrustedApprovalResult::Unavailable,
     };
-    let Some(session_id) = active_local_graphical_session(&connection).await else {
+    let Some(session) = active_local_graphical_session(&connection).await else {
         return TrustedApprovalResult::InvalidEnvironment;
     };
     let expected_uid = nix::unistd::geteuid().as_raw();
-    let Some(process) = trusted_session_process(&session_id, expected_uid) else {
+    let Some(process) = trusted_session_process(&session.id, session.leader, expected_uid) else {
         return TrustedApprovalResult::InvalidEnvironment;
     };
     check_for_session(
         &connection,
         challenge,
         challenged,
-        &session_id,
+        &session.id,
         &process,
         challenge_limiter,
     )
@@ -190,9 +189,24 @@ struct TrustedSessionProcess {
     start_time: u64,
 }
 
+#[derive(Clone, Debug)]
+struct SessionProcessCandidate {
+    pid: u32,
+    parent_pid: u32,
+    uid: u32,
+    cgroup: String,
+    start_time: u64,
+    stable_start_time: Option<u64>,
+}
+
 fn proc_start_time(stat: &str) -> Option<u64> {
     let after_name = stat.rsplit_once(')')?.1.trim_start();
     after_name.split_whitespace().nth(19)?.parse().ok()
+}
+
+fn proc_parent_pid(stat: &str) -> Option<u32> {
+    let after_name = stat.rsplit_once(')')?.1.trim_start();
+    after_name.split_whitespace().nth(1)?.parse().ok()
 }
 
 fn proc_real_uid(status: &str) -> Option<u32> {
@@ -210,8 +224,38 @@ fn cgroup_matches_session(cgroup: &str, session_id: &str) -> bool {
     cgroup.lines().any(|line| line.ends_with(&suffix))
 }
 
-fn trusted_session_process(session_id: &str, expected_uid: u32) -> Option<TrustedSessionProcess> {
-    let mut matches = fs::read_dir("/proc")
+fn select_trusted_session_process(
+    session_id: &str,
+    session_leader: u32,
+    expected_uid: u32,
+    candidates: impl IntoIterator<Item = SessionProcessCandidate>,
+) -> Option<TrustedSessionProcess> {
+    let mut matches = candidates.into_iter().filter_map(|candidate| {
+        (candidate.parent_pid == session_leader).then_some(())?;
+        (candidate.uid == expected_uid).then_some(())?;
+        cgroup_matches_session(&candidate.cgroup, session_id).then_some(())?;
+        (candidate.stable_start_time == Some(candidate.start_time)).then_some(())?;
+        Some(TrustedSessionProcess {
+            pid: candidate.pid,
+            uid: expected_uid.try_into().ok()?,
+            start_time: candidate.start_time,
+        })
+    });
+    let selected = matches.next()?;
+    matches.next().is_none().then_some(selected)
+}
+
+fn trusted_session_process(
+    session_id: &str,
+    session_leader: u32,
+    expected_uid: u32,
+) -> Option<TrustedSessionProcess> {
+    let leader_root = format!("/proc/{session_leader}");
+    let leader_status = fs::read_to_string(format!("{leader_root}/status")).ok()?;
+    (proc_real_uid(&leader_status)? == 0).then_some(())?;
+    let leader_cgroup = fs::read_to_string(format!("{leader_root}/cgroup")).ok()?;
+    cgroup_matches_session(&leader_cgroup, session_id).then_some(())?;
+    let candidates = fs::read_dir("/proc")
         .ok()?
         .filter_map(Result::ok)
         .filter_map(|entry| entry.file_name().to_str()?.parse::<u32>().ok())
@@ -220,25 +264,23 @@ fn trusted_session_process(session_id: &str, expected_uid: u32) -> Option<Truste
             let first_stat = fs::read_to_string(root.join("stat")).ok()?;
             let start_time = proc_start_time(&first_stat)?;
             let status = fs::read_to_string(root.join("status")).ok()?;
-            (proc_real_uid(&status)? == expected_uid).then_some(())?;
-            let executable = fs::read_link(root.join("exe")).ok()?;
-            (executable == Path::new(TRUSTED_COMPOSITOR)).then_some(())?;
             let cgroup = fs::read_to_string(root.join("cgroup")).ok()?;
-            cgroup_matches_session(&cgroup, session_id).then_some(())?;
             let second_stat = fs::read_to_string(root.join("stat")).ok()?;
-            (proc_start_time(&second_stat)? == start_time).then_some(())?;
-            Some(TrustedSessionProcess {
+            Some(SessionProcessCandidate {
                 pid,
-                uid: expected_uid.try_into().ok()?,
+                parent_pid: proc_parent_pid(&first_stat)?,
+                uid: proc_real_uid(&status)?,
+                cgroup,
                 start_time,
+                stable_start_time: proc_start_time(&second_stat),
             })
         });
-    let selected = matches.next()?;
-    matches.next().is_none().then_some(selected)
+    select_trusted_session_process(session_id, session_leader, expected_uid, candidates)
 }
 
 struct SessionCandidate {
     id: String,
+    leader: u32,
     uid: u32,
     seat: String,
     active: bool,
@@ -248,10 +290,16 @@ struct SessionCandidate {
     state: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ActiveGraphicalSession {
+    id: String,
+    leader: u32,
+}
+
 fn select_active_local_graphical_session(
     expected_uid: u32,
     candidates: impl IntoIterator<Item = SessionCandidate>,
-) -> Option<String> {
+) -> Option<ActiveGraphicalSession> {
     let mut eligible = candidates.into_iter().filter(|candidate| {
         candidate.uid == expected_uid
             && !candidate.seat.is_empty()
@@ -261,11 +309,17 @@ fn select_active_local_graphical_session(
             && matches!(candidate.kind.as_str(), "wayland" | "x11")
             && candidate.state == "active"
     });
-    let selected = eligible.next()?.id;
+    let selected = eligible.next()?;
+    let selected = ActiveGraphicalSession {
+        id: selected.id,
+        leader: selected.leader,
+    };
     eligible.next().is_none().then_some(selected)
 }
 
-async fn active_local_graphical_session(connection: &zbus::Connection) -> Option<String> {
+async fn active_local_graphical_session(
+    connection: &zbus::Connection,
+) -> Option<ActiveGraphicalSession> {
     let manager: Proxy<'_> = ProxyBuilder::new(connection)
         .destination(LOGIN1_DESTINATION)
         .ok()?
@@ -301,8 +355,10 @@ async fn active_local_graphical_session(connection: &zbus::Connection) -> Option
         let class: String = session.get_property("Class").await.ok()?;
         let kind: String = session.get_property("Type").await.ok()?;
         let state: String = session.get_property("State").await.ok()?;
+        let leader: u32 = session.get_property("Leader").await.ok()?;
         candidates.push(SessionCandidate {
             id: session_id,
+            leader,
             uid,
             seat,
             active,
@@ -520,6 +576,7 @@ mod tests {
     fn session(id: &str) -> SessionCandidate {
         SessionCandidate {
             id: id.into(),
+            leader: 400,
             uid: 1_000,
             seat: "seat0".into(),
             active: true,
@@ -566,7 +623,10 @@ mod tests {
         remote.remote = true;
         assert_eq!(
             select_active_local_graphical_session(1_000, vec![remote, session("session-1")],),
-            Some("session-1".into())
+            Some(ActiveGraphicalSession {
+                id: "session-1".into(),
+                leader: 400,
+            })
         );
     }
 
@@ -574,6 +634,7 @@ mod tests {
     fn parses_process_identity_fields_used_by_polkit() {
         let stat = "463 (Hyprland) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 12345 20";
         assert_eq!(proc_start_time(stat), Some(12_345));
+        assert_eq!(proc_parent_pid(stat), Some(1));
         assert_eq!(
             proc_real_uid("Name:\tHyprland\nUid:\t1000\t1000\t1000\t1000\n"),
             Some(1_000)
@@ -586,6 +647,68 @@ mod tests {
             "0::/user.slice/user-1000.slice/user@1000.service\n",
             "1"
         ));
+    }
+
+    fn process_candidate() -> SessionProcessCandidate {
+        SessionProcessCandidate {
+            pid: 449,
+            parent_pid: 421,
+            uid: 1_000,
+            cgroup: "0::/user.slice/user-1000.slice/session-1.scope\n".into(),
+            start_time: 12_345,
+            stable_start_time: Some(12_345),
+        }
+    }
+
+    #[test]
+    fn session_process_selection_binds_parent_uid_scope_and_start_time() {
+        assert_eq!(
+            select_trusted_session_process("1", 421, 1_000, [process_candidate()]),
+            Some(TrustedSessionProcess {
+                pid: 449,
+                uid: 1_000,
+                start_time: 12_345,
+            })
+        );
+
+        let mut changed_parent = process_candidate();
+        changed_parent.parent_pid = 1;
+        assert_eq!(
+            select_trusted_session_process("1", 421, 1_000, [changed_parent]),
+            None
+        );
+
+        let mut changed_uid = process_candidate();
+        changed_uid.uid = 1_001;
+        assert_eq!(
+            select_trusted_session_process("1", 421, 1_000, [changed_uid]),
+            None
+        );
+
+        let mut changed_scope = process_candidate();
+        changed_scope.cgroup = "0::/user.slice/user-1000.slice/user@1000.service\n".into();
+        assert_eq!(
+            select_trusted_session_process("1", 421, 1_000, [changed_scope]),
+            None
+        );
+
+        let mut reused_pid = process_candidate();
+        reused_pid.stable_start_time = Some(12_346);
+        assert_eq!(
+            select_trusted_session_process("1", 421, 1_000, [reused_pid]),
+            None
+        );
+    }
+
+    #[test]
+    fn session_process_selection_rejects_ambiguous_direct_children() {
+        let first = process_candidate();
+        let mut second = process_candidate();
+        second.pid = 450;
+        assert_eq!(
+            select_trusted_session_process("1", 421, 1_000, [first, second]),
+            None
+        );
     }
 
     #[test]
