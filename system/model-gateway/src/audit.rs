@@ -33,6 +33,15 @@ pub(crate) enum GatewayAuditOutcome {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+pub(crate) enum GatewayAuditReason {
+    ProviderRejected,
+    OutputTruncated,
+    OutputInvalid,
+    OutputOversize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub(crate) enum GatewayAdmissionOutcome {
     Authorized,
     CredentialsUnavailable,
@@ -69,6 +78,7 @@ pub(crate) enum GatewayAuditEvent {
         instance_sha256: String,
         request_id_sha256: String,
         outcome: GatewayAuditOutcome,
+        reason: Option<GatewayAuditReason>,
         elapsed_ms: u64,
         output_bytes: usize,
         proposed_intents: usize,
@@ -279,6 +289,7 @@ mod tests {
                 instance_sha256: "b".repeat(64),
                 request_id_sha256: "d".repeat(64),
                 outcome: GatewayAuditOutcome::CompletedText,
+                reason: None,
                 elapsed_ms: 4,
                 output_bytes: 12,
                 proposed_intents: 0,
