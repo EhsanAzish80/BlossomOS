@@ -9,10 +9,10 @@ state. This was a local package gate; no full image or GitHub-hosted build ran.
 - Architecture: `aarch64`
 - Guest resources: 4 vCPUs, 8 GiB RAM
 - Disk: disposable qcow2 overlay on the existing ARM64 development image
-- Package: `blossom-shell 0.9.0-7`, built inside the VM and installed with
+- Package: `blossom-shell 0.9.0-8`, built inside the VM and installed with
   `pacman -U`
 - Package SHA-256:
-  `2a861aa8a21aeba57a157e2eef72c06151a236b9d0ae98dd2e0adb36fbf2e759`
+  `7a3770331b3ecc088a4c0bc35f094c92e8760b907de08b65d18ca8ff3de133a1`
 - Authentication: a random disposable password enrolled only in the overlay;
   the password is not recorded in this evidence
 
@@ -33,6 +33,14 @@ The first attempted implementation still showed `NoNewPrivs: 1` despite the
 declarative `no` setting. The cause was systemd implicitly enabling the kernel
 bit for seccomp-backed user-service restrictions. Those settings now appear on
 a source-checked forbidden list for this PAM-owning service.
+
+The source check also requires the remaining narrow boundaries in the other
+direction: an exact `/usr/bin/quickshell` command and
+`/usr/share/blossom-os/lock` QML path, `UMask=0077`, the private runtime
+directory and restart policy. The lock unit cannot load QML from the workspace
+or the user's home. The removed mount-namespace and seccomp-backed options are
+listed in ADR-0038 with the PAM failure they caused; they remain forbidden for
+this one PAM-owning user unit.
 
 ## Manual authentication cases
 
@@ -72,6 +80,57 @@ waited for its exact approval preview. Super+L closed the approval and acquired
 the session lock. After authenticating, the workspace file was absent and the
 lock service had exited cleanly. No proposed effect survived behind the lock.
 
+## Idle and explicit lock
+
+A test-only 30-second swayidle timeout replaced the five-minute product value
+without changing the installed configuration. With no inhibitor, the lock
+service started exactly 30 seconds after swayidle. During a generated local
+video playing fullscreen in Firefox, the same timer remained active for more
+than 40 seconds and the lock service stayed inactive. Command+L over that
+fullscreen video started the lock immediately at `13:09:47`.
+
+## Suspend and lid ordering
+
+The first suspend attempt found a real failure: swayidle 1.9.0 held a delay
+inhibitor but did not execute `before-sleep`, while emitting its known
+`BlockInhibited` parsing error. The gate did not count that attempt as a pass.
+Revision 8 moved sleep ordering to a system-manager transaction unit. It starts
+the existing user lock and waits for Quickshell's compositor-confirmed
+`WlSessionLock.secure` state before allowing `sleep.target` to continue.
+
+The real suspend transaction recorded these journal timestamps:
+
+| Event | Timestamp |
+| --- | --- |
+| secure-lock unit started | `1790947475.123096` |
+| secure-lock confirmation finished | `1790947475.268545` |
+| sleep target reached | `1790947475.269097` |
+| kernel entered s2idle | `1790947475.283691` |
+
+For lid qualification, a test-only `python-evdev` uinput device exposed a real
+`SW_LID` switch. logind attached it to seat0 and recorded `Lid closed`. The
+ordered timestamps were:
+
+| Event | Timestamp |
+| --- | --- |
+| logind received lid close | `1790947885.222994` |
+| secure-lock unit started | `1790947885.260687` |
+| secure-lock confirmation finished | `1790947885.477779` |
+| sleep target reached | `1790947885.478063` |
+| kernel entered s2idle | `1790947885.491952` |
+
+The QEMU ARM `virt` machine enters s2idle but reports that guest wake-up is not
+supported, including through QMP `system_wakeup`. Each ordering test therefore
+used QMP reset after the journal had persisted. Resume remains a clean-image
+and physical-hardware gate; lock-before-sleep and lid ordering passed here.
+
+A runtime-only fault injection then masked `blossom-lock.service` and requested
+suspend. The pre-sleep unit failed at `1790948090.721972`; `sleep.target` and
+`systemd-suspend.service` both failed with `dependency`, logind completed the
+operation without sleeping, and QMP reported the VM still `running`. The mask
+was removed immediately afterward. A missing or failed lock therefore blocks
+suspend instead of continuing unlocked.
+
 ## Automated checks
 
 - shell packaging source check: passed
@@ -80,6 +139,8 @@ lock service had exited cleanly. No proposed effect survived behind the lock.
 - desktop-launcher source check: passed
 - `git diff --check`: passed
 - installed package and PAM/service contents: checked after `pacman -U`
+- stale-process tripwire after service restart: passed with no Blossom
+  `/proc/<pid>/exe` ending in `(deleted)`
 
 ## Limitations
 
@@ -89,3 +150,5 @@ lock service had exited cleanly. No proposed effect survived behind the lock.
   logout or reboot resets it; it is an online guessing throttle, not an
   account-level lockout.
 - The manual portion is one tester's observation, not a usability study.
+- This ARM QEMU machine cannot qualify resume-from-suspend; it can qualify the
+  ordering up to kernel suspend, and physical hardware must qualify resume.

@@ -3,5 +3,4 @@ dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP
 systemctl --user --no-block start blossom-polkit-agent.service mako.service xdg-desktop-portal.service xdg-desktop-portal-wlr.service
 systemctl --user --no-block start blossom-shell-ui.service blossom-desktop-shell.service
 swayidle -w \
-  timeout 300 'quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock' \
-  before-sleep 'quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock' &
+  timeout 300 'quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock' &

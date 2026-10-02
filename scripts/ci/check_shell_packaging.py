@@ -19,6 +19,7 @@ RECOVERY_UNIT = "blossom-shell-recovery.service"
 RECOVERY = "blossom-shell-recovery"
 POLKIT_AGENT_UNIT = "blossom-polkit-agent.service"
 LOCK_UNIT = "blossom-lock.service"
+SLEEP_LOCK_UNIT = "blossom-lock-before-sleep.service"
 POLICY = "org.blossomos.shell.policy"
 MODEL_EFFECT_ACTION = "org.blossomos.shell.approve-model-effect"
 
@@ -205,8 +206,8 @@ def check_labwc_session_contract() -> None:
     lock_command = "quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock"
     require("timeout 300 '" + lock_command + "'" in autostart,
             "labwc must lock through ext-idle-notify after five minutes")
-    require("before-sleep '" + lock_command + "'" in autostart,
-            "labwc must take the delay inhibitor and lock before suspend")
+    require("before-sleep" not in autostart,
+            "swayidle 1.9 before-sleep is unreliable and must not guard suspend")
     environment = (labwc / "environment").read_text()
     require("XDG_CURRENT_DESKTOP=labwc:wlroots" in environment,
             "labwc desktop identity is missing")
@@ -229,6 +230,7 @@ def check_lock_screen_pam() -> None:
             "separate lock service must ship in the shell package")
     unit = (PACKAGE / LOCK_UNIT).read_text()
     for required in [
+        "ExecStartPre=/usr/lib/blossom-os/blossom-lock-delay prepare",
         "ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/lock",
         "NoNewPrivileges=no",
         "UMask=0077",
@@ -269,6 +271,9 @@ def check_lock_screen_pam() -> None:
         'state_file="$state_dir/retry-state"',
         '((delay > 30)) && delay=30',
         'rm -f "$state_file"',
+        'rm -f "$secure_file"',
+        "wait-secure)",
+        '[[ -f $secure_file ]] && exit 0',
     ]:
         require(required in delay_helper,
                 f"persistent runtime retry helper missing: {required}")
@@ -279,6 +284,23 @@ def check_lock_screen_pam() -> None:
             "lock retry helper must ship in the shell package")
     require("$pkgdir/usr/lib/systemd/logind.conf.d/50-blossom-lock.conf" in package,
             "lid-close policy must ship in the shell package")
+    sleep_unit = (PACKAGE / SLEEP_LOCK_UNIT).read_text()
+    for required in [
+        "DefaultDependencies=no",
+        "Requires=user@1000.service",
+        "Before=sleep.target",
+        "StopWhenUnneeded=yes",
+        "User=blossom",
+        "ExecStart=/usr/bin/systemctl --user start blossom-lock.service",
+        "ExecStart=/usr/lib/blossom-os/blossom-lock-delay wait-secure",
+        "RemainAfterExit=yes",
+    ]:
+        require(required in sleep_unit,
+                f"pre-sleep secure-lock unit missing: {required}")
+    require("$pkgdir/usr/lib/systemd/system/blossom-lock-before-sleep.service" in package,
+            "pre-sleep secure-lock unit must ship in the shell package")
+    require("sleep.target.requires/blossom-lock-before-sleep.service" in package,
+            "sleep target must require secure lock confirmation")
 
 
 def check_polkit_helper_preset() -> None:
@@ -371,7 +393,7 @@ def check_policy() -> None:
 def main() -> None:
     expected = {
         "README.md", UNIT, UI_UNIT, DESKTOP_UNIT, RECOVERY_UNIT, RECOVERY,
-        POLKIT_AGENT_UNIT, LOCK_UNIT, "50-blossom-core.preset", POLICY,
+        POLKIT_AGENT_UNIT, LOCK_UNIT, SLEEP_LOCK_UNIT, "50-blossom-core.preset", POLICY,
         "blossom-lock.pam", "blossom-lock-delay", "50-blossom-lock.conf",
     }
     require({path.name for path in PACKAGE.iterdir()} == expected, "unexpected shell package surface")

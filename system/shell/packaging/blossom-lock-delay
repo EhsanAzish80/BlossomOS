@@ -11,6 +11,7 @@ fi
 
 state_dir="$runtime/blossom-lock"
 state_file="$state_dir/retry-state"
+secure_file="$state_dir/secure"
 install -d -m 0700 "$state_dir"
 
 attempts=0
@@ -50,10 +51,27 @@ case "$action" in
     printf '%s %s\n' "$attempts" "$delay"
     ;;
   reset)
-    rm -f "$state_file"
+    rm -f "$state_file" "$secure_file"
+    ;;
+  prepare)
+    rm -f "$secure_file"
+    ;;
+  secure)
+    temporary="$state_dir/secure.$$"
+    umask 077
+    : >"$temporary"
+    mv -f "$temporary" "$secure_file"
+    ;;
+  wait-secure)
+    for _ in {1..100}; do
+      [[ -f $secure_file ]] && exit 0
+      sleep 0.05
+    done
+    echo "lock did not become secure before sleep" >&2
+    exit 1
     ;;
   *)
-    echo "usage: blossom-lock-delay {status|failure|reset}" >&2
+    echo "usage: blossom-lock-delay {status|failure|reset|prepare|secure|wait-secure}" >&2
     exit 64
     ;;
 esac

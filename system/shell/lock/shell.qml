@@ -108,6 +108,15 @@ ShellRoot {
     }
 
     Process {
+        id: markSecureState
+        command: ["/usr/lib/blossom-os/blossom-lock-delay", "secure"]
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode !== 0)
+                lock.feedback = "Can't confirm the secure lock state. The screen remains locked."
+        }
+    }
+
+    Process {
         id: suspendSystem
         command: ["/usr/bin/systemctl", "suspend"]
     }
@@ -162,6 +171,11 @@ ShellRoot {
         property var activePasswordField: null
         property int failedAttempts: 0
         property int retrySecondsRemaining: 0
+
+        onSecureChanged: {
+            if (secure)
+                markSecureState.running = true
+        }
 
         function authenticate(response: string): void {
             if (!root.pamContext.active || !root.pamContext.responseRequired || response.length === 0)

@@ -45,7 +45,15 @@ general-purpose process.
 5. Starting a lock denies pending approvals and closes the command bar and
    transient menus before requesting the session lock. No pending effect is
    restored after unlock.
-6. Recovery-required lockdown is deferred. It
+6. Idle locking uses swayidle and the compositor's idle-inhibit protocol.
+   Sleep ordering does not use swayidle's `before-sleep` path: version 1.9.0
+   has a known `BlockInhibited` parsing regression, and the installed-package
+   gate proved it could allow suspend without locking. A system-manager unit
+   required by `sleep.target` instead starts the user lock and waits for
+   Quickshell's compositor-confirmed `WlSessionLock.secure` state. Failure to
+   obtain that confirmation fails the required unit rather than declaring the
+   session safe to sleep.
+7. Recovery-required lockdown is deferred. It
    must not ship until Blossom has an offline recovery mechanism generated
    during setup, stored separately, and qualified against denial of service.
 

@@ -214,6 +214,8 @@ def main() -> None:
         '["/usr/bin/systemctl", "reboot"]',
         '["/usr/bin/systemctl", "poweroff"]',
         "result === PamResult.Failed || result === PamResult.MaxTries",
+        "onSecureChanged:",
+        'command: ["/usr/lib/blossom-os/blossom-lock-delay", "secure"]',
     ):
         require(required in lock_screen,
                 f"protocol-backed lock-screen contract missing: {required}")

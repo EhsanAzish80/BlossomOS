@@ -1,6 +1,6 @@
 pkgname=blossom-shell
 pkgver=0.9.0
-pkgrel=7
+pkgrel=8
 pkgdesc='Blossom OS narrow desktop shell surface'
 arch=('x86_64' 'aarch64')
 license=('Apache-2.0' 'OFL-1.1')
@@ -55,6 +55,11 @@ package() {
     "$pkgdir/usr/lib/systemd/user/blossom-shell-ui.service"
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-lock.service" \
     "$pkgdir/usr/lib/systemd/user/blossom-lock.service"
+  install -Dm0644 "$repo_root/system/shell/packaging/blossom-lock-before-sleep.service" \
+    "$pkgdir/usr/lib/systemd/system/blossom-lock-before-sleep.service"
+  install -d "$pkgdir/usr/lib/systemd/system/sleep.target.requires"
+  ln -s ../blossom-lock-before-sleep.service \
+    "$pkgdir/usr/lib/systemd/system/sleep.target.requires/blossom-lock-before-sleep.service"
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-desktop-shell.service" \
     "$pkgdir/usr/lib/systemd/user/blossom-desktop-shell.service"
   install -Dm0644 "$repo_root/system/shell/packaging/blossom-shell-recovery.service" \
