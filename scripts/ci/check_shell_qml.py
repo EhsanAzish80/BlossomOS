@@ -5,7 +5,8 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[2]
-QML = ROOT / "system" / "shell" / "qml"
+SHELL = ROOT / "system" / "shell"
+QML = SHELL / "qml"
 
 
 def require(condition: bool, message: str) -> None:
@@ -158,11 +159,68 @@ def main() -> None:
                 f"dock window-management contract missing: {required}")
     require("acceptedButtons: Qt.RightButton" in window_item,
             "dock window controls must be reachable from a right-click menu")
+    for required in (
+        "Qt.Key_Menu",
+        "Qt.Key_F10",
+        "Qt.ShiftModifier",
+    ):
+        require(required in window_item,
+                f"context-menu keyboard opening is missing: {required}")
     menu_item = (QML / "BlossomMenuItem.qml").read_text()
     require("implicitHeight: 38" in menu_item and "horizontalAlignment: Text.AlignLeft" in menu_item,
             "context menus must use compact native-style rows")
     require('text: "Close Window"' in shell and "height: 94" in shell,
             "dock window menu must remain compact")
+    require("Accessible.role: Accessible.MenuItem" in menu_item,
+            "context-menu rows must expose their menu role to AT-SPI")
+    for required in (
+        "Qt.Key_Down",
+        "Qt.Key_Up",
+        "Qt.Key_Escape",
+        "root.dockWindowTarget = null",
+        "minimizeWindowItem.forceActiveFocus",
+    ):
+        require(required in shell,
+                f"context-menu keyboard contract missing: {required}")
+    busy_close = re.search(
+        r"if \(busy\) \{\s*//.*?root\.dockWindowTarget = null",
+        shell,
+        re.DOTALL,
+    )
+    require(busy_close is not None,
+            "context menus must close before approval can begin")
+    forbidden_menu_calls = (
+        "requestAgentTurn",
+        "beginAgentTurn",
+        "StartAgentTurn",
+        "queryCommands",
+    )
+    for forbidden in forbidden_menu_calls:
+        require(forbidden not in menu_item and forbidden not in window_item,
+                f"context menus must not start agent work: {forbidden}")
+    lock_screen = (SHELL / "lock" / "shell.qml").read_text()
+    for required in (
+        "WlSessionLock {",
+        "WlSessionLockSurface {",
+        'config: "blossom-lock"',
+        "result === PamResult.Success",
+        "Incorrect password. Try again in ",
+        "retryDelay.running",
+        "passwordMaskDelay: 0",
+        'text: "Show password"',
+        "showPassword.checked ? TextInput.Normal : TextInput.Password",
+    ):
+        require(required in lock_screen,
+                f"protocol-backed lock-screen contract missing: {required}")
+    for required in (
+        'target: "lockscreen"',
+        "BlossomBroker.cancelPending()",
+        "root.dockWindowTarget = null",
+        "commandBar.hide()",
+        "BlossomBroker.lockScreen()",
+    ):
+        require(required in shell,
+                f"lock preparation contract missing: {required}")
     command_bar = (QML / "CommandBar.qml").read_text()
     theme = (QML / "Petal" / "Theme.qml").read_text()
     require("property color on" not in theme,

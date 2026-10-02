@@ -80,6 +80,7 @@ public slots:
         else if (action == QStringLiteral("audio-down")) command = {QStringLiteral("/usr/bin/wpctl"), QStringLiteral("set-volume"), QStringLiteral("@DEFAULT_AUDIO_SINK@"), QStringLiteral("5%-")};
         else if (action == QStringLiteral("audio-up")) command = {QStringLiteral("/usr/bin/wpctl"), QStringLiteral("set-volume"), QStringLiteral("@DEFAULT_AUDIO_SINK@"), QStringLiteral("5%+")};
         else if (action == QStringLiteral("notifications")) command = {QStringLiteral("/usr/bin/makoctl"), QStringLiteral("mode"), QStringLiteral("-t"), QStringLiteral("do-not-disturb")};
+        else if (action == QStringLiteral("lock")) command = {QStringLiteral("/usr/bin/systemctl"), QStringLiteral("--user"), QStringLiteral("start"), QStringLiteral("blossom-lock.service")};
         else if (action == QStringLiteral("logout")) command = {QStringLiteral("/usr/bin/hyprctl"), QStringLiteral("dispatch"), QStringLiteral("exit")};
         else if (action == QStringLiteral("installer")) command = {QStringLiteral("/usr/lib/blossom-os/blossom-installer")};
         else if (action == QStringLiteral("restart")) command = {QStringLiteral("/usr/bin/systemctl"), QStringLiteral("reboot")};

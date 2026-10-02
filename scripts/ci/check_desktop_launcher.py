@@ -73,7 +73,7 @@ def main() -> None:
     ]:
         require(value in source, f"missing fixed desktop launcher binding: {value}")
     actions = ["terminal", "files", "browser", "editor", "network", "audio",
-               "bluetooth", "audio-mute", "audio-down", "audio-up", "notifications",
+               "bluetooth", "audio-mute", "audio-down", "audio-up", "notifications", "lock",
                "logout", "installer", "restart", "poweroff"]
     for action in actions:
         require(source.count(f'action == QStringLiteral("{action}")') == 1,

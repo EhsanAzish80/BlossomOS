@@ -27,6 +27,15 @@ Button {
         }
     }
 
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_Menu
+                || (event.key === Qt.Key_F10
+                    && (event.modifiers & Qt.ShiftModifier))) {
+            control.menuRequested()
+            event.accepted = true
+        }
+    }
+
     TapHandler {
         acceptedButtons: Qt.RightButton
         onTapped: control.menuRequested()

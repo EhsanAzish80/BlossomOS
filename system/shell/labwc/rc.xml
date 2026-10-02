@@ -10,6 +10,9 @@
     <keybind key="W-Space">
       <action name="Execute" command="quickshell ipc --any-display -p /usr/share/blossom-os/shell call commandbar toggle" />
     </keybind>
+    <keybind key="W-L">
+      <action name="Execute" command="quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock" />
+    </keybind>
     <keybind key="W-Return"><action name="Execute" command="foot" /></keybind>
     <keybind key="W-Q"><action name="Close" /></keybind>
   </keyboard>

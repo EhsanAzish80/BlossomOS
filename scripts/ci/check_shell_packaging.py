@@ -18,6 +18,7 @@ DESKTOP_UNIT = "blossom-desktop-shell.service"
 RECOVERY_UNIT = "blossom-shell-recovery.service"
 RECOVERY = "blossom-shell-recovery"
 POLKIT_AGENT_UNIT = "blossom-polkit-agent.service"
+LOCK_UNIT = "blossom-lock.service"
 POLICY = "org.blossomos.shell.policy"
 MODEL_EFFECT_ACTION = "org.blossomos.shell.approve-model-effect"
 
@@ -176,6 +177,7 @@ def check_labwc_session_contract() -> None:
     for value in [
         'key="W-Space"',
         "quickshell ipc --any-display -p /usr/share/blossom-os/shell call commandbar toggle",
+        "quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock",
         'identifier="lxqt-policykit-agent"',
         'identifier="org.blossomos.ShellApproval"',
         'action name="Focus"',
@@ -200,11 +202,60 @@ def check_labwc_session_contract() -> None:
             "labwc must not manually start RefuseManualStart graphical-session.target")
     require("blossom-shell-ui.service blossom-desktop-shell.service" in autostart,
             "labwc must start the concrete Blossom shell services")
+    require(
+        "swayidle -w timeout 300 'quickshell ipc --any-display -p /usr/share/blossom-os/shell call lockscreen lock'"
+        in autostart,
+        "labwc must lock through ext-idle-notify after five minutes",
+    )
     environment = (labwc / "environment").read_text()
     require("XDG_CURRENT_DESKTOP=labwc:wlroots" in environment,
             "labwc desktop identity is missing")
     require((labwc / "Petal/openbox-3/themerc").is_file(),
             "Petal labwc title-bar theme is missing")
+
+
+def check_lock_screen_pam() -> None:
+    pam = (PACKAGE / "blossom-lock.pam").read_text()
+    require(pam == "#%PAM-1.0\nauth required pam_unix.so try_first_pass\n",
+            "lock PAM policy must authenticate without account-level lockout")
+    require("pam_faillock" not in pam,
+            "screen unlock must not lock the owner account with pam_faillock")
+    package = (ROOT / "distribution/packages/blossom-shell/PKGBUILD").read_text()
+    require("'swayidle'" in package,
+            "lock package must depend on the ext-idle-notify client")
+    require("$pkgdir/etc/pam.d/blossom-lock" in package,
+            "lock-specific PAM policy must ship in the shell package")
+    require("$pkgdir/usr/lib/systemd/user/blossom-lock.service" in package,
+            "separate lock service must ship in the shell package")
+    unit = (PACKAGE / LOCK_UNIT).read_text()
+    for required in [
+        "ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/lock",
+        "NoNewPrivileges=no",
+        "UMask=0077",
+        "Restart=no",
+    ]:
+        require(required in unit, f"lock-service boundary missing: {required}")
+    for forbidden in [
+        "PrivateTmp=", "ProtectSystem=", "ProtectHome=", "ReadWritePaths=",
+        "ProtectKernelTunables=", "ProtectKernelModules=", "ProtectControlGroups=",
+        "LockPersonality=", "RestrictAddressFamilies=", "SystemCallArchitectures=",
+        "RestrictRealtime=", "SystemCallFilter=", "MemoryDenyWriteExecute=",
+    ]:
+        require(forbidden not in unit,
+                f"lock user service must not activate a PAM-breaking namespace or no-new-privileges boundary: {forbidden}")
+    ui_unit = (PACKAGE / UI_UNIT).read_text()
+    desktop_unit = (PACKAGE / DESKTOP_UNIT).read_text()
+    require("NoNewPrivileges=yes" in ui_unit and "NoNewPrivileges=yes" in desktop_unit,
+            "general shell processes must retain NoNewPrivileges")
+    lock_qml = (ROOT / "system/shell/lock/shell.qml").read_text()
+    for required in [
+        "property int failedAttempts: 0",
+        "property int retrySecondsRemaining: 0",
+        "Math.min(30, Math.pow(2, Math.min(failedAttempts - 1, 5)))",
+        "Incorrect password. Try again in ",
+    ]:
+        require(required in lock_qml,
+                f"lock-local progressive retry delay missing: {required}")
 
 
 def check_polkit_helper_preset() -> None:
@@ -297,7 +348,7 @@ def check_policy() -> None:
 def main() -> None:
     expected = {
         "README.md", UNIT, UI_UNIT, DESKTOP_UNIT, RECOVERY_UNIT, RECOVERY,
-        POLKIT_AGENT_UNIT, "50-blossom-core.preset", POLICY,
+        POLKIT_AGENT_UNIT, LOCK_UNIT, "50-blossom-core.preset", POLICY, "blossom-lock.pam",
     }
     require({path.name for path in PACKAGE.iterdir()} == expected, "unexpected shell package surface")
     check_lock()
@@ -308,6 +359,7 @@ def main() -> None:
     check_recovery()
     check_polkit_agent_unit()
     check_labwc_session_contract()
+    check_lock_screen_pam()
     check_polkit_helper_preset()
     check_real_pam_qualification()
     check_policy()

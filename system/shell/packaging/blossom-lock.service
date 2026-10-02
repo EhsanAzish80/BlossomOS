@@ -1,0 +1,14 @@
+[Unit]
+Description=Blossom OS session lock
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/quickshell -p /usr/share/blossom-os/lock
+Restart=no
+Environment=QT_QPA_PLATFORM=wayland
+Environment=QML2_IMPORT_PATH=/usr/lib/qt6/qml
+NoNewPrivileges=no
+UMask=0077

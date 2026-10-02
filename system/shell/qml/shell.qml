@@ -49,6 +49,10 @@ ShellRoot {
         function show(): void { commandBar.show() }
         function hide(): void { commandBar.hide() }
     }
+    IpcHandler {
+        target: "lockscreen"
+        function lock(): void { root.requestSessionLock() }
+    }
     Component.onCompleted: {
         BlossomBroker.refreshActivity()
         BlossomBroker.refreshBattery()
@@ -62,6 +66,9 @@ ShellRoot {
             const finished = ["unavailable", "unsupported", "model_failed", "verified", "verification_failed", "cancelled", "expired"]
                 .includes(BlossomBroker.state)
             if (busy) {
+                // Ordinary menus never remain above, or compete for focus
+                // with, the broker-controlled approval ceremony.
+                root.dockWindowTarget = null
                 if (root.activityVisible)
                     root.agentHiddenForApproval = true
                 root.activityVisible = false
@@ -82,6 +89,19 @@ ShellRoot {
             else if (BlossomBroker.desktopMessage.startsWith("Could not"))
                 root.installerRequested = false
         }
+    }
+
+    function requestSessionLock(): void {
+        if (["waiting", "submitting", "cancelling"].includes(BlossomBroker.state))
+            BlossomBroker.cancelPending()
+        root.launcherVisible = false
+        root.activityVisible = false
+        root.quickVisible = false
+        root.powerVisible = false
+        root.dockWindowTarget = null
+        root.powerAction = ""
+        commandBar.hide()
+        BlossomBroker.lockScreen()
     }
 
     // The approval must live in the client connection that started the
@@ -250,6 +270,7 @@ ShellRoot {
                         anchors { fill: parent; margins: 20 } spacing: 12
                         Label { Layout.fillWidth: true; text: "System"; color: Theme.text; font.family: Theme.sans; font.pixelSize: Theme.title; font.bold: true }
                         Label { Layout.fillWidth: true; text: "Super+Tab switches windows · Super+Q closes the active window"; color: Theme.textSecondary; font.family: Theme.sans; wrapMode: Text.WordWrap }
+                        BlossomButton { Layout.fillWidth: true; text: "Lock"; onClicked: root.requestSessionLock() }
                         BlossomButton { Layout.fillWidth: true; text: "Log Out"; onClicked: { root.powerAction = "logout"; root.powerVisible = false } }
                         BlossomButton { Layout.fillWidth: true; text: "Restart"; onClicked: { root.powerAction = "restart"; root.powerVisible = false } }
                         BlossomButton { Layout.fillWidth: true; destructive: true; text: "Shut Down"; onClicked: { root.powerAction = "shutdown"; root.powerVisible = false } }
@@ -352,15 +373,33 @@ ShellRoot {
                 visible: root.dockWindowTarget !== null
                 grabFocus: true
                 color: "transparent"
+                onVisibleChanged: {
+                    if (visible)
+                        minimizeWindowItem.forceActiveFocus(Qt.PopupFocusReason)
+                }
                 Rectangle {
+                    id: dockWindowMenuSurface
                     anchors.fill: parent
                     radius: Theme.radiusControl
                     color: Theme.panelFill
                     border { color: Theme.lineStrong; width: 1 }
+                    Keys.onPressed: event => {
+                        if (event.key === Qt.Key_Down) {
+                            closeWindowItem.forceActiveFocus(Qt.TabFocusReason)
+                            event.accepted = true
+                        } else if (event.key === Qt.Key_Up) {
+                            minimizeWindowItem.forceActiveFocus(Qt.BacktabFocusReason)
+                            event.accepted = true
+                        } else if (event.key === Qt.Key_Escape) {
+                            root.dockWindowTarget = null
+                            event.accepted = true
+                        }
+                    }
                     ColumnLayout {
                         anchors { fill: parent; margins: 7 }
                         spacing: 2
                         BlossomMenuItem {
+                            id: minimizeWindowItem
                             Layout.fillWidth: true
                             text: root.dockWindowTarget !== null && root.dockWindowTarget.minimized
                                 ? "Restore" : "Minimize"
@@ -377,6 +416,7 @@ ShellRoot {
                             }
                         }
                         BlossomMenuItem {
+                            id: closeWindowItem
                             Layout.fillWidth: true
                             destructive: true
                             text: "Close Window"

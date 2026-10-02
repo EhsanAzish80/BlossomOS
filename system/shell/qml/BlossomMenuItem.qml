@@ -6,6 +6,9 @@ Button {
     id: control
     property bool destructive: false
 
+    Accessible.role: Accessible.MenuItem
+    Accessible.name: text
+
     implicitWidth: 210
     implicitHeight: 38
     leftPadding: 12

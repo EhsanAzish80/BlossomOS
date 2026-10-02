@@ -53,7 +53,10 @@ def main() -> None:
     ]:
         require(forbidden not in text, f"forbidden client authority: {forbidden}")
     header = (PLUGIN / "blossombroker.h").read_text()
-    require(header.count("Q_INVOKABLE") == 29, "client invokable surface drift")
+    require(header.count("Q_INVOKABLE") == 30, "client invokable surface drift")
+    require("Q_INVOKABLE void lockScreen();" in header and
+            'launchDesktop(QStringLiteral("lock"))' in text,
+            "lock request must use the fixed desktop-launcher bridge")
     require("onboardingRequired" in header and "dismissOnboarding" in header,
             "fixed onboarding surface is missing")
     client = (PLUGIN / "blossombroker.cpp").read_text()
