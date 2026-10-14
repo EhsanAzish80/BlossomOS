@@ -33,7 +33,7 @@ jobs:
           python3 -c 'import json,sys; value=json.load(open(sys.argv[1])); assert value["result"] == "eligible_for_qualification"; assert value["authority"] == "read_only_preflight_only"' "$result"
 
       - name: Upload minimized result
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: phase11-physical-preflight
           path: ${{ runner.temp }}/phase11-physical-preflight.json
